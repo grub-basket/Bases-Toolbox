@@ -1,4 +1,5 @@
 import { App, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
+import { installEmbedOptions } from "./embed-options";
 import { PropertySuggestModal } from "./find-replace";
 import { HistoryModal, undoLatest } from "./history";
 import { installNumberGuard } from "./number-guard";
@@ -13,6 +14,7 @@ export default class BasesToolboxPlugin extends Plugin {
     await this.loadPluginData();
 
     installNumberGuard(this);
+    installEmbedOptions(this);
 
     this.registerView(VIEW_TYPE_PROPERTY_INDEX, (leaf) => new PropertyIndexView(leaf, this));
 

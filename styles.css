@@ -1,3 +1,14 @@
+/* Embedded-base display flags (written as embed alt text):
+   ![[My Base.base|bases-no-toolbar]] hides the toolbar row,
+   ![[My Base.base|bases-no-header]] hides the whole header. */
+.bases-embed[alt~="bases-no-toolbar"] .bases-toolbar {
+  display: none;
+}
+
+.bases-embed[alt~="bases-no-header"] .bases-header {
+  display: none;
+}
+
 /* Multiline list cells: stack list-property pills vertically in Bases tables.
    Rows are virtualized with a fixed height (inline top offsets computed in JS),
    so per-row auto-height is off the table; instead the stacked list scrolls

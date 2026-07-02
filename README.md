@@ -28,6 +28,26 @@ wheel over a focused input. Optionally, only digits, `.` and `-` are accepted
 as typed characters (so no stray `e` exponents). Both behaviors are toggles
 in the plugin settings and are on by default.
 
+### Embedded-base display options
+
+Control how an embedded base renders via flags in the embed's alt text:
+
+```
+![[My Base.base|bases-no-toolbar]]        hide the toolbar row
+![[My Base.base|bases-no-header]]         hide the whole header
+![[My Base.base|bt-height-300]]           fix the embed height (px)
+![[My Base.base|bases-no-header bt-height-150]]   combine them
+```
+
+No CSS snippets needed; flags apply per embed.
+
+### Multiline list cells
+
+Settings toggle: list-property values in Bases table cells stack one per
+line instead of a single row of pills. Rows in Bases are fixed-height
+(virtualized), so long lists scroll inside the cell — pair with the Bases
+row-height option for taller rows.
+
 ### Property index
 
 Command: **Open property index** (also a ribbon icon). A sidebar view listing
