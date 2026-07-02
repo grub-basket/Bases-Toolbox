@@ -1,9 +1,12 @@
 import { Modal, Notice, Setting, TFile } from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { findKey, parseValueForProperty } from "./scan";
+import { parseReplacement } from "./find-replace";
+import { findKey, getPropertyType, parseValueForProperty, valueToDisplay } from "./scan";
 import { ChangeRecord } from "./types";
 
 const NEW_PROPERTY = "__bt_new_property__";
+
+type BulkMode = "set" | "append" | "remove";
 
 /**
  * Reads the current result set of the active Bases view via its controller —
@@ -47,6 +50,8 @@ export class BulkEditModal extends Modal {
   private files: TFile[];
   private baseName: string;
   private property = "";
+  private mode: BulkMode = "set";
+  private valueDescEl: HTMLElement | null = null;
   private running = false;
   private newNameSetting: Setting | null = null;
   private nameInputEl: HTMLInputElement | null = null;
@@ -99,12 +104,25 @@ export class BulkEditModal extends Modal {
     this.setNewNameVisible(this.property === NEW_PROPERTY);
 
     new Setting(contentEl)
-      .setName("Value")
-      .setDesc("Applied to all files. Empty clears the property. For list properties: one item per line.")
-      .addTextArea((t) => {
-        t.setPlaceholder("New value");
-        this.valueEl = t.inputEl;
+      .setName("Mode")
+      .setDesc("Append and Remove treat the property as a list.")
+      .addDropdown((dd) => {
+        dd.addOption("set", "Set (replace the value)");
+        dd.addOption("append", "Append items");
+        dd.addOption("remove", "Remove items");
+        dd.setValue(this.mode);
+        dd.onChange((v) => {
+          this.mode = v as BulkMode;
+          this.updateValueDesc();
+        });
       });
+
+    const valueSetting = new Setting(contentEl).setName("Value").addTextArea((t) => {
+      t.setPlaceholder("New value");
+      this.valueEl = t.inputEl;
+    });
+    this.valueDescEl = valueSetting.descEl;
+    this.updateValueDesc();
 
     contentEl.createDiv({
       cls: "bases-toolbox-fr-warning",
@@ -123,6 +141,16 @@ export class BulkEditModal extends Modal {
     if (this.newNameSetting) this.newNameSetting.settingEl.style.display = show ? "" : "none";
   }
 
+  private updateValueDesc(): void {
+    this.valueDescEl?.setText(
+      this.mode === "set"
+        ? "Applied to all files. Empty clears the property. For list properties: one item per line."
+        : this.mode === "append"
+          ? "One item per line. Added to each file's existing list (duplicates skipped); a scalar value becomes the first list item."
+          : "One item per line. Matching items are removed from each file's list; a matching scalar value is cleared."
+    );
+  }
+
   private async apply(): Promise<void> {
     if (this.running) return;
     const property =
@@ -131,10 +159,19 @@ export class BulkEditModal extends Modal {
       new Notice("Give the new property a name first.");
       return;
     }
+    const rawValue = this.valueEl?.value ?? "";
+    const items = rawValue
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((line) => parseReplacement(line, getPropertyType(this.app, property)));
+    if (this.mode !== "set" && !items.length) {
+      new Notice(`Nothing to ${this.mode} — enter one item per line.`);
+      return;
+    }
     this.running = true;
     try {
-      const rawValue = this.valueEl?.value ?? "";
-      const value = parseValueForProperty(this.app, property, rawValue);
+      const setValue = parseValueForProperty(this.app, property, rawValue);
       const changes: ChangeRecord[] = [];
       for (const file of this.files) {
         let record: ChangeRecord | null = null;
@@ -142,8 +179,9 @@ export class BulkEditModal extends Modal {
           const key = findKey(fm, property);
           const existed = key !== null;
           const cur = existed ? fm[key as string] : undefined;
+          const value = this.nextValue(cur, existed, setValue, items);
+          if (value === SKIP) return;
           if (existed && JSON.stringify(cur) === JSON.stringify(value)) return; // no-op
-          const writeKey = key ?? property;
           record = {
             path: file.path,
             property,
@@ -151,7 +189,7 @@ export class BulkEditModal extends Modal {
             newValue: Array.isArray(value) ? value.slice() : value,
             ...(existed ? {} : { created: true }),
           };
-          fm[writeKey] = value;
+          fm[key ?? property] = value;
         });
         if (record) changes.push(record);
       }
@@ -164,10 +202,45 @@ export class BulkEditModal extends Modal {
           changes,
         });
       }
-      new Notice(`${property}: set in ${changes.length} of ${this.files.length} files.`);
+      new Notice(
+        `${property}: ${this.mode === "set" ? "set" : this.mode === "append" ? "appended" : "removed"} in ${changes.length} of ${this.files.length} files.`
+      );
       this.close();
     } finally {
       this.running = false;
     }
   }
+
+  /** Computes the new value for one file, or SKIP when nothing changes. */
+  private nextValue(
+    cur: unknown,
+    existed: boolean,
+    setValue: unknown,
+    items: unknown[]
+  ): unknown {
+    if (this.mode === "set") return setValue;
+    if (this.mode === "append") {
+      const base = Array.isArray(cur) ? cur.slice() : !existed || cur === null ? [] : [cur];
+      let added = false;
+      for (const item of items) {
+        if (!base.some((x) => valueToDisplay(x) === valueToDisplay(item))) {
+          base.push(item);
+          added = true;
+        }
+      }
+      return added ? base : SKIP;
+    }
+    // remove
+    if (!existed || cur === null) return SKIP;
+    if (Array.isArray(cur)) {
+      const filtered = cur.filter(
+        (x) => !items.some((i) => valueToDisplay(i) === valueToDisplay(x))
+      );
+      if (filtered.length === cur.length) return SKIP;
+      return filtered.length ? filtered : null;
+    }
+    return items.some((i) => valueToDisplay(i) === valueToDisplay(cur)) ? null : SKIP;
+  }
 }
+
+const SKIP = Symbol("skip");
