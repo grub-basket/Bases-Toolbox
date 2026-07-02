@@ -39,7 +39,19 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   multilineListCells: false,
 };
 
+/** A filter condition removed from a .base file, kept so it can be re-enabled. */
+export interface DisabledFilter {
+  /** The raw condition string as it appeared in the .base YAML. */
+  text: string;
+  /** Which conjunction array it came from. */
+  conj: "and" | "or";
+  /** "" for base-level filters, otherwise the view name. */
+  scope: string;
+}
+
 export interface PluginData {
   settings: BasesToolboxSettings;
   history: HistoryEntry[];
+  /** Disabled filters keyed by .base file path. */
+  disabledFilters: Record<string, DisabledFilter[]>;
 }

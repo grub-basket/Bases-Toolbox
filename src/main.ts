@@ -1,14 +1,16 @@
 import { App, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
 import { installEmbedOptions } from "./embed-options";
+import { openFilterToggle } from "./filter-toggle";
 import { PropertySuggestModal } from "./find-replace";
 import { HistoryModal, undoLatest } from "./history";
 import { installNumberGuard } from "./number-guard";
 import { PropertyIndexView, VIEW_TYPE_PROPERTY_INDEX } from "./property-index";
-import { BasesToolboxSettings, DEFAULT_SETTINGS, HistoryEntry, PluginData } from "./types";
+import { BasesToolboxSettings, DEFAULT_SETTINGS, DisabledFilter, HistoryEntry, PluginData } from "./types";
 
 export default class BasesToolboxPlugin extends Plugin {
   settings: BasesToolboxSettings = { ...DEFAULT_SETTINGS };
   history: HistoryEntry[] = [];
+  disabledFilters: Record<string, DisabledFilter[]> = {};
 
   async onload(): Promise<void> {
     await this.loadPluginData();
@@ -34,6 +36,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "find-replace-history",
       name: "Find & replace history",
       callback: () => new HistoryModal(this).open(),
+    });
+
+    this.addCommand({
+      id: "toggle-base-filters",
+      name: "Toggle base filters",
+      callback: () => openFilterToggle(this),
     });
 
     this.addCommand({
@@ -95,12 +103,17 @@ export default class BasesToolboxPlugin extends Plugin {
     };
     this.settings = { ...DEFAULT_SETTINGS, ...data.settings };
     this.history = data.history ?? [];
+    this.disabledFilters = data.disabledFilters ?? {};
     // Migrate the pre-history single-undo slot.
     if (data.lastOperation) this.history.push(data.lastOperation);
   }
 
   async savePluginData(): Promise<void> {
-    const data: PluginData = { settings: this.settings, history: this.history };
+    const data: PluginData = {
+      settings: this.settings,
+      history: this.history,
+      disabledFilters: this.disabledFilters,
+    };
     await this.saveData(data);
   }
 }
