@@ -58,11 +58,23 @@ export function parseCSV(text: string): string[][] {
   return rows;
 }
 
-export function toPropertyKey(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9\-_]/g, "");
+/**
+ * Title Case with spaces ("account-holder-name" → "Account Holder Name"),
+ * preserving existing caps ("USD" stays "USD"). Chosen consciously in the web
+ * tool: display quality over formula ergonomics (spaced names need
+ * note["Account Holder Name"] syntax in Bases formulas).
+ */
+export function toPropertyName(str: string): string {
+  return (
+    str
+      .replace(/[_-]+/g, " ")
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/\s+/g, " ")
+      .trim()
+      .split(" ")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ") || "Column"
+  );
 }
 
 export function guessType(header: string, samples: string[]): CsvType {
@@ -138,8 +150,9 @@ export function cellToValue(raw: string, type: CsvType): unknown {
     case "date":
       return normalizeDate(val);
     case "list":
-      // Multi-value cells separated by ";" (or the whole cell as one item).
-      return val.split(";").map((s) => s.trim()).filter(Boolean);
+      // One cell can hold multiple items, separated by ";" or ",".
+      // Known gap (documented in the web tool too): "Doe, Jane" splits wrongly.
+      return val.split(/[;,]/).map((s) => s.trim()).filter(Boolean);
     case "link":
       return `[[${val}]]`;
     default:
@@ -149,6 +162,20 @@ export function cellToValue(raw: string, type: CsvType): unknown {
 
 export function sanitizeFilename(str: string): string {
   return str.replace(/[\\/:*?"<>|#^[\]]/g, "-").trim() || "untitled";
+}
+
+/**
+ * Counts M/D/YYYY-style dates where day and month are both ≤ 12 — those are
+ * ambiguous (3/4/2024 silently reads as March 4, US order). Surfaced as a
+ * warning so the user can double-check.
+ */
+export function countAmbiguousDates(values: string[]): number {
+  let n = 0;
+  for (const v of values) {
+    const m = v.trim().match(/^(\d{1,2})\/(\d{1,2})\/\d{4}$/);
+    if (m && +m[1] <= 12 && +m[2] <= 12 && m[1] !== m[2]) n++;
+  }
+  return n;
 }
 
 /** Serializes one CSV cell for export: quote when needed, strip wikilinks. */
