@@ -15,6 +15,7 @@ import { installEmbedOptions } from "./embed-options";
 import { openFilterToggle } from "./filter-toggle";
 import { PropertySuggestModal } from "./find-replace";
 import { HistoryModal, undoLatest } from "./history";
+import { DuplicateFinderModal, startMerge } from "./merge";
 import { installNumberGuard } from "./number-guard";
 import { PropertyIndexView, VIEW_TYPE_PROPERTY_INDEX } from "./property-index";
 import { BasesToolboxSettings, DEFAULT_SETTINGS, DisabledFilter, HistoryEntry, PluginData } from "./types";
@@ -50,6 +51,18 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "find-replace-history",
       name: "Find & replace history",
       callback: () => new HistoryModal(this).open(),
+    });
+
+    this.addCommand({
+      id: "merge-note",
+      name: "Merge current note into another",
+      callback: () => startMerge(this),
+    });
+
+    this.addCommand({
+      id: "find-duplicates",
+      name: "Find duplicate notes",
+      callback: () => new DuplicateFinderModal(this).open(),
     });
 
     this.addCommand({

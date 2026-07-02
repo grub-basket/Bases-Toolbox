@@ -55,6 +55,27 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   width: 100%;
 }
 
+/* Duplicate finder */
+.bases-toolbox-dup-group {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-2);
+  margin: var(--size-4-2) 0;
+}
+
+.bases-toolbox-dup-key {
+  font-weight: var(--font-medium);
+  font-size: var(--font-ui-small);
+  margin-bottom: var(--size-2-2);
+}
+
+.bases-toolbox-dup-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  padding: var(--size-2-1) 0;
+}
+
 /* Cell zoom modal */
 .bases-toolbox-zoom-textarea {
   width: 100%;
