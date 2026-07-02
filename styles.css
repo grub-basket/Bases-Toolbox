@@ -23,6 +23,38 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   overflow-y: auto;
 }
 
+/* CSV import modal */
+.bases-toolbox-csv-modal {
+  width: var(--modal-width);
+  max-width: 900px;
+}
+
+.bases-toolbox-csv-input {
+  width: 100%;
+  min-height: 6em;
+  resize: vertical;
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+}
+
+.bases-toolbox-csv-table {
+  width: 100%;
+  margin: var(--size-4-2) 0;
+  border-collapse: collapse;
+}
+
+.bases-toolbox-csv-table th,
+.bases-toolbox-csv-table td {
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding: var(--size-2-1) var(--size-2-2);
+  text-align: left;
+  font-size: var(--font-ui-small);
+}
+
+.bases-toolbox-csv-table input[type="text"] {
+  width: 100%;
+}
+
 /* Cell zoom modal */
 .bases-toolbox-zoom-textarea {
   width: 100%;

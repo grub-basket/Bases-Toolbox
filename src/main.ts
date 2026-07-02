@@ -9,6 +9,8 @@ import {
   installConditionalFormatting,
   redecorateAll,
 } from "./conditional-format";
+import { exportBaseCsv } from "./csv-export";
+import { CsvImportModal } from "./csv-import";
 import { installEmbedOptions } from "./embed-options";
 import { openFilterToggle } from "./filter-toggle";
 import { PropertySuggestModal } from "./find-replace";
@@ -48,6 +50,18 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "find-replace-history",
       name: "Find & replace history",
       callback: () => new HistoryModal(this).open(),
+    });
+
+    this.addCommand({
+      id: "import-csv",
+      name: "Import CSV as notes",
+      callback: () => new CsvImportModal(this).open(),
+    });
+
+    this.addCommand({
+      id: "export-base-csv",
+      name: "Export base results as CSV",
+      callback: () => void exportBaseCsv(this),
     });
 
     this.addCommand({
