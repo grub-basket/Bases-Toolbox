@@ -13,7 +13,8 @@ a global override collapses the list to the new value). Leaving the
 replacement empty clears the value.
 
 Every run is logged. **Find & replace history** lists all past operations
-(newest first, capped at the last 50) and each one can be reverted;
+(newest first, uncapped by default — an optional cap and a clear-history
+action live in the settings) and each one can be reverted;
 **Undo last find & replace** reverts the newest entry. The log survives app
 restarts. Reverts are best-effort: a file is only restored if the property
 still exists in it and still holds the value the operation wrote — renamed

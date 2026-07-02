@@ -26,15 +26,15 @@ export interface BasesToolboxSettings {
   blockArrowAndWheel: boolean;
   /** Swallow character keys other than digits, "." and "-" on number property inputs. */
   digitsOnlyTyping: boolean;
+  /** Max history entries to keep; null = unlimited. Oldest are dropped first. */
+  historyCap: number | null;
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   blockArrowAndWheel: true,
   digitsOnlyTyping: true,
+  historyCap: null,
 };
-
-/** Oldest entries are dropped past this point to keep data.json bounded. */
-export const HISTORY_MAX = 50;
 
 export interface PluginData {
   settings: BasesToolboxSettings;

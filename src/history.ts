@@ -106,6 +106,22 @@ export class HistoryModal extends Modal {
       text: "Reverts are best-effort: files whose value was edited again, whose property was renamed or removed, or that no longer exist are skipped.",
     });
 
+    new Setting(contentEl)
+      .setName(`${this.plugin.history.length} operation${this.plugin.history.length === 1 ? "" : "s"} logged`)
+      .addButton((b) => {
+        let armed = false;
+        b.setButtonText("Clear history").onClick(async () => {
+          if (!armed) {
+            armed = true;
+            b.setButtonText("Click again to confirm");
+            b.buttonEl.addClass("mod-warning");
+            return;
+          }
+          await this.plugin.clearHistory();
+          this.render();
+        });
+      });
+
     for (const entry of [...this.plugin.history].reverse()) {
       const n = entry.changes.length;
       const when = new Date(entry.timestamp).toLocaleString();

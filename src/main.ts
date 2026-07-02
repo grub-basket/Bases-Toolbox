@@ -3,7 +3,7 @@ import { PropertySuggestModal } from "./find-replace";
 import { HistoryModal, undoLatest } from "./history";
 import { installNumberGuard } from "./number-guard";
 import { PropertyIndexView, VIEW_TYPE_PROPERTY_INDEX } from "./property-index";
-import { BasesToolboxSettings, DEFAULT_SETTINGS, HISTORY_MAX, HistoryEntry, PluginData } from "./types";
+import { BasesToolboxSettings, DEFAULT_SETTINGS, HistoryEntry, PluginData } from "./types";
 
 export default class BasesToolboxPlugin extends Plugin {
   settings: BasesToolboxSettings = { ...DEFAULT_SETTINGS };
@@ -61,7 +61,19 @@ export default class BasesToolboxPlugin extends Plugin {
 
   async addHistoryEntry(entry: HistoryEntry): Promise<void> {
     this.history.push(entry);
-    if (this.history.length > HISTORY_MAX) this.history = this.history.slice(-HISTORY_MAX);
+    this.trimHistory();
+    await this.savePluginData();
+  }
+
+  /** Drops the oldest entries when a cap is set. */
+  trimHistory(): void {
+    const cap = this.settings.historyCap;
+    if (cap !== null && cap > 0 && this.history.length > cap)
+      this.history = this.history.slice(-cap);
+  }
+
+  async clearHistory(): Promise<void> {
+    this.history = [];
     await this.savePluginData();
   }
 
@@ -116,5 +128,44 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           await this.plugin.savePluginData();
         })
       );
+
+    new Setting(containerEl)
+      .setName("History cap")
+      .setDesc(
+        "Max find & replace operations to keep in the history. Leave empty for no cap. Lowering it drops the oldest entries immediately."
+      )
+      .addText((t) => {
+        t.setPlaceholder("No cap");
+        t.setValue(this.plugin.settings.historyCap?.toString() ?? "");
+        t.onChange(async (v) => {
+          const trimmed = v.trim();
+          const n = Number(trimmed);
+          if (trimmed !== "" && (!Number.isInteger(n) || n < 1)) return; // ignore invalid input
+          this.plugin.settings.historyCap = trimmed === "" ? null : n;
+          this.plugin.trimHistory();
+          await this.plugin.savePluginData();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Clear find & replace history")
+      .setDesc("Removes all logged operations. Reverting them is no longer possible.")
+      .addButton((b) => {
+        const label = () =>
+          `Clear (${this.plugin.history.length} entr${this.plugin.history.length === 1 ? "y" : "ies"})`;
+        let armed = false;
+        b.setButtonText(label()).onClick(async () => {
+          if (!armed) {
+            armed = true;
+            b.setButtonText("Click again to confirm");
+            b.buttonEl.addClass("mod-warning");
+            return;
+          }
+          await this.plugin.clearHistory();
+          armed = false;
+          b.setButtonText(label());
+          b.buttonEl.removeClass("mod-warning");
+        });
+      });
   }
 }
