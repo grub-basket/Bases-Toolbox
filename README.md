@@ -117,6 +117,56 @@ expanded — every distinct value with usage counts. Built straight from the
 metadata cache, so it never forgets a property the way the Bases filter menu
 can. Each property and value has a shortcut into find & replace.
 
+### Allowed values (pinned)
+
+From the property index, pin the allowed values of any property (pin icon).
+Editing a pinned property — in the frontmatter panel or a Bases cell — shows
+a picker of the allowed values, and the **Audit allowed values** command
+lists every value that falls outside a pinned list, with one-click jumps
+into find & replace.
+
+### Inline-field migration
+
+Command: **Migrate inline fields to properties**. Scans for Dataview-style
+`Key:: value` lines (and optionally `[key:: value]` spans), previews what it
+found, and writes them into frontmatter so Bases can query them. Optionally
+cleans the migrated fields out of note bodies (off by default — that part
+isn't revertible; the frontmatter side is, via history). Scope to a folder
+or the whole vault; existing properties are skipped unless you opt into
+overwriting.
+
+## Credits & related plugins
+
+Parts of this plugin overlap with — and were inspired by — existing
+community work. Credit where due:
+
+- **[Mass Editor](https://github.com/ondreu/mass-editor)** — shipped a
+  query-based frontmatter editor with backups and selective undo while this
+  plugin was already in development; our find & replace + history was built
+  independently, but if you want query-builder-style mass edits, check it out.
+- **[Better Properties](https://github.com/unxok/obsidian-better-properties)**
+  and **[Metadata Menu](https://github.com/mdelobelle/metadatamenu)** — the
+  full-featured takes on select-style property fields with predefined values.
+  Our pinned allowed values are the lightweight, Bases-focused slice of that
+  idea.
+- **[Dataview to Properties](https://github.com/tsunemaru/dataview-to-properties)**
+  — covers the basic inline-field conversion; ours adds scoping, dry-run
+  preview, and revertible frontmatter writes.
+- **[Multi Properties](https://github.com/fez-github/obsidian-multi-properties)**
+  — bulk property editing over folders and search results (ours scopes to
+  Bases view results instead).
+- **[Bases Lock](https://github.com/tcyeee/obsidian-bases-lock)** — per-embed
+  toolbar hiding via embed flags; our embed options add the fixed-height flag.
+- **[Colored Bases Properties](https://github.com/rafjaf/obsidian-colored-bases-properties)**
+  — colors property value pills in Bases; our conditional formatting colors
+  whole rows by rules.
+- **[Dualyze Notes](https://github.com/dualyze-ai/dualyze-notes)** and
+  **[Merge Notes](https://github.com/martinschenk/obsidian-merge-notes)** —
+  note merging by body; ours adds frontmatter-aware merging with conflict
+  resolution.
+- **[CSV-to-Obsidian-Properties-for-Bases](https://github.com/grub-basket/CSV-to-Obsidian-Properties-for-Bases)**
+  — the companion web tool our CSV import is ported from.
+
 ## Development
 
 ```
