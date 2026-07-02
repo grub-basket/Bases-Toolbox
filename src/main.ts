@@ -1,6 +1,14 @@
 import { App, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
 import { openBulkEdit } from "./bulk-edit";
 import { installCellZoomTracking, openCellZoom } from "./cell-zoom";
+import {
+  FormatOp,
+  FormatRule,
+  OP_LABELS,
+  RULE_COLORS,
+  installConditionalFormatting,
+  redecorateAll,
+} from "./conditional-format";
 import { installEmbedOptions } from "./embed-options";
 import { openFilterToggle } from "./filter-toggle";
 import { PropertySuggestModal } from "./find-replace";
@@ -20,6 +28,7 @@ export default class BasesToolboxPlugin extends Plugin {
     installNumberGuard(this);
     installEmbedOptions(this);
     installCellZoomTracking(this);
+    installConditionalFormatting(this);
 
     this.registerView(VIEW_TYPE_PROPERTY_INDEX, (leaf) => new PropertyIndexView(leaf, this));
 
@@ -182,6 +191,8 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         })
       );
 
+    this.renderFormatRules(containerEl);
+
     new Setting(containerEl)
       .setName("History cap")
       .setDesc(
@@ -220,5 +231,90 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           b.buttonEl.removeClass("mod-warning");
         });
       });
+  }
+
+  private renderFormatRules(containerEl: HTMLElement): void {
+    new Setting(containerEl)
+      .setName("Conditional formatting")
+      .setDesc("Color Bases rows by property value. The first matching rule wins.")
+      .setHeading();
+
+    for (const rule of this.plugin.settings.formatRules) {
+      const setting = new Setting(containerEl).setName(
+        `${rule.property} ${OP_LABELS[rule.op]}${
+          rule.op === "empty" || rule.op === "not-empty" ? "" : ` “${rule.value}”`
+        }`
+      );
+      setting.addDropdown((dd) => {
+        for (const c of Object.keys(RULE_COLORS)) dd.addOption(c, c);
+        dd.setValue(rule.color);
+        dd.onChange(async (v) => {
+          rule.color = v;
+          await this.plugin.savePluginData();
+          redecorateAll(this.plugin);
+        });
+      });
+      setting.addToggle((t) =>
+        t.setValue(rule.enabled).onChange(async (v) => {
+          rule.enabled = v;
+          await this.plugin.savePluginData();
+          redecorateAll(this.plugin);
+        })
+      );
+      setting.addExtraButton((b) =>
+        b
+          .setIcon("trash")
+          .setTooltip("Delete rule")
+          .onClick(async () => {
+            this.plugin.settings.formatRules = this.plugin.settings.formatRules.filter(
+              (r) => r !== rule
+            );
+            await this.plugin.savePluginData();
+            redecorateAll(this.plugin);
+            this.display();
+          })
+      );
+    }
+
+    let propEl: HTMLInputElement | null = null;
+    let valueEl: HTMLInputElement | null = null;
+    let opEl: HTMLSelectElement | null = null;
+    let colorEl: HTMLSelectElement | null = null;
+    new Setting(containerEl)
+      .setName("Add rule")
+      .addText((t) => {
+        t.setPlaceholder("property");
+        propEl = t.inputEl;
+      })
+      .addDropdown((dd) => {
+        for (const [op, label] of Object.entries(OP_LABELS)) dd.addOption(op, label);
+        opEl = dd.selectEl;
+      })
+      .addText((t) => {
+        t.setPlaceholder("value");
+        valueEl = t.inputEl;
+      })
+      .addDropdown((dd) => {
+        for (const c of Object.keys(RULE_COLORS)) dd.addOption(c, c);
+        colorEl = dd.selectEl;
+      })
+      .addButton((b) =>
+        b.setButtonText("Add").onClick(async () => {
+          const property = propEl?.value.trim() ?? "";
+          if (!property) return;
+          const rule: FormatRule = {
+            id: `${Date.now()}-${this.plugin.settings.formatRules.length}`,
+            property,
+            op: (opEl?.value ?? "equals") as FormatOp,
+            value: valueEl?.value ?? "",
+            color: colorEl?.value ?? "red",
+            enabled: true,
+          };
+          this.plugin.settings.formatRules.push(rule);
+          await this.plugin.savePluginData();
+          redecorateAll(this.plugin);
+          this.display();
+        })
+      );
   }
 }

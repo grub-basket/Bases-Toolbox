@@ -32,6 +32,8 @@ export interface BasesToolboxSettings {
   historyCap: number | null;
   /** Stack list-property pills vertically in Bases table cells. */
   multilineListCells: boolean;
+  /** Conditional row-coloring rules for Bases views. */
+  formatRules: import("./conditional-format").FormatRule[];
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -39,6 +41,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   digitsOnlyTyping: true,
   historyCap: null,
   multilineListCells: false,
+  formatRules: [],
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */
