@@ -1,4 +1,5 @@
 import { App, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
+import { AllowedValuesAuditModal, installAllowedValuePicker } from "./allowed-values";
 import { openBulkEdit } from "./bulk-edit";
 import { installCellZoomTracking, openCellZoom } from "./cell-zoom";
 import {
@@ -15,16 +16,19 @@ import { installEmbedOptions } from "./embed-options";
 import { openFilterToggle } from "./filter-toggle";
 import { PropertySuggestModal } from "./find-replace";
 import { HistoryModal, undoLatest } from "./history";
+import { InlineFieldMigratorModal } from "./inline-fields";
 import { DuplicateFinderModal, startMerge } from "./merge";
 import { installNumberGuard } from "./number-guard";
 import { PropertyIndexView, VIEW_TYPE_PROPERTY_INDEX } from "./property-index";
 import { openRollup } from "./rollup";
+import { PropertyCache } from "./scan";
 import { BasesToolboxSettings, DEFAULT_SETTINGS, DisabledFilter, HistoryEntry, PluginData } from "./types";
 
 export default class BasesToolboxPlugin extends Plugin {
   settings: BasesToolboxSettings = { ...DEFAULT_SETTINGS };
   history: HistoryEntry[] = [];
   disabledFilters: Record<string, DisabledFilter[]> = {};
+  propertyCache: PropertyCache = new PropertyCache(this.app);
 
   async onload(): Promise<void> {
     await this.loadPluginData();
@@ -33,6 +37,12 @@ export default class BasesToolboxPlugin extends Plugin {
     installEmbedOptions(this);
     installCellZoomTracking(this);
     installConditionalFormatting(this);
+    installAllowedValuePicker(this);
+
+    const dirty = () => this.propertyCache.markDirty();
+    this.registerEvent(this.app.metadataCache.on("changed", dirty));
+    this.registerEvent(this.app.metadataCache.on("deleted", dirty));
+    this.registerEvent(this.app.vault.on("rename", dirty));
 
     this.registerView(VIEW_TYPE_PROPERTY_INDEX, (leaf) => new PropertyIndexView(leaf, this));
 
@@ -55,9 +65,21 @@ export default class BasesToolboxPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "audit-allowed-values",
+      name: "Audit allowed values",
+      callback: () => new AllowedValuesAuditModal(this).open(),
+    });
+
+    this.addCommand({
       id: "compute-rollup",
       name: "Compute rollup into property",
       callback: () => openRollup(this),
+    });
+
+    this.addCommand({
+      id: "migrate-inline-fields",
+      name: "Migrate inline fields to properties",
+      callback: () => new InlineFieldMigratorModal(this).open(),
     });
 
     this.addCommand({

@@ -1,6 +1,6 @@
 import { FuzzySuggestModal, Modal, Notice, Setting } from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { EMPTY_DISPLAY, PropertyUsage, findKey, scanProperties, valueToDisplay } from "./scan";
+import { EMPTY_DISPLAY, PropertyUsage, findKey, valueToDisplay } from "./scan";
 import { ChangeRecord } from "./types";
 
 /** Sentinel for the "match every value" dropdown option. */
@@ -13,7 +13,7 @@ export class PropertySuggestModal extends FuzzySuggestModal<PropertyUsage> {
   constructor(plugin: BasesToolboxPlugin) {
     super(plugin.app);
     this.plugin = plugin;
-    this.items = scanProperties(plugin.app);
+    this.items = plugin.propertyCache.get();
     this.setPlaceholder("Pick a property to find & replace…");
   }
 
@@ -36,6 +36,7 @@ export class FindReplaceModal extends Modal {
   private find: string;
   private replace = "";
   private infoEl: HTMLElement | null = null;
+  private replaceInfoEl: HTMLElement | null = null;
   private running = false;
 
   constructor(plugin: BasesToolboxPlugin, usage: PropertyUsage, presetFind?: string) {
@@ -70,14 +71,19 @@ export class FindReplaceModal extends Modal {
       .setDesc('New value for every match. Leave empty to clear the value.')
       .addText((t) => {
         t.setPlaceholder("New value");
-        t.onChange((v) => (this.replace = v));
+        t.onChange((v) => {
+          this.replace = v;
+          this.updateReplaceInfo();
+        });
         t.inputEl.addEventListener("keydown", (e) => {
           if (e.key === "Enter") void this.apply();
         });
       });
 
+    this.replaceInfoEl = contentEl.createDiv({ cls: "bases-toolbox-fr-info" });
     this.infoEl = contentEl.createDiv({ cls: "bases-toolbox-fr-info" });
     this.updateInfo();
+    this.updateReplaceInfo();
 
     contentEl.createDiv({
       cls: "bases-toolbox-fr-warning",
@@ -100,7 +106,27 @@ export class FindReplaceModal extends Modal {
   private updateInfo(): void {
     if (!this.infoEl) return;
     const n = this.matchCount();
-    this.infoEl.setText(`${n} file${n === 1 ? "" : "s"} will be checked for changes.`);
+    this.infoEl.setText(
+      this.find !== ALL_VALUES && n === 0
+        ? `“${this.find}” no longer exists as a value of ${this.usage.name} — nothing will change.`
+        : `${n} file${n === 1 ? "" : "s"} will be checked for changes.`
+    );
+  }
+
+  /** Tells the user whether the replacement value already exists for this property. */
+  private updateReplaceInfo(): void {
+    if (!this.replaceInfoEl) return;
+    if (this.replace.trim() === "") {
+      this.replaceInfoEl.setText("Empty replacement clears the value.");
+      return;
+    }
+    const display = valueToDisplay(parseReplacement(this.replace, this.usage.type));
+    const count = this.usage.values.get(display) ?? 0;
+    this.replaceInfoEl.setText(
+      count
+        ? `“${display}” is an existing value of ${this.usage.name} (${count} file${count === 1 ? "" : "s"}) — matches will merge into it.`
+        : `“${display}” is a new value for ${this.usage.name}.`
+    );
   }
 
   private async apply(): Promise<void> {

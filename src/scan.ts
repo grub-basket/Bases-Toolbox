@@ -103,6 +103,34 @@ export function parseValueForProperty(app: App, key: string, raw: string): unkno
   return raw;
 }
 
+/**
+ * Memoized property index. Obsidian's metadataCache is already the "database"
+ * (an incrementally-updated in-memory index of all frontmatter), so no
+ * separate store is needed — this just avoids re-deriving the per-property
+ * aggregation on every modal open. Any metadata change marks it dirty; the
+ * next read rebuilds (O(files) map lookups, no disk I/O).
+ */
+export class PropertyCache {
+  private cached: PropertyUsage[] | null = null;
+
+  constructor(private app: App) {}
+
+  markDirty(): void {
+    this.cached = null;
+  }
+
+  get(): PropertyUsage[] {
+    if (!this.cached) this.cached = scanProperties(this.app);
+    return this.cached;
+  }
+
+  /** O(1)-ish lookup of one property's usage (case-insensitive). */
+  usage(name: string): PropertyUsage | undefined {
+    const lower = name.toLowerCase();
+    return this.get().find((u) => u.name.toLowerCase() === lower);
+  }
+}
+
 /** Finds the actual frontmatter key matching a property name, case-insensitively. */
 export function findKey(fm: Record<string, unknown>, name: string): string | null {
   if (name in fm) return name;
