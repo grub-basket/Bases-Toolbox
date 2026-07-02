@@ -138,34 +138,53 @@ overwriting.
 ## Credits & related plugins
 
 Parts of this plugin overlap with — and were inspired by — existing
-community work. Credit where due:
+community work. Credit where due, and if one of these fits your workflow
+better, use it. What each is capable of:
 
-- **[Mass Editor](https://github.com/ondreu/mass-editor)** — shipped a
-  query-based frontmatter editor with backups and selective undo while this
-  plugin was already in development; our find & replace + history was built
-  independently, but if you want query-builder-style mass edits, check it out.
-- **[Better Properties](https://github.com/unxok/obsidian-better-properties)**
-  and **[Metadata Menu](https://github.com/mdelobelle/metadatamenu)** — the
-  full-featured takes on select-style property fields with predefined values.
-  Our pinned allowed values are the lightweight, Bases-focused slice of that
-  idea.
-- **[Dataview to Properties](https://github.com/tsunemaru/dataview-to-properties)**
-  — covers the basic inline-field conversion; ours adds scoping, dry-run
-  preview, and revertible frontmatter writes.
-- **[Multi Properties](https://github.com/fez-github/obsidian-multi-properties)**
-  — bulk property editing over folders and search results (ours scopes to
-  Bases view results instead).
+- **[Mass Editor](https://github.com/ondreu/mass-editor)** — shipped while
+  this plugin's find & replace was already in development (built
+  independently). Capabilities:
+  - query builder over tags, frontmatter, and body text
+  - bulk frontmatter set / add / delete / append on the matched notes
+  - automatic per-run backups with a history panel
+  - selective undo with drift detection and git-style diffs
+- **[Better Properties](https://github.com/unxok/obsidian-better-properties)** —
+  the full-featured take on property editing (BRAT install):
+  - select-style fields with predefined value lists per property
+  - extra property input types beyond core's set
+  - rename or delete a property across the whole vault from the property menu
+- **[Metadata Menu](https://github.com/mdelobelle/metadatamenu)** — the
+  heavyweight metadata suite (requires Dataview):
+  - fileClass schemas: define which fields a kind of note has
+  - select / multi-select fields with predefined and dynamic values
+  - lookup fields that aggregate over Dataview queries and persist results
+    into frontmatter (count / sum / average / custom JS)
+  - edit any field from context menus, links, or buttons anywhere in the app
+- **[Multi Properties](https://github.com/fez-github/obsidian-multi-properties)** —
+  bulk property editing:
+  - add or overwrite properties on many notes at once
+  - works on folders, multi-selected files, and search results
+    (this plugin covers the missing scope: the live results of a Bases view)
+- **[Dataview to Properties](https://github.com/tsunemaru/dataview-to-properties)** —
+  converts Dataview inline `key:: value` fields into frontmatter properties
+  (our migrator adds folder scoping, a dry-run preview, and revertible writes)
 - **[Bases Lock](https://github.com/tcyeee/obsidian-bases-lock)** — per-embed
-  toolbar hiding via embed flags; our embed options add the fixed-height flag.
-- **[Colored Bases Properties](https://github.com/rafjaf/obsidian-colored-bases-properties)**
-  — colors property value pills in Bases; our conditional formatting colors
-  whole rows by rules.
-- **[Dualyze Notes](https://github.com/dualyze-ai/dualyze-notes)** and
-  **[Merge Notes](https://github.com/martinschenk/obsidian-merge-notes)** —
-  note merging by body; ours adds frontmatter-aware merging with conflict
-  resolution.
-- **[CSV-to-Obsidian-Properties-for-Bases](https://github.com/grub-basket/CSV-to-Obsidian-Properties-for-Bases)**
-  — the companion web tool our CSV import is ported from.
+  control of embedded bases:
+  - hide the toolbar / lock header interaction with `|x` / `|o` embed flags
+    (reading view; our flags add a fixed-height option)
+- **[Colored Bases Properties](https://github.com/rafjaf/obsidian-colored-bases-properties)** —
+  automatic, hash-based colors for property value pills in Bases views
+  (our conditional formatting instead colors whole rows by explicit rules)
+- **[Dualyze Notes](https://github.com/dualyze-ai/dualyze-notes)** — finds
+  similar notes by weighted title / heading / tag / link / body similarity
+  and builds side-by-side merge drafts for their bodies
+- **[Merge Notes](https://github.com/martinschenk/obsidian-merge-notes)** —
+  straightforward concatenation of two notes into one
+  (our merge adds frontmatter awareness: list union + per-conflict picker)
+- **[CSV-to-Obsidian-Properties-for-Bases](https://github.com/grub-basket/CSV-to-Obsidian-Properties-for-Bases)** —
+  the companion browser tool our CSV import is ported from:
+  - paste/drop CSV or TSV, map columns to typed properties, live preview
+  - downloads a ZIP of ready-to-drop .md files — no install, works offline
 
 ## Development
 
