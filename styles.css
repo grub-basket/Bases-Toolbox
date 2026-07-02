@@ -1,18 +1,15 @@
-/* Multiline list cells: stack list-property pills vertically in Bases tables */
+/* Multiline list cells: stack list-property pills vertically in Bases tables.
+   Rows are virtualized with a fixed height (inline top offsets computed in JS),
+   so per-row auto-height is off the table; instead the stacked list scrolls
+   within the cell, and Bases' native row-height option provides taller rows. */
 body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   flex-direction: column;
   align-items: flex-start;
   flex-wrap: nowrap;
-}
-
-body.bases-toolbox-multiline-lists .bases-td,
-body.bases-toolbox-multiline-lists .bases-table-cell {
-  height: auto;
-  min-height: var(--size-4-6);
-}
-
-body.bases-toolbox-multiline-lists .bases-tr {
-  height: auto;
+  /* the container otherwise shrinks to fit and clips the pills */
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
 }
 
 /* Find & replace modal */

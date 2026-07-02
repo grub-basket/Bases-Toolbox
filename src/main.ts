@@ -142,7 +142,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Multiline list cells")
       .setDesc(
-        "In Bases table views, show list-property values stacked one per line instead of a single row of pills."
+        "In Bases table views, show list-property values stacked one per line instead of a single row of pills. Long lists scroll inside the cell — pair with the Bases row height option for taller rows."
       )
       .addToggle((t) =>
         t.setValue(this.plugin.settings.multilineListCells).onChange(async (v) => {
