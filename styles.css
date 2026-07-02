@@ -109,6 +109,22 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   padding: var(--size-2-1) 0;
 }
 
+.bases-toolbox-csv-preview {
+  background: var(--background-secondary);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-2);
+  font-size: var(--font-ui-smaller);
+  max-height: 220px;
+  overflow: auto;
+}
+
+.bases-toolbox-csv-preview-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  margin-top: var(--size-4-2);
+}
+
 /* Cell zoom modal */
 .bases-toolbox-zoom-textarea {
   width: 100%;
