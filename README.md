@@ -12,8 +12,12 @@ once. Works on list properties too (the matched item is replaced in place;
 a global override collapses the list to the new value). Leaving the
 replacement empty clears the value.
 
-Every run keeps the previous values, so **Undo last find & replace** restores
-them — one level deep, and it survives an app restart.
+Every run is logged. **Find & replace history** lists all past operations
+(newest first, capped at the last 50) and each one can be reverted;
+**Undo last find & replace** reverts the newest entry. The log survives app
+restarts. Reverts are best-effort: a file is only restored if the property
+still exists in it and still holds the value the operation wrote — renamed
+properties, values edited since, and deleted files are skipped and reported.
 
 ### Number input guard
 

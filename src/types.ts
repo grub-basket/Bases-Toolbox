@@ -3,15 +3,22 @@ export interface ChangeRecord {
   property: string;
   /** Value before the change (the property always existed when recorded). */
   oldValue: unknown;
+  /**
+   * Value the operation wrote. Undefined only in entries migrated from the
+   * pre-history format; those revert unconditionally.
+   */
+  newValue?: unknown;
 }
 
-export interface LastOperation {
+export interface HistoryEntry {
   property: string;
   /** Display string of the value that was matched, or null for "all values". */
   find: string | null;
   replace: string;
   timestamp: number;
   changes: ChangeRecord[];
+  /** Set once the entry has been reverted (even partially). */
+  revertedAt?: number;
 }
 
 export interface BasesToolboxSettings {
@@ -26,7 +33,10 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   digitsOnlyTyping: true,
 };
 
+/** Oldest entries are dropped past this point to keep data.json bounded. */
+export const HISTORY_MAX = 50;
+
 export interface PluginData {
   settings: BasesToolboxSettings;
-  lastOperation: LastOperation | null;
+  history: HistoryEntry[];
 }

@@ -1,12 +1,13 @@
 import { App, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
-import { PropertySuggestModal, undoLastOperation } from "./find-replace";
+import { PropertySuggestModal } from "./find-replace";
+import { HistoryModal, undoLatest } from "./history";
 import { installNumberGuard } from "./number-guard";
 import { PropertyIndexView, VIEW_TYPE_PROPERTY_INDEX } from "./property-index";
-import { BasesToolboxSettings, DEFAULT_SETTINGS, LastOperation, PluginData } from "./types";
+import { BasesToolboxSettings, DEFAULT_SETTINGS, HISTORY_MAX, HistoryEntry, PluginData } from "./types";
 
 export default class BasesToolboxPlugin extends Plugin {
   settings: BasesToolboxSettings = { ...DEFAULT_SETTINGS };
-  lastOperation: LastOperation | null = null;
+  history: HistoryEntry[] = [];
 
   async onload(): Promise<void> {
     await this.loadPluginData();
@@ -24,7 +25,13 @@ export default class BasesToolboxPlugin extends Plugin {
     this.addCommand({
       id: "undo-last-find-replace",
       name: "Undo last find & replace",
-      callback: () => void undoLastOperation(this),
+      callback: () => void undoLatest(this),
+    });
+
+    this.addCommand({
+      id: "find-replace-history",
+      name: "Find & replace history",
+      callback: () => new HistoryModal(this).open(),
     });
 
     this.addCommand({
@@ -52,19 +59,24 @@ export default class BasesToolboxPlugin extends Plugin {
     await this.app.workspace.revealLeaf(leaf);
   }
 
-  async setLastOperation(op: LastOperation | null): Promise<void> {
-    this.lastOperation = op;
+  async addHistoryEntry(entry: HistoryEntry): Promise<void> {
+    this.history.push(entry);
+    if (this.history.length > HISTORY_MAX) this.history = this.history.slice(-HISTORY_MAX);
     await this.savePluginData();
   }
 
   private async loadPluginData(): Promise<void> {
-    const data = ((await this.loadData()) ?? {}) as Partial<PluginData>;
+    const data = ((await this.loadData()) ?? {}) as Partial<PluginData> & {
+      lastOperation?: HistoryEntry | null;
+    };
     this.settings = { ...DEFAULT_SETTINGS, ...data.settings };
-    this.lastOperation = data.lastOperation ?? null;
+    this.history = data.history ?? [];
+    // Migrate the pre-history single-undo slot.
+    if (data.lastOperation) this.history.push(data.lastOperation);
   }
 
   async savePluginData(): Promise<void> {
-    const data: PluginData = { settings: this.settings, lastOperation: this.lastOperation };
+    const data: PluginData = { settings: this.settings, history: this.history };
     await this.saveData(data);
   }
 }

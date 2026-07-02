@@ -11,6 +11,14 @@
   margin-bottom: var(--size-4-2);
 }
 
+.bases-toolbox-history-reverted {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  padding: 0 var(--size-2-1);
+}
+
 /* Property index view */
 .bases-toolbox-index-search {
   width: 100%;
