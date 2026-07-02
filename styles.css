@@ -23,6 +23,14 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   overflow-y: auto;
 }
 
+/* Cell zoom modal */
+.bases-toolbox-zoom-textarea {
+  width: 100%;
+  min-height: 12em;
+  resize: vertical;
+  font-family: var(--font-text);
+}
+
 /* Find & replace modal */
 .bases-toolbox-fr-info {
   color: var(--text-muted);

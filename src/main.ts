@@ -1,4 +1,5 @@
 import { App, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
+import { installCellZoomTracking, openCellZoom } from "./cell-zoom";
 import { installEmbedOptions } from "./embed-options";
 import { openFilterToggle } from "./filter-toggle";
 import { PropertySuggestModal } from "./find-replace";
@@ -17,6 +18,7 @@ export default class BasesToolboxPlugin extends Plugin {
 
     installNumberGuard(this);
     installEmbedOptions(this);
+    installCellZoomTracking(this);
 
     this.registerView(VIEW_TYPE_PROPERTY_INDEX, (leaf) => new PropertyIndexView(leaf, this));
 
@@ -36,6 +38,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "find-replace-history",
       name: "Find & replace history",
       callback: () => new HistoryModal(this).open(),
+    });
+
+    this.addCommand({
+      id: "zoom-into-cell",
+      name: "Zoom into focused cell",
+      callback: () => openCellZoom(this),
     });
 
     this.addCommand({
