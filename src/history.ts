@@ -42,7 +42,8 @@ export async function revertEntry(
         report.valueChanged++;
         return;
       }
-      fm[key] = change.oldValue;
+      if (change.created) delete fm[key];
+      else fm[key] = change.oldValue;
       report.restored++;
     });
   }

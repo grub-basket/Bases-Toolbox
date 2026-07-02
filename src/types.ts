@@ -1,13 +1,15 @@
 export interface ChangeRecord {
   path: string;
   property: string;
-  /** Value before the change (the property always existed when recorded). */
+  /** Value before the change (absent when the operation created the property). */
   oldValue: unknown;
   /**
    * Value the operation wrote. Undefined only in entries migrated from the
    * pre-history format; those revert unconditionally.
    */
   newValue?: unknown;
+  /** True when the operation created the property; revert deletes it. */
+  created?: boolean;
 }
 
 export interface HistoryEntry {

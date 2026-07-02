@@ -1,4 +1,5 @@
 import { App, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
+import { openBulkEdit } from "./bulk-edit";
 import { installCellZoomTracking, openCellZoom } from "./cell-zoom";
 import { installEmbedOptions } from "./embed-options";
 import { openFilterToggle } from "./filter-toggle";
@@ -38,6 +39,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "find-replace-history",
       name: "Find & replace history",
       callback: () => new HistoryModal(this).open(),
+    });
+
+    this.addCommand({
+      id: "bulk-edit-base-results",
+      name: "Bulk edit properties of base results",
+      callback: () => openBulkEdit(this),
     });
 
     this.addCommand({

@@ -72,6 +72,37 @@ export function scanProperties(app: App): PropertyUsage[] {
   return [...byLower.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+const LIST_TYPES = new Set(["multitext", "tags", "aliases"]);
+
+/**
+ * Converts raw text from a textarea/input into a frontmatter value for the
+ * given property: list types split one-item-per-line, numbers/checkboxes
+ * coerce, empty clears (null), anything else stays a string.
+ */
+export function parseValueForProperty(app: App, key: string, raw: string): unknown {
+  const type = getPropertyType(app, key);
+  if (LIST_TYPES.has(type ?? "")) {
+    const items = raw
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return items.length ? items : null;
+  }
+  if (type === "number") {
+    const n = Number(raw.trim());
+    return raw.trim() !== "" && !Number.isNaN(n) ? n : raw.trim() || null;
+  }
+  if (type === "checkbox") return raw.trim() === "true";
+  if (raw === "") return null;
+  if (type && type !== "unknown") return raw;
+  // No assigned type: light heuristic.
+  const t = raw.trim();
+  if (/^-?\d+(\.\d+)?$/.test(t)) return Number(t);
+  if (t === "true") return true;
+  if (t === "false") return false;
+  return raw;
+}
+
 /** Finds the actual frontmatter key matching a property name, case-insensitively. */
 export function findKey(fm: Record<string, unknown>, name: string): string | null {
   if (name in fm) return name;
