@@ -55,6 +55,39 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   width: 100%;
 }
 
+/* Allowed-values picker */
+.bases-toolbox-picker {
+  position: fixed;
+  z-index: var(--layer-menu);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-s);
+  max-height: 240px;
+  overflow-y: auto;
+  min-width: 140px;
+}
+
+.bases-toolbox-picker-item {
+  padding: var(--size-2-1) var(--size-4-2);
+  cursor: pointer;
+  font-size: var(--font-ui-small);
+}
+
+.bases-toolbox-picker-item:hover {
+  background: var(--background-modifier-hover);
+}
+
+.bases-toolbox-pin-active {
+  color: var(--interactive-accent);
+}
+
+.bases-toolbox-pin-list {
+  max-height: 240px;
+  overflow-y: auto;
+  margin-bottom: var(--size-4-2);
+}
+
 /* Duplicate finder */
 .bases-toolbox-dup-group {
   border: 1px solid var(--background-modifier-border);

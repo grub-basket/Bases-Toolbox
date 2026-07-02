@@ -34,6 +34,8 @@ export interface BasesToolboxSettings {
   multilineListCells: boolean;
   /** Conditional row-coloring rules for Bases views. */
   formatRules: import("./conditional-format").FormatRule[];
+  /** Pinned allowed values per property (key: lowercase property name). */
+  allowedValues: Record<string, string[]>;
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -42,6 +44,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   historyCap: null,
   multilineListCells: false,
   formatRules: [],
+  allowedValues: {},
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */

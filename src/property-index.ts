@@ -1,7 +1,8 @@
 import { ItemView, Notice, WorkspaceLeaf, debounce, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
+import { PinValuesModal } from "./allowed-values";
 import { FindReplaceModal } from "./find-replace";
-import { PropertyUsage, scanProperties } from "./scan";
+import { PropertyUsage } from "./scan";
 
 export const VIEW_TYPE_PROPERTY_INDEX = "bases-toolbox-property-index";
 
@@ -59,7 +60,7 @@ export class PropertyIndexView extends ItemView {
     if (!listEl) return;
     listEl.empty();
 
-    const props = scanProperties(this.app).filter(
+    const props = this.plugin.propertyCache.get().filter(
       (p) => !this.search || p.name.toLowerCase().includes(this.search)
     );
     if (!props.length) {
@@ -95,6 +96,18 @@ export class PropertyIndexView extends ItemView {
       searchBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         void this.openInAllProperties(usage.name);
+      });
+      const pinBtn = header.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
+      setIcon(pinBtn, "pin");
+      const pinned = !!this.plugin.settings.allowedValues[usage.name.toLowerCase()];
+      if (pinned) pinBtn.addClass("bases-toolbox-pin-active");
+      pinBtn.setAttribute(
+        "aria-label",
+        pinned ? "Allowed values pinned — edit" : "Pin allowed values"
+      );
+      pinBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        new PinValuesModal(this.plugin, usage).open();
       });
 
       header.addEventListener("click", () => {
