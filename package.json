@@ -1,0 +1,18 @@
+{
+  "name": "bases-toolbox",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "deploy:files": "node scripts/deploy.mjs",
+    "deploy": "node esbuild.config.mjs production && node scripts/deploy.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "esbuild": "^0.21.0",
+    "obsidian": "latest",
+    "typescript": "^5.4.0"
+  }
+}
