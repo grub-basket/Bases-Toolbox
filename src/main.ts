@@ -18,6 +18,7 @@ import { HistoryModal, undoLatest } from "./history";
 import { DuplicateFinderModal, startMerge } from "./merge";
 import { installNumberGuard } from "./number-guard";
 import { PropertyIndexView, VIEW_TYPE_PROPERTY_INDEX } from "./property-index";
+import { openRollup } from "./rollup";
 import { BasesToolboxSettings, DEFAULT_SETTINGS, DisabledFilter, HistoryEntry, PluginData } from "./types";
 
 export default class BasesToolboxPlugin extends Plugin {
@@ -51,6 +52,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "find-replace-history",
       name: "Find & replace history",
       callback: () => new HistoryModal(this).open(),
+    });
+
+    this.addCommand({
+      id: "compute-rollup",
+      name: "Compute rollup into property",
+      callback: () => openRollup(this),
     });
 
     this.addCommand({

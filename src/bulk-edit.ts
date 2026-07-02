@@ -10,7 +10,9 @@ const NEW_PROPERTY = "__bt_new_property__";
  * undocumented internals, probed defensively so a core change degrades to a
  * clear notice instead of wrong behavior.
  */
-function activeBaseResults(plugin: BasesToolboxPlugin): { files: TFile[]; name: string } | null {
+export function activeBaseResults(
+  plugin: BasesToolboxPlugin
+): { files: TFile[]; name: string } | null {
   const view = plugin.app.workspace.activeLeaf?.view as unknown as {
     getViewType?: () => string;
     file?: TFile;
