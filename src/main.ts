@@ -15,6 +15,7 @@ import { CsvImportModal } from "./csv-import";
 import { installEmbedOptions } from "./embed-options";
 import { openFilterToggle } from "./filter-toggle";
 import { PropertySuggestModal } from "./find-replace";
+import { FindReplaceView, VIEW_TYPE_FIND_REPLACE } from "./find-replace-view";
 import { HistoryModal, undoLatest } from "./history";
 import { InlineFieldMigratorModal } from "./inline-fields";
 import { DuplicateFinderModal, startMerge } from "./merge";
@@ -45,6 +46,7 @@ export default class BasesToolboxPlugin extends Plugin {
     this.registerEvent(this.app.vault.on("rename", dirty));
 
     this.registerView(VIEW_TYPE_PROPERTY_INDEX, (leaf) => new PropertyIndexView(leaf, this));
+    this.registerView(VIEW_TYPE_FIND_REPLACE, (leaf) => new FindReplaceView(leaf, this));
 
     this.addCommand({
       id: "find-replace-property-values",

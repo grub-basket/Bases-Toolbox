@@ -1,7 +1,7 @@
 import { ItemView, Notice, WorkspaceLeaf, debounce, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { PinValuesModal } from "./allowed-values";
-import { FindReplaceModal } from "./find-replace";
+import { openFindReplaceView } from "./find-replace-view";
 import { PropertyUsage } from "./scan";
 
 export const VIEW_TYPE_PROPERTY_INDEX = "bases-toolbox-property-index";
@@ -81,7 +81,7 @@ export class PropertyIndexView extends ItemView {
       frBtn.setAttribute("aria-label", "Find & replace values");
       frBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        new FindReplaceModal(this.plugin, usage).open();
+        void openFindReplaceView(this.plugin, usage.name);
       });
       const copyBtn = header.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
       setIcon(copyBtn, "copy");
@@ -165,7 +165,7 @@ export class PropertyIndexView extends ItemView {
       setIcon(btn, "replace");
       btn.setAttribute("aria-label", "Replace this value");
       btn.addEventListener("click", () => {
-        new FindReplaceModal(this.plugin, usage, display).open();
+        void openFindReplaceView(this.plugin, usage.name, display);
       });
     }
     if (sorted.length > MAX_VALUES_SHOWN) {

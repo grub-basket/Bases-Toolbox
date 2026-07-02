@@ -133,6 +133,50 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   font-family: var(--font-text);
 }
 
+/* Find & replace tab view */
+.bases-toolbox-frv-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-3);
+  flex-wrap: wrap;
+  margin: var(--size-4-2) 0;
+  font-size: var(--font-ui-small);
+}
+
+.bases-toolbox-frv-bar input[type="text"] {
+  flex: 1;
+  min-width: 160px;
+}
+
+.bases-toolbox-frv-list {
+  border-top: 1px solid var(--background-modifier-border);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.bases-toolbox-frv-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-3);
+  padding: var(--size-2-2) 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: var(--font-ui-small);
+}
+
+.bases-toolbox-frv-path {
+  color: var(--text-accent);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bases-toolbox-frv-diff {
+  color: var(--text-muted);
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Find & replace modal */
 .bases-toolbox-fr-info {
   color: var(--text-muted);

@@ -1,6 +1,6 @@
 import { Modal, Notice, Setting, TFile, parseYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { FindReplaceModal } from "./find-replace";
+import { openFindReplaceView } from "./find-replace-view";
 import { PropertyUsage, findKey, valueToDisplay } from "./scan";
 
 /**
@@ -266,7 +266,8 @@ export class AllowedValuesAuditModal extends Modal {
           .setDesc(`${count} file${count === 1 ? "" : "s"} — not in the allowed list`)
           .addButton((b) =>
             b.setButtonText("Find & replace").onClick(() => {
-              new FindReplaceModal(this.plugin, usage, value).open();
+              void openFindReplaceView(this.plugin, usage.name, value);
+              this.close();
             })
           );
       }
