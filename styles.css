@@ -1,3 +1,20 @@
+/* Multiline list cells: stack list-property pills vertically in Bases tables */
+body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
+  flex-direction: column;
+  align-items: flex-start;
+  flex-wrap: nowrap;
+}
+
+body.bases-toolbox-multiline-lists .bases-td,
+body.bases-toolbox-multiline-lists .bases-table-cell {
+  height: auto;
+  min-height: var(--size-4-6);
+}
+
+body.bases-toolbox-multiline-lists .bases-tr {
+  height: auto;
+}
+
 /* Find & replace modal */
 .bases-toolbox-fr-info {
   color: var(--text-muted);

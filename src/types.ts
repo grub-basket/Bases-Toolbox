@@ -28,12 +28,15 @@ export interface BasesToolboxSettings {
   digitsOnlyTyping: boolean;
   /** Max history entries to keep; null = unlimited. Oldest are dropped first. */
   historyCap: number | null;
+  /** Stack list-property pills vertically in Bases table cells. */
+  multilineListCells: boolean;
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   blockArrowAndWheel: true,
   digitsOnlyTyping: true,
   historyCap: null,
+  multilineListCells: false,
 };
 
 export interface PluginData {

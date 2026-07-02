@@ -45,6 +45,16 @@ export default class BasesToolboxPlugin extends Plugin {
     );
 
     this.addSettingTab(new BasesToolboxSettingTab(this.app, this));
+
+    this.applyMultilineListCells();
+  }
+
+  onunload(): void {
+    document.body.removeClass("bases-toolbox-multiline-lists");
+  }
+
+  applyMultilineListCells(): void {
+    document.body.toggleClass("bases-toolbox-multiline-lists", this.settings.multilineListCells);
   }
 
   async activatePropertyIndex(): Promise<void> {
@@ -125,6 +135,19 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       .addToggle((t) =>
         t.setValue(this.plugin.settings.digitsOnlyTyping).onChange(async (v) => {
           this.plugin.settings.digitsOnlyTyping = v;
+          await this.plugin.savePluginData();
+        })
+      );
+
+    new Setting(containerEl)
+      .setName("Multiline list cells")
+      .setDesc(
+        "In Bases table views, show list-property values stacked one per line instead of a single row of pills."
+      )
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.multilineListCells).onChange(async (v) => {
+          this.plugin.settings.multilineListCells = v;
+          this.plugin.applyMultilineListCells();
           await this.plugin.savePluginData();
         })
       );
