@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, debounce, setIcon } from "obsidian";
+import { ItemView, Notice, WorkspaceLeaf, debounce, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { FindReplaceModal } from "./find-replace";
 import { PropertyUsage, scanProperties } from "./scan";
@@ -89,6 +89,13 @@ export class PropertyIndexView extends ItemView {
         e.stopPropagation();
         void navigator.clipboard.writeText(usage.name);
       });
+      const searchBtn = header.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
+      setIcon(searchBtn, "search");
+      searchBtn.setAttribute("aria-label", "Show in All properties view");
+      searchBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        void this.openInAllProperties(usage.name);
+      });
 
       header.addEventListener("click", () => {
         if (this.expanded.has(key)) this.expanded.delete(key);
@@ -97,6 +104,40 @@ export class PropertyIndexView extends ItemView {
       });
 
       if (this.expanded.has(key)) this.renderValues(row, usage);
+    }
+  }
+
+  /**
+   * Reveals Obsidian's core "All properties" view and pre-fills its search
+   * with the property name. The search field is undocumented DOM, so this
+   * degrades to just revealing the view if the input can't be found.
+   */
+  private async openInAllProperties(name: string): Promise<void> {
+    const { workspace } = this.app;
+    let leaf = workspace.getLeavesOfType("all-properties")[0];
+    if (!leaf) {
+      const internal = (
+        this.app as unknown as {
+          internalPlugins?: { getEnabledPluginById?: (id: string) => unknown };
+        }
+      ).internalPlugins?.getEnabledPluginById?.("properties");
+      if (!internal) {
+        new Notice("Enable the core “Properties view” plugin first.");
+        return;
+      }
+      const right = workspace.getRightLeaf(false);
+      if (!right) return;
+      await right.setViewState({ type: "all-properties", active: true });
+      leaf = right;
+      // Give the freshly created view a beat to build its DOM.
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    await workspace.revealLeaf(leaf);
+    const input = leaf.view.containerEl.querySelector<HTMLInputElement>('input[type="search"]');
+    if (input) {
+      input.value = name;
+      input.dispatchEvent(new Event("input"));
+      input.focus();
     }
   }
 
