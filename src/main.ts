@@ -16,6 +16,7 @@ import { exportBaseCsv } from "./csv-export";
 import { CsvImportModal } from "./csv-import";
 import { installEmbedOptions } from "./embed-options";
 import { openFilterToggle } from "./filter-toggle";
+import { FormatDoctorView, VIEW_TYPE_FORMAT_DOCTOR, openFormatDoctor } from "./format-doctor";
 import { PropertySuggestModal } from "./find-replace";
 import { FindReplaceView, VIEW_TYPE_FIND_REPLACE } from "./find-replace-view";
 import { undoLatest } from "./history";
@@ -51,6 +52,7 @@ export default class BasesToolboxPlugin extends Plugin {
     this.registerView(VIEW_TYPE_PROPERTY_INDEX, (leaf) => new PropertyIndexView(leaf, this));
     this.registerView(VIEW_TYPE_FIND_REPLACE, (leaf) => new FindReplaceView(leaf, this));
     this.registerView(VIEW_TYPE_HISTORY, (leaf) => new HistoryView(leaf, this));
+    this.registerView(VIEW_TYPE_FORMAT_DOCTOR, (leaf) => new FormatDoctorView(leaf, this));
 
     this.addCommand({
       id: "find-replace-property-values",
@@ -68,6 +70,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "find-replace-history",
       name: "Find & replace history",
       callback: () => void openHistoryView(this),
+    });
+
+    this.addCommand({
+      id: "format-doctor",
+      name: "Property format doctor",
+      callback: () => void openFormatDoctor(this),
     });
 
     this.addCommand({

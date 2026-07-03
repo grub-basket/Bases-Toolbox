@@ -123,6 +123,20 @@ expanded — every distinct value with usage counts. Built straight from the
 metadata cache, so it never forgets a property the way the Bases filter menu
 can. Each property and value has a shortcut into find & replace.
 
+### Property format doctor
+
+Command: **Property format doctor**. Obsidian flags type-mismatched property
+values but "corrects" them destructively — sometimes erasing the value
+outright. The doctor opens a tab listing every value in the vault that
+doesn't match its property's assigned type (number, checkbox, date,
+datetime, text, list, tags, aliases), explains what each type expects with
+an example, and pre-fills a suggested fix only when one is safe (dates get
+normalized, `yes` becomes `true`, scalars become one-item lists, a date in a
+datetime slot gains `T00:00`). Everything is editable before applying;
+inputs that still don't match are marked red and the file is left untouched;
+an empty input means "skip" — a value is never erased. Applied fixes are
+logged to history and revertible.
+
 ### Allowed values (pinned)
 
 From the property index, pin the allowed values of any property (pin icon).

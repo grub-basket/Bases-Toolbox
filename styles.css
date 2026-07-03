@@ -133,6 +133,17 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   font-family: var(--font-text);
 }
 
+/* Format doctor */
+.bases-toolbox-doctor-input {
+  flex: 1;
+  min-width: 140px;
+}
+
+.bases-toolbox-doctor-invalid {
+  border-color: var(--text-error) !important;
+  box-shadow: 0 0 0 1px var(--text-error);
+}
+
 /* Find & replace tab view */
 .bases-toolbox-frv-bar {
   display: flex;
