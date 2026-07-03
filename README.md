@@ -146,9 +146,12 @@ Parts of this plugin overlap with — and were inspired by — existing
 community work. Credit where due, and if one of these fits your workflow
 better, use it. What each is capable of:
 
-- **[Mass Editor](https://github.com/ondreu/mass-editor)** — shipped while
-  this plugin's find & replace was already in development (built
-  independently). Capabilities:
+- **[Mass Editor](https://github.com/ondreu/mass-editor)** (MIT) — shipped
+  while this plugin's find & replace was already in development (built
+  independently). Reviewing its code later inspired several history
+  refinements here — selective per-file revert, the force-revert option, and
+  set-if-missing/delete bulk modes — as concepts; no code was copied, our
+  implementations are our own. Capabilities:
   - query builder over tags, frontmatter, and body text
   - bulk frontmatter set / add / delete / append on the matched notes
   - automatic per-run backups with a history panel
@@ -187,7 +190,8 @@ better, use it. What each is capable of:
   straightforward concatenation of two notes into one
   (our merge adds frontmatter awareness: list union + per-conflict picker)
 - **[CSV-to-Obsidian-Properties-for-Bases](https://github.com/grub-basket/CSV-to-Obsidian-Properties-for-Bases)** —
-  the companion browser tool our CSV import is ported from:
+  the companion browser tool our CSV import's converter core is ported from
+  (same author as this plugin):
   - paste/drop CSV or TSV, map columns to typed properties, live preview
   - downloads a ZIP of ready-to-drop .md files — no install, works offline
 
