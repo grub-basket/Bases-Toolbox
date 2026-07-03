@@ -32,7 +32,7 @@ export function installNumberGuard(plugin: BasesToolboxPlugin): void {
         !e.ctrlKey &&
         !e.metaKey &&
         !e.altKey &&
-        !/[0-9.\-]/.test(e.key)
+        !/[0-9.,\-]/.test(e.key) // comma: decimal separator in many locales
       ) {
         // Swallows "e", "+", letters — everything a number input would
         // otherwise accept beyond digits, "." and "-".

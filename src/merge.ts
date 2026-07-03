@@ -1,6 +1,6 @@
 import { FuzzySuggestModal, Modal, Notice, Setting, TFile } from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { findKey, valueToDisplay } from "./scan";
+import { findKey, isUnsafeKey, valueToDisplay } from "./scan";
 
 /* ---------- merge core ---------- */
 
@@ -16,7 +16,7 @@ interface MergePlan {
 function planMerge(targetFm: Record<string, unknown>, sourceFm: Record<string, unknown>): MergePlan {
   const plan: MergePlan = { copied: [], unioned: [], conflicts: [] };
   for (const [key, sv] of Object.entries(sourceFm)) {
-    if (key === "position") continue;
+    if (key === "position" || isUnsafeKey(key)) continue;
     const tk = findKey(targetFm, key);
     if (tk === null) {
       plan.copied.push(key);
@@ -73,6 +73,35 @@ async function rewriteBacklinks(
       rewritten++;
     }
     await app.vault.modify(from, content);
+  }
+
+  // Frontmatter wikilinks (properties) also need re-pointing — they live in
+  // cache.frontmatterLinks with a dotted key path instead of offsets.
+  for (const [fromPath, links] of Object.entries(app.metadataCache.resolvedLinks)) {
+    if (!links[source.path] || fromPath === source.path) continue;
+    const from = app.vault.getAbstractFileByPath(fromPath);
+    if (!(from instanceof TFile)) continue;
+    const fmRefs = (app.metadataCache.getFileCache(from)?.frontmatterLinks ?? []).filter(
+      (l) =>
+        app.metadataCache.getFirstLinkpathDest(l.link.split("#")[0], fromPath)?.path === source.path
+    );
+    if (!fmRefs.length) continue;
+    const newLink = app.fileManager.generateMarkdownLink(target, fromPath);
+    await app.fileManager.processFrontMatter(from, (fm) => {
+      for (const ref of fmRefs) {
+        const path = ref.key.split(".");
+        let obj: unknown = fm;
+        for (let i = 0; i < path.length - 1; i++) {
+          if (obj === null || typeof obj !== "object") return;
+          obj = (obj as Record<string, unknown>)[path[i]];
+        }
+        const last = path[path.length - 1];
+        if (obj !== null && typeof obj === "object") {
+          (obj as Record<string, unknown>)[last] = newLink;
+          rewritten++;
+        }
+      }
+    });
   }
   return rewritten;
 }
@@ -210,7 +239,10 @@ class MergeConfirmModal extends Modal {
         b
           .setButtonText("Merge")
           .setCta()
-          .onClick(async () => {
+          .onClick(async (evt) => {
+            const btn = evt.target as HTMLButtonElement;
+            if (btn.disabled) return;
+            btn.disabled = true; // double-click would re-merge a trashed source
             await mergeNotes(this.plugin, this.target, this.source, this.resolutions);
             this.close();
           })
@@ -288,6 +320,7 @@ export class DuplicateFinderModal extends Modal {
     };
 
     const files = this.app.vault.getMarkdownFiles();
+    const bodies = new Map<TFile, string>();
     for (const file of files) {
       if (this.byName) add(`name:${normalizeName(file.basename)}`, file);
       if (prop) {
@@ -301,7 +334,26 @@ export class DuplicateFinderModal extends Modal {
       }
       if (this.byBody) {
         const body = stripFrontmatter(await this.app.vault.cachedRead(file)).trim();
-        if (body) add(`body:${simpleHash(body)}`, file);
+        if (body) {
+          add(`body:${simpleHash(body)}`, file);
+          bodies.set(file, body);
+        }
+      }
+    }
+
+    // The 32-bit hash only buckets; verify EXACT body equality inside each
+    // bucket so a crafted hash collision can't fake an "identical" pair.
+    if (this.byBody) {
+      for (const [key, group] of [...groups.entries()]) {
+        if (!key.startsWith("body:") || group.length < 2) continue;
+        groups.delete(key);
+        const exact = new Map<string, TFile[]>();
+        for (const f of group) {
+          const b = bodies.get(f) ?? "";
+          exact.set(b, [...(exact.get(b) ?? []), f]);
+        }
+        let i = 0;
+        for (const g of exact.values()) if (g.length > 1) groups.set(`${key}:${i++}`, g);
       }
     }
 
@@ -337,12 +389,19 @@ export class DuplicateFinderModal extends Modal {
         });
       }
       const btn = box.createEl("button", { text: `Merge ${group.length - 1} into kept note` });
+      let armed = false;
       btn.addEventListener("click", async () => {
+        if (!armed) {
+          armed = true;
+          btn.setText(`Really merge ${group.length - 1} note${group.length === 2 ? "" : "s"} away? Click again`);
+          btn.addClass("mod-warning");
+          return;
+        }
         btn.disabled = true;
         for (const file of group) {
           if (file !== keep) await mergeNotes(this.plugin, keep, file);
         }
-        box.createDiv({ cls: "bases-toolbox-fr-info", text: "Merged." });
+        box.createDiv({ cls: "bases-toolbox-fr-info", text: "Merged. Sources are in the vault trash." });
       });
     }
   }

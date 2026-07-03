@@ -133,7 +133,12 @@ class RollupModal extends Modal {
             .map((f) => {
               const fm = (this.app.metadataCache.getFileCache(f)?.frontmatter ?? {}) as Record<string, unknown>;
               const key = findKey(fm, sourceProp);
-              return key === null ? NaN : Number(fm[key]);
+              const raw = key === null ? undefined : fm[key];
+              // only genuine numbers (or numeric strings) count — null/""/true
+              // would coerce to 0/1 and silently poison sum/avg/min
+              if (typeof raw === "number") return raw;
+              if (typeof raw === "string" && raw.trim() !== "") return Number(raw);
+              return NaN;
             })
             .filter((x) => !Number.isNaN(x));
           if (!nums.length) value = null;

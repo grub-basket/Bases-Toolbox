@@ -78,6 +78,8 @@ function matches(rule: FormatRule, fmValue: unknown): boolean {
   if (isEmpty) return false;
   const values = Array.isArray(fmValue) ? fmValue : [fmValue];
   const want = rule.value.trim();
+  // not-equals must hold for EVERY item — some() would match any 2-item list
+  if (rule.op === "not-equals") return values.every((v) => String(v) !== want);
   return values.some((v) => {
     const s = String(v);
     switch (rule.op) {

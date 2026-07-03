@@ -1,7 +1,7 @@
 import { Modal, Notice, Setting, TFile } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { parseReplacement } from "./find-replace";
-import { findKey } from "./scan";
+import { findKey, isUnsafeKey } from "./scan";
 import { ChangeRecord } from "./types";
 
 /**
@@ -19,20 +19,25 @@ interface FoundField {
   value: string;
   /** Whole-line field vs bracketed inline span. */
   line: boolean;
+  /** The exact matched text (bracketed spans) so cleanup removes what was found. */
+  raw?: string;
 }
 
 const LINE_FIELD = /^([A-Za-z][\w /-]{0,80})::\s*(.+)$/;
-const BRACKET_FIELD = /\[([^[\]:()]{1,80})::\s*([^\]]*)\]/g;
+const BRACKET_FIELD = /\[([^[\]:()]{1,80})::\s*([^\]]{0,300})\]/g;
 
 function findFields(body: string, includeBracketed: boolean): FoundField[] {
   const out: FoundField[] = [];
+  const push = (f: FoundField) => {
+    if (!isUnsafeKey(f.key)) out.push(f);
+  };
   for (const line of body.split("\n")) {
     const m = line.trim().match(LINE_FIELD);
-    if (m && !m[1].startsWith("http")) out.push({ key: m[1].trim(), value: m[2].trim(), line: true });
+    if (m && !m[1].startsWith("http")) push({ key: m[1].trim(), value: m[2].trim(), line: true });
   }
   if (includeBracketed) {
     for (const m of body.matchAll(BRACKET_FIELD)) {
-      out.push({ key: m[1].trim(), value: m[2].trim(), line: false });
+      push({ key: m[1].trim(), value: m[2].trim(), line: false, raw: m[0] });
     }
   }
   return out;
@@ -95,7 +100,7 @@ export class InlineFieldMigratorModal extends Modal {
   }
 
   private scopedFiles(): TFile[] {
-    const folder = this.folderEl?.value.trim().replace(/\/+$/, "") ?? "";
+    const folder = this.folderEl?.value.trim().replace(/^\/+|\/+$/g, "") ?? "";
     const files = this.app.vault.getMarkdownFiles();
     return folder ? files.filter((f) => f.path.startsWith(folder + "/")) : files;
   }
@@ -194,7 +199,7 @@ export class InlineFieldMigratorModal extends Modal {
                   })
                   .join("\n");
               } else {
-                next = next.split(`[${f.key}:: ${f.value}]`).join(f.value);
+                if (f.raw) next = next.split(f.raw).join(f.value);
               }
             }
             return next;

@@ -131,9 +131,17 @@ export class PropertyCache {
   }
 }
 
+const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+/** Keys that would touch object internals rather than data — never edit these. */
+export function isUnsafeKey(key: string): boolean {
+  return UNSAFE_KEYS.has(key);
+}
+
 /** Finds the actual frontmatter key matching a property name, case-insensitively. */
 export function findKey(fm: Record<string, unknown>, name: string): string | null {
-  if (name in fm) return name;
+  if (isUnsafeKey(name)) return null;
+  if (Object.prototype.hasOwnProperty.call(fm, name)) return name;
   const lower = name.toLowerCase();
   for (const k of Object.keys(fm)) if (k.toLowerCase() === lower) return k;
   return null;

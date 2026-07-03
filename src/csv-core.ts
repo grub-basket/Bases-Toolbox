@@ -11,8 +11,17 @@ export type CsvType = (typeof CSV_TYPES)[number];
 export function parseCSV(text: string): string[][] {
   const nl = text.indexOf("\n");
   const firstLine = nl === -1 ? text : text.slice(0, nl);
-  const delim =
-    (firstLine.match(/\t/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? "\t" : ",";
+  // count candidate delimiters OUTSIDE quotes, else quoted commas skew the sniff
+  const countOutsideQuotes = (line: string, ch: string): number => {
+    let n = 0;
+    let q = false;
+    for (const c of line) {
+      if (c === '"') q = !q;
+      else if (c === ch && !q) n++;
+    }
+    return n;
+  };
+  const delim = countOutsideQuotes(firstLine, "\t") > countOutsideQuotes(firstLine, ",") ? "\t" : ",";
 
   const rows: string[][] = [];
   let row: string[] = [];
@@ -125,7 +134,12 @@ export function normalizeDate(val: string): string {
   }
   if (!d && /^\d+$/.test(val)) {
     const n = parseInt(val, 10); // Excel serial (epoch Dec 30 1899)
-    if (n > 1 && n < 60000) d = new Date(Date.UTC(1899, 11, 30) + n * 86400000);
+    if (n > 1 && n < 60000) {
+      // compute in UTC, then rebuild as a local date so the local getters
+      // below don't shift it a day west of UTC
+      const u = new Date(Date.UTC(1899, 11, 30) + n * 86400000);
+      d = new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate());
+    }
   }
   if (d && !Number.isNaN(d.getTime())) {
     const yyyy = d.getFullYear();
@@ -184,6 +198,12 @@ export function toCsvCell(value: unknown): string {
   if (value === null || value === undefined) s = "";
   else if (Array.isArray(value)) s = value.map((v) => cleanValue(String(v))).join("; ");
   else s = cleanValue(String(value));
+  // Neutralize spreadsheet formula injection (OWASP): a leading =, +, @,
+  // tab or CR — or a leading - that isn't just a negative number — gets an
+  // apostrophe prefix so Excel/LibreOffice treat the cell as text.
+  if (/^[=+@\t\r]/.test(s) || (s.startsWith("-") && !/^-\d*\.?\d+$/.test(s))) {
+    s = "'" + s;
+  }
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

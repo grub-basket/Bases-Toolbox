@@ -68,8 +68,11 @@ async function resolveBasesCell(
   const views = Array.isArray(doc.views) ? (doc.views as Record<string, unknown>[]) : [];
   const scope = (embed ?? td.closest(".view-content")) as HTMLElement | null;
   const viewLabel = scope?.querySelector(".bases-toolbar-views-menu")?.textContent?.trim();
-  const view = views.find((v) => v.name === viewLabel) ?? views[0];
-  const order = Array.isArray(view?.order) ? (view.order as unknown[]) : [];
+  // If the toolbar label exists but matches no view, DON'T guess views[0] —
+  // a wrong guess here would write to the wrong property.
+  const view = views.find((v) => v.name === viewLabel) ?? (viewLabel ? undefined : views[0]);
+  if (!view) return null;
+  const order = Array.isArray(view.order) ? (view.order as unknown[]) : [];
 
   const index = row ? Array.from(row.querySelectorAll(".bases-td")).indexOf(td) : -1;
   const rawKey = order[index];
@@ -124,6 +127,14 @@ class CellZoomModal extends Modal {
     const fm = this.app.metadataCache.getFileCache(this.target.file)?.frontmatter ?? {};
     const key = findKey(fm, this.target.key) ?? this.target.key;
     const cur = (fm as Record<string, unknown>)[key];
+    if (cur !== null && typeof cur === "object" && !Array.isArray(cur)) {
+      // Nested objects would round-trip through String() as garbage.
+      contentEl.createDiv({
+        cls: "bases-toolbox-fr-warning",
+        text: "This property holds a nested object — zoom editing would destroy its structure, so it's disabled here.",
+      });
+      return;
+    }
     this.wasArray = Array.isArray(cur);
     const text = Array.isArray(cur)
       ? cur.map((v) => String(v ?? "")).join("\n")

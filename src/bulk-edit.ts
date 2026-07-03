@@ -230,7 +230,11 @@ export class BulkEditModal extends Modal {
     setValue: unknown,
     items: unknown[]
   ): unknown {
-    if (this.mode === "set") return setValue;
+    if (this.mode === "set") {
+      // "empty clears" must not CREATE a null property on files that lack it
+      if (!existed && setValue === null) return SKIP;
+      return setValue;
+    }
     if (this.mode === "set-missing") return existed ? SKIP : setValue;
     if (this.mode === "delete") return existed ? null : SKIP; // value unused; SKIP when absent
     if (this.mode === "append") {

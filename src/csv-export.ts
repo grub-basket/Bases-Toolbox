@@ -59,10 +59,17 @@ export async function exportBaseCsv(plugin: BasesToolboxPlugin): Promise<void> {
   }
   const csv = lines.join("\n");
 
-  await navigator.clipboard.writeText(csv);
   const outPath = view.file.path.replace(/\.base$/, "") + " export.csv";
   const existing = app.vault.getAbstractFileByPath(outPath);
   if (existing instanceof TFile) await app.vault.modify(existing, csv);
   else await app.vault.create(outPath, csv);
-  new Notice(`Exported ${files.length} rows → "${outPath}" (also on the clipboard).`);
+  let onClipboard = true;
+  try {
+    await navigator.clipboard.writeText(csv); // throws when window unfocused
+  } catch {
+    onClipboard = false;
+  }
+  new Notice(
+    `Exported ${files.length} rows → "${outPath}"${onClipboard ? " (also on the clipboard)" : ""}.`
+  );
 }

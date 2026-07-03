@@ -231,7 +231,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Digits-only typing")
       .setDesc(
-        'Number properties only accept digits, "." and "-" — other character keys (like "e") are swallowed. Editing and shortcut keys still work.'
+        'Number properties only accept digits, ".", "," and "-" — other character keys (like "e") are swallowed. Editing and shortcut keys still work.'
       )
       .addToggle((t) =>
         t.setValue(this.plugin.settings.digitsOnlyTyping).onChange(async (v) => {

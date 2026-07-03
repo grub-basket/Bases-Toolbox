@@ -139,7 +139,7 @@ export class FilterToggleModal extends Modal {
 
   /** Removes the condition from the .base file and stashes it in plugin data. */
   private async disableFilter(row: FilterRow): Promise<void> {
-    await this.rewriteBase((doc) => {
+    const applied = await this.rewriteBase((doc) => {
       const holder = this.filtersHolder(doc, row.scope);
       if (!holder) return false;
       let filters = holder.obj[holder.key] as FiltersNode;
@@ -159,6 +159,11 @@ export class FilterToggleModal extends Modal {
       if (!Object.keys(filters).length) delete holder.obj[holder.key];
       return true;
     });
+    if (!applied) {
+      // .base changed since the modal rendered — don't stash a phantom entry
+      new Notice("That filter is no longer in the file — refreshed the list.");
+      return;
+    }
     const list = (this.plugin.disabledFilters[this.file.path] ??= []);
     list.push({ text: row.text, conj: row.conj, scope: row.scope });
     await this.plugin.savePluginData();
@@ -176,7 +181,9 @@ export class FilterToggleModal extends Modal {
       }
       if (!filters || typeof filters !== "object") filters = {};
       const arr = (filters[row.conj] ??= []);
-      if (!arr.includes(row.text)) arr.push(row.text);
+      // push unconditionally: duplicate conditions are legal and each stashed
+      // entry corresponds to one removed occurrence
+      arr.push(row.text);
       holder.obj[holder.key] = filters;
       return true;
     });
@@ -201,12 +208,14 @@ export class FilterToggleModal extends Modal {
     return view ? { obj: view, key: "filters" } : null;
   }
 
+  /** Returns whether the mutation applied (and the file was written). */
   private async rewriteBase(
     mutate: (doc: Record<string, unknown>) => boolean
-  ): Promise<void> {
+  ): Promise<boolean> {
     const raw = await this.app.vault.read(this.file);
     const doc = (parseYaml(raw) ?? {}) as Record<string, unknown>;
-    if (!mutate(doc)) return;
+    if (!mutate(doc)) return false;
     await this.app.vault.modify(this.file, stringifyYaml(doc));
+    return true;
   }
 }
