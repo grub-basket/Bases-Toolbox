@@ -9,6 +9,8 @@ export interface PropertyUsage {
   count: number;
   /** Display string of each distinct value -> number of files using it. */
   values: Map<string, number>;
+  /** Display string of each distinct value -> the files that use it. */
+  valueFiles: Map<string, TFile[]>;
   files: TFile[];
 }
 
@@ -52,6 +54,7 @@ export function scanProperties(app: App): PropertyUsage[] {
           type: getPropertyType(app, lower),
           count: 0,
           values: new Map(),
+          valueFiles: new Map(),
           files: [],
         };
         byLower.set(lower, usage);
@@ -66,6 +69,9 @@ export function scanProperties(app: App): PropertyUsage[] {
         if (seen.has(d)) continue; // count each value once per file
         seen.add(d);
         usage.values.set(d, (usage.values.get(d) ?? 0) + 1);
+        const vf = usage.valueFiles.get(d);
+        if (vf) vf.push(file);
+        else usage.valueFiles.set(d, [file]);
       }
     }
   }

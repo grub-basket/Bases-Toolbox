@@ -365,16 +365,77 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         .setDesc("Forks recomputed automatically when their source property changes.")
         .setHeading();
       for (const def of [...this.plugin.settings.propertyForks]) {
+        const setting = new Setting(containerEl)
+          .setName(`${def.source} → ${def.target}`)
+          .setDesc(`${TRANSFORM_LABELS[def.transform]}${def.active === false ? " · paused" : ""}`);
+        setting.addToggle((t) =>
+          t
+            .setTooltip("Active — recompute the fork when the source changes")
+            .setValue(def.active !== false)
+            .onChange((v) =>
+              void (async () => {
+                def.active = v;
+                await this.plugin.savePluginData();
+                this.display();
+              })()
+            )
+        );
+        setting.addExtraButton((b) =>
+          b
+            .setIcon("trash")
+            .setTooltip("Delete (keeps existing property values; restorable below)")
+            .onClick(() =>
+              void (async () => {
+                this.plugin.settings.propertyForks = this.plugin.settings.propertyForks.filter(
+                  (d) => d !== def
+                );
+                this.plugin.settings.removedForks.unshift(def);
+                this.plugin.settings.removedForks = this.plugin.settings.removedForks.slice(0, 20);
+                await this.plugin.savePluginData();
+                this.display();
+              })()
+            )
+        );
+      }
+    }
+
+    // Add-fork builder access from settings.
+    new Setting(containerEl)
+      .setName("Add a fork")
+      .setDesc("Convert or fork a property's format (dates, wikilinks). Enable live sync in the builder to list it above.")
+      .addButton((b) =>
+        b.setButtonText("Fork builder…").onClick(() => new ForkPropertyPicker(this.plugin).open())
+      );
+
+    // Restore deleted forks.
+    if (this.plugin.settings.removedForks.length) {
+      new Setting(containerEl).setName("Recently removed forks").setHeading();
+      for (const def of [...this.plugin.settings.removedForks]) {
         new Setting(containerEl)
           .setName(`${def.source} → ${def.target}`)
           .setDesc(TRANSFORM_LABELS[def.transform])
           .addExtraButton((b) =>
             b
-              .setIcon("trash")
-              .setTooltip("Stop syncing (properties stay as they are)")
+              .setIcon("rotate-ccw")
+              .setTooltip("Restore this fork (re-adds it, active)")
               .onClick(() =>
                 void (async () => {
-                  this.plugin.settings.propertyForks = this.plugin.settings.propertyForks.filter(
+                  this.plugin.settings.removedForks = this.plugin.settings.removedForks.filter(
+                    (d) => d !== def
+                  );
+                  this.plugin.settings.propertyForks.push({ ...def, active: true });
+                  await this.plugin.savePluginData();
+                  this.display();
+                })()
+              )
+          )
+          .addExtraButton((b) =>
+            b
+              .setIcon("x")
+              .setTooltip("Forget this removed fork")
+              .onClick(() =>
+                void (async () => {
+                  this.plugin.settings.removedForks = this.plugin.settings.removedForks.filter(
                     (d) => d !== def
                   );
                   await this.plugin.savePluginData();

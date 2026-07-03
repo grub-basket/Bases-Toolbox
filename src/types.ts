@@ -42,6 +42,8 @@ export interface BasesToolboxSettings {
   allowedValues: Record<string, string[]>;
   /** Live-synced property forks (source → target with a transform). */
   propertyForks: import("./property-fork").PropertyForkDef[];
+  /** Forks deleted from settings, kept so they can be restored. */
+  removedForks: import("./property-fork").PropertyForkDef[];
   /** Last-used companions destination ("" = adjacent to each file). */
   companionsFolder: string;
   /** Default extension filter for companions ("" = all non-md). */
@@ -58,6 +60,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   formatRules: [],
   allowedValues: {},
   propertyForks: [],
+  removedForks: [],
   companionsFolder: "",
   companionExts: "",
   companionAuto: false,

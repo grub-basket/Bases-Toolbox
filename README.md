@@ -149,8 +149,10 @@ property and a transform (normalize dates → YYYY-MM-DD, unwrap wikilinks,
 wrap in wikilinks, plain copy), preview the effect, then either **convert in
 place** or **fork into a second property** so you keep your original format
 AND a Bases-friendly variant side by side. Forks can be kept in **live
-sync** — edit the original and the fork recomputes automatically (active
-syncs are listed and removable in the plugin settings). Every apply is
+sync** — edit the original and the fork recomputes automatically. Live syncs
+are managed in the plugin settings: pause one without deleting it, delete it
+(deleted syncs move to a restorable "recently removed" list), or open the
+fork builder to add another. Every apply is
 history-logged and revertible.
 
 ### Allowed values (pinned)
