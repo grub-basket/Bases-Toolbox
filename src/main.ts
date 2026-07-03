@@ -1,4 +1,4 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
+import { App, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, setIcon } from "obsidian";
 import { AllowedValuesAuditModal, installAllowedValuePicker } from "./allowed-values";
 import { openBulkEdit } from "./bulk-edit";
 import { CompanionNotesModal, MetadataStampModal, installCompanionAuto } from "./companion-notes";
@@ -8,10 +8,13 @@ import {
   DEFAULT_CUSTOM_HEX,
   FormatOp,
   FormatRule,
+  FormatScope,
   OP_LABELS,
   RULE_COLORS,
+  colorLabel,
   installConditionalFormatting,
   redecorateAll,
+  ruleSwatchColor,
 } from "./conditional-format";
 import { exportBaseCsv } from "./csv-export";
 import { CsvImportModal } from "./csv-import";
@@ -36,6 +39,8 @@ export default class BasesToolboxPlugin extends Plugin {
   history: HistoryEntry[] = [];
   disabledFilters: Record<string, DisabledFilter[]> = {};
   propertyCache: PropertyCache = new PropertyCache(this.app);
+  /** Debounced re-decorate, set by installConditionalFormatting. */
+  refreshConditionalFormatting?: () => void;
 
   async onload(): Promise<void> {
     await this.loadPluginData();
@@ -484,112 +489,189 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       });
   }
 
+  private saveAndPaint(): void {
+    void this.plugin.savePluginData();
+    redecorateAll(this.plugin);
+  }
+
   private renderFormatRules(containerEl: HTMLElement): void {
     new Setting(containerEl)
       .setName("Conditional formatting")
-      .setDesc("Color Bases rows by property value. The first matching rule wins.")
+      .setDesc("Color Bases rows or cells by property value. Rules apply top to bottom; the first match wins (per row, and per cell).")
       .setHeading()
       .settingEl.setAttribute("data-bt-section", "formatting");
 
-    for (const rule of this.plugin.settings.formatRules) {
-      const setting = new Setting(containerEl).setName(
-        `${rule.property} ${OP_LABELS[rule.op]}${
-          rule.op === "empty" || rule.op === "not-empty" ? "" : ` “${rule.value}”`
-        }`
-      );
-      let ruleSwatch: HTMLInputElement | null = null;
-      setting.addDropdown((dd) => {
-        for (const c of Object.keys(RULE_COLORS)) dd.addOption(c, c);
-        dd.addOption(CUSTOM_COLOR, "custom…");
-        dd.setValue(rule.color);
-        dd.onChange(async (v) => {
-          rule.color = v;
-          ruleSwatch?.setCssStyles({ display: v === CUSTOM_COLOR ? "" : "none" });
-          await this.plugin.savePluginData();
-          redecorateAll(this.plugin);
-        });
-      });
-      ruleSwatch = setting.controlEl.createEl("input", { type: "color" });
-      ruleSwatch.value = rule.customColor ?? DEFAULT_CUSTOM_HEX;
-      ruleSwatch.setCssStyles({ display: rule.color === CUSTOM_COLOR ? "" : "none" });
-      ruleSwatch.addEventListener("input", async () => {
-        rule.customColor = ruleSwatch?.value ?? DEFAULT_CUSTOM_HEX;
-        await this.plugin.savePluginData();
-        redecorateAll(this.plugin);
-      });
-      setting.addToggle((t) =>
-        t.setValue(rule.enabled).onChange(async (v) => {
-          rule.enabled = v;
-          await this.plugin.savePluginData();
-          redecorateAll(this.plugin);
-        })
-      );
-      setting.addExtraButton((b) =>
-        b
-          .setIcon("trash")
-          .setTooltip("Delete rule")
-          .onClick(() =>
-            void (async () => {
-              this.plugin.settings.formatRules = this.plugin.settings.formatRules.filter(
-                (r) => r !== rule
-              );
-              await this.plugin.savePluginData();
-              redecorateAll(this.plugin);
-              this.display();
-            })()
-          )
-      );
+    const rules = this.plugin.settings.formatRules;
+    const list = containerEl.createDiv({ cls: "bases-toolbox-cf-list" });
+    if (!rules.length) {
+      list.createDiv({ cls: "bases-toolbox-fr-info", text: "No rules yet — add one below." });
     }
+    rules.forEach((rule, i) => this.renderRuleRow(list, rule, i));
+    this.renderAddRule(containerEl);
+  }
 
-    let propEl: HTMLInputElement | null = null;
-    let valueEl: HTMLInputElement | null = null;
-    let opEl: HTMLSelectElement | null = null;
-    let colorEl: HTMLSelectElement | null = null;
-    let swatchEl: HTMLInputElement | null = null;
-    const addSetting = new Setting(containerEl)
-      .setName("Add rule")
-      .addText((t) => {
-        t.setPlaceholder("property");
-        propEl = t.inputEl;
-      })
-      .addDropdown((dd) => {
-        for (const [op, label] of Object.entries(OP_LABELS)) dd.addOption(op, label);
-        opEl = dd.selectEl;
-      })
-      .addText((t) => {
-        t.setPlaceholder("value");
-        valueEl = t.inputEl;
-      })
-      .addDropdown((dd) => {
-        for (const c of Object.keys(RULE_COLORS)) dd.addOption(c, c);
-        dd.addOption(CUSTOM_COLOR, "custom…");
-        colorEl = dd.selectEl;
-        dd.onChange((v) => {
-          swatchEl?.setCssStyles({ display: v === CUSTOM_COLOR ? "" : "none" });
-        });
+  private renderRuleRow(list: HTMLElement, rule: FormatRule, index: number): void {
+    const rules = this.plugin.settings.formatRules;
+    const row = list.createDiv({ cls: "bases-toolbox-cf-rule" });
+
+    const swatch = row.createDiv({ cls: "bases-toolbox-cf-swatch" });
+    const paintSwatch = () => swatch.setCssStyles({ backgroundColor: ruleSwatchColor(rule) });
+    paintSwatch();
+
+    const prop = row.createEl("input", {
+      type: "text",
+      cls: "bases-toolbox-cf-prop",
+      attr: { placeholder: "property" },
+    });
+    prop.value = rule.property;
+    prop.addEventListener("input", () => {
+      rule.property = prop.value.trim();
+      this.saveAndPaint();
+    });
+
+    const op = row.createEl("select", { cls: "dropdown bases-toolbox-cf-op" });
+    for (const [k, label] of Object.entries(OP_LABELS)) op.createEl("option", { value: k, text: label });
+    op.value = rule.op;
+
+    const val = row.createEl("input", {
+      type: "text",
+      cls: "bases-toolbox-cf-val",
+      attr: { placeholder: "value" },
+    });
+    val.value = rule.value;
+    const syncVal = () =>
+      val.setCssStyles({ display: rule.op === "empty" || rule.op === "not-empty" ? "none" : "" });
+    syncVal();
+    op.addEventListener("change", () => {
+      rule.op = op.value as FormatOp;
+      syncVal();
+      this.saveAndPaint();
+    });
+    val.addEventListener("input", () => {
+      rule.value = val.value;
+      this.saveAndPaint();
+    });
+
+    const scope = row.createEl("select", { cls: "dropdown bases-toolbox-cf-scope" });
+    scope.createEl("option", { value: "row", text: "Row" });
+    scope.createEl("option", { value: "cell", text: "Cell" });
+    scope.value = rule.scope ?? "row";
+    scope.addEventListener("change", () => {
+      rule.scope = scope.value as FormatScope;
+      this.saveAndPaint();
+    });
+
+    const color = row.createEl("select", { cls: "dropdown bases-toolbox-cf-colorsel" });
+    for (const c of Object.keys(RULE_COLORS)) color.createEl("option", { value: c, text: colorLabel(c) });
+    color.createEl("option", { value: CUSTOM_COLOR, text: colorLabel(CUSTOM_COLOR) });
+    color.value = rule.color;
+
+    const custom = row.createEl("input", { type: "color", cls: "bases-toolbox-color-input" });
+    custom.value = rule.customColor ?? DEFAULT_CUSTOM_HEX;
+    const syncCustom = () =>
+      custom.setCssStyles({ display: rule.color === CUSTOM_COLOR ? "" : "none" });
+    syncCustom();
+    color.addEventListener("change", () => {
+      rule.color = color.value;
+      syncCustom();
+      paintSwatch();
+      this.saveAndPaint();
+    });
+    custom.addEventListener("input", () => {
+      rule.customColor = custom.value;
+      paintSwatch();
+      this.saveAndPaint();
+    });
+
+    const enabled = row.createEl("input", { type: "checkbox", cls: "bases-toolbox-cf-enabled" });
+    enabled.checked = rule.enabled;
+    enabled.setAttribute("aria-label", "Enable rule");
+    enabled.addEventListener("change", () => {
+      rule.enabled = enabled.checked;
+      this.saveAndPaint();
+    });
+
+    const mkBtn = (icon: string, label: string, disabled: boolean, fn: () => void) => {
+      const b = row.createEl("button", {
+        cls: "bases-toolbox-cf-btn clickable-icon",
+        attr: { "aria-label": label },
       });
-    swatchEl = addSetting.controlEl.createEl("input", { type: "color" });
-    swatchEl.value = DEFAULT_CUSTOM_HEX;
-    swatchEl.setCssStyles({ display: "none" });
-    addSetting.addButton((b) =>
-      b.setButtonText("Add").onClick(async () => {
+      setIcon(b, icon);
+      b.disabled = disabled;
+      b.addEventListener("click", fn);
+    };
+    mkBtn("chevron-up", "Move up", index === 0, () => {
+      [rules[index - 1], rules[index]] = [rules[index], rules[index - 1]];
+      this.saveAndPaint();
+      this.display();
+    });
+    mkBtn("chevron-down", "Move down", index === rules.length - 1, () => {
+      [rules[index + 1], rules[index]] = [rules[index], rules[index + 1]];
+      this.saveAndPaint();
+      this.display();
+    });
+    mkBtn("trash", "Delete rule", false, () => {
+      this.plugin.settings.formatRules = rules.filter((r) => r !== rule);
+      this.saveAndPaint();
+      this.display();
+    });
+  }
+
+  private renderAddRule(containerEl: HTMLElement): void {
+    let propEl: HTMLInputElement | null = null;
+    let opEl: HTMLSelectElement | null = null;
+    let valEl: HTMLInputElement | null = null;
+    let scopeEl: HTMLSelectElement | null = null;
+    let colorEl: HTMLSelectElement | null = null;
+    let customEl: HTMLInputElement | null = null;
+    const add = new Setting(containerEl).setName("Add rule");
+    add.addText((t) => {
+      t.setPlaceholder("property");
+      propEl = t.inputEl;
+    });
+    add.addDropdown((dd) => {
+      for (const [k, label] of Object.entries(OP_LABELS)) dd.addOption(k, label);
+      opEl = dd.selectEl;
+    });
+    add.addText((t) => {
+      t.setPlaceholder("value");
+      valEl = t.inputEl;
+    });
+    add.addDropdown((dd) => {
+      dd.addOption("row", "Row");
+      dd.addOption("cell", "Cell");
+      scopeEl = dd.selectEl;
+    });
+    add.addDropdown((dd) => {
+      for (const c of Object.keys(RULE_COLORS)) dd.addOption(c, colorLabel(c));
+      dd.addOption(CUSTOM_COLOR, colorLabel(CUSTOM_COLOR));
+      colorEl = dd.selectEl;
+      dd.onChange((v) => customEl?.setCssStyles({ display: v === CUSTOM_COLOR ? "" : "none" }));
+    });
+    customEl = add.controlEl.createEl("input", { type: "color", cls: "bases-toolbox-color-input" });
+    customEl.value = DEFAULT_CUSTOM_HEX;
+    customEl.setCssStyles({ display: "none" });
+    add.addButton((b) =>
+      b.setButtonText("Add").setCta().onClick(() => {
         const property = propEl?.value.trim() ?? "";
         if (!property) return;
-        const color = colorEl?.value ?? "red";
-        const rule: FormatRule = {
+        const colorKey = colorEl?.value ?? "red";
+        this.plugin.settings.formatRules.push({
           id: `${Date.now()}-${this.plugin.settings.formatRules.length}`,
           property,
           op: (opEl?.value ?? "equals") as FormatOp,
-          value: valueEl?.value ?? "",
-          color,
-          ...(color === CUSTOM_COLOR ? { customColor: swatchEl?.value ?? DEFAULT_CUSTOM_HEX } : {}),
+          value: valEl?.value ?? "",
+          scope: (scopeEl?.value ?? "row") as FormatScope,
+          color: colorKey,
+          ...(colorKey === CUSTOM_COLOR
+            ? { customColor: customEl?.value ?? DEFAULT_CUSTOM_HEX }
+            : {}),
           enabled: true,
-        };
-        this.plugin.settings.formatRules.push(rule);
-        await this.plugin.savePluginData();
-        redecorateAll(this.plugin);
+        });
+        this.saveAndPaint();
         this.display();
       })
     );
   }
+
 }

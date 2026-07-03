@@ -289,3 +289,53 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   0%, 40% { background-color: var(--text-selection); }
   100% { background-color: transparent; }
 }
+
+/* Conditional formatting rules editor */
+.bases-toolbox-cf-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-2);
+  margin-bottom: var(--size-4-2);
+}
+.bases-toolbox-cf-rule {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  flex-wrap: wrap;
+}
+.bases-toolbox-cf-swatch {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--background-modifier-border);
+}
+.bases-toolbox-cf-prop,
+.bases-toolbox-cf-val {
+  width: 96px;
+}
+.bases-toolbox-cf-rule select.dropdown {
+  height: auto;
+  min-height: unset;
+}
+.bases-toolbox-cf-btn {
+  padding: var(--size-2-1);
+}
+.bases-toolbox-cf-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+/* Native color input: explicit box so the swatch is not clipped top/bottom */
+.bases-toolbox-color-input {
+  width: 34px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: none;
+  cursor: pointer;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+}
+.bases-toolbox-color-input::-webkit-color-swatch-wrapper { padding: 2px; }
+.bases-toolbox-color-input::-webkit-color-swatch { border: none; border-radius: 2px; }

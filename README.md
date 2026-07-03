@@ -50,10 +50,13 @@ revertible.
 
 ### Conditional formatting
 
-Color Bases rows by rules (first match wins): property, operator
-(equals/contains/compare/empty), value, and a color — pick from the
-theme-tinted palette or choose any custom color with a color picker (applied
-at the same subtle tint strength). Managed in the plugin settings.
+Color Bases rows — or individual cells — by rules. Each rule has a
+property, operator (equals/contains/compare/empty), value, a **scope**
+(color the whole Row or just that property's Cell), and a color from the
+theme palette or a custom color picker (applied at a subtle tint). Rules are
+fully editable inline, reorderable (they apply top-to-bottom; first match
+wins per row and per cell), and each shows a color swatch. Changes apply to
+open bases in real time. Managed in the plugin settings.
 
 ### CSV import & export
 

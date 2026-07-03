@@ -2,6 +2,8 @@ import { TFile, debounce } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { findKey } from "./scan";
 
+export type FormatScope = "row" | "cell";
+
 export interface FormatRule {
   id: string;
   property: string;
@@ -10,6 +12,8 @@ export interface FormatRule {
   color: string; // key of RULE_COLORS, or "custom"
   /** Hex color (e.g. #ff9800) used when color === "custom". */
   customColor?: string;
+  /** Color the whole row (default) or only this property's cell. */
+  scope?: FormatScope;
   enabled: boolean;
 }
 
@@ -39,6 +43,12 @@ export const OP_LABELS: Record<FormatOp, string> = {
 export const CUSTOM_COLOR = "custom";
 export const DEFAULT_CUSTOM_HEX = "#ff9800";
 
+/** Display label for a color key ("red" → "Red", "custom" → "Custom…"). */
+export function colorLabel(key: string): string {
+  if (key === CUSTOM_COLOR) return "Custom…";
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
 /** Resolves a rule to its CSS background tint (palette var or custom hex). */
 export function ruleColor(rule: FormatRule): string | null {
   if (rule.color === CUSTOM_COLOR) {
@@ -51,6 +61,12 @@ export function ruleColor(rule: FormatRule): string | null {
   return RULE_COLORS[rule.color] ?? null;
 }
 
+/** A solid swatch color of the rule's choice, for the settings preview. */
+export function ruleSwatchColor(rule: FormatRule): string {
+  if (rule.color === CUSTOM_COLOR) return rule.customColor ?? DEFAULT_CUSTOM_HEX;
+  return SWATCH_COLORS[rule.color] ?? "transparent";
+}
+
 /** Theme-aware tints via Obsidian's extended color palette variables. */
 export const RULE_COLORS: Record<string, string> = {
   red: "rgba(var(--color-red-rgb), 0.18)",
@@ -61,6 +77,18 @@ export const RULE_COLORS: Record<string, string> = {
   blue: "rgba(var(--color-blue-rgb), 0.18)",
   purple: "rgba(var(--color-purple-rgb), 0.18)",
   pink: "rgba(var(--color-pink-rgb), 0.18)",
+};
+
+/** Fully-opaque versions for the settings preview swatch. */
+const SWATCH_COLORS: Record<string, string> = {
+  red: "var(--color-red)",
+  orange: "var(--color-orange)",
+  yellow: "var(--color-yellow)",
+  green: "var(--color-green)",
+  cyan: "var(--color-cyan)",
+  blue: "var(--color-blue)",
+  purple: "var(--color-purple)",
+  pink: "var(--color-pink)",
 };
 
 function matches(rule: FormatRule, fmValue: unknown): boolean {
@@ -102,7 +130,30 @@ function matches(rule: FormatRule, fmValue: unknown): boolean {
   });
 }
 
+/** Maps a property name to its column index in the table containing `row`. */
+function columnIndexFor(row: HTMLElement, property: string): number {
+  // Headers live in a separate thead OUTSIDE .bases-table — scope to the
+  // whole view so both the header row and the body rows are in reach.
+  const view = row.closest<HTMLElement>(".bases-view") ?? row.closest<HTMLElement>(".view-content");
+  if (!view) return -1;
+  const headers = Array.from(view.querySelectorAll<HTMLElement>(".bases-table-header-name"));
+  const lower = property.toLowerCase();
+  return headers.findIndex((h) => (h.textContent ?? "").trim().toLowerCase() === lower);
+}
+
+function clearRow(row: HTMLElement): void {
+  if (row.dataset.btFormatted) {
+    row.setCssStyles({ backgroundColor: "" });
+    delete row.dataset.btFormatted;
+  }
+  row.querySelectorAll<HTMLElement>("[data-bt-cell-formatted]").forEach((c) => {
+    c.setCssStyles({ backgroundColor: "" });
+    delete c.dataset.btCellFormatted;
+  });
+}
+
 function decorateRow(plugin: BasesToolboxPlugin, row: HTMLElement): void {
+  clearRow(row); // always start clean so removed/changed rules don't linger
   const href = row.querySelector("[data-href]")?.getAttribute("data-href");
   const file = href ? plugin.app.vault.getAbstractFileByPath(href) : null;
   if (!(file instanceof TFile)) return;
@@ -111,23 +162,37 @@ function decorateRow(plugin: BasesToolboxPlugin, row: HTMLElement): void {
     unknown
   >;
 
-  let color: string | null = null;
+  let rowColor: string | null = null;
+  const cellColors = new Map<number, string>(); // column index → color
+
   for (const rule of plugin.settings.formatRules) {
     if (!rule.enabled || !rule.property) continue;
     const key = findKey(fm, rule.property);
     const value = key === null ? undefined : fm[key];
-    if (matches(rule, value)) {
-      color = ruleColor(rule);
-      break; // first matching rule wins
+    if (!matches(rule, value)) continue;
+    const color = ruleColor(rule);
+    if (!color) continue;
+    if (rule.scope === "cell") {
+      const idx = columnIndexFor(row, rule.property);
+      if (idx >= 0 && !cellColors.has(idx)) cellColors.set(idx, color); // first per cell wins
+    } else if (rowColor === null) {
+      rowColor = color; // first matching row rule wins
     }
   }
 
-  if (color) {
-    row.setCssStyles({ backgroundColor: color });
+  if (rowColor) {
+    row.setCssStyles({ backgroundColor: rowColor });
     row.dataset.btFormatted = "1";
-  } else if (row.dataset.btFormatted) {
-    row.setCssStyles({ backgroundColor: "" });
-    delete row.dataset.btFormatted;
+  }
+  if (cellColors.size) {
+    const cells = Array.from(row.querySelectorAll<HTMLElement>(".bases-td"));
+    for (const [idx, color] of cellColors) {
+      const cell = cells[idx];
+      if (cell) {
+        cell.setCssStyles({ backgroundColor: color });
+        cell.dataset.btCellFormatted = "1";
+      }
+    }
   }
 }
 
@@ -136,11 +201,21 @@ export function redecorateAll(plugin: BasesToolboxPlugin): void {
 }
 
 export function installConditionalFormatting(plugin: BasesToolboxPlugin): void {
-  const refresh = debounce(() => redecorateAll(plugin), 250, true);
+  const refresh = debounce(() => redecorateAll(plugin), 200, true);
+  plugin.refreshConditionalFormatting = refresh;
 
   const observer = new MutationObserver((mutations) => {
     if (!plugin.settings.formatRules.length) return;
     for (const mutation of mutations) {
+      // Row recycled to a different file (virtualization) → re-evaluate it.
+      if (mutation.type === "attributes") {
+        const t = mutation.target;
+        if (t.instanceOf(HTMLElement)) {
+          const row = (t as HTMLElement).closest<HTMLElement>(".bases-tr");
+          if (row) decorateRow(plugin, row);
+        }
+        continue;
+      }
       for (const node of Array.from(mutation.addedNodes)) {
         if (!node.instanceOf(HTMLElement)) continue;
         const el = node as HTMLElement;
@@ -149,10 +224,19 @@ export function installConditionalFormatting(plugin: BasesToolboxPlugin): void {
       }
     }
   });
-  observer.observe(activeDocument.body, { childList: true, subtree: true });
+  observer.observe(activeDocument.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    // data-href changes when Bases recycles a row for a different file
+    attributeFilter: ["data-href"],
+  });
   plugin.register(() => observer.disconnect());
 
-  // Frontmatter edits re-evaluate rules for visible rows.
+  // Re-apply whenever the view context changes — this is what makes rule
+  // edits show up the moment you return to the base from settings.
   plugin.registerEvent(plugin.app.metadataCache.on("changed", () => refresh()));
+  plugin.registerEvent(plugin.app.workspace.on("active-leaf-change", () => refresh()));
+  plugin.registerEvent(plugin.app.workspace.on("layout-change", () => refresh()));
   refresh();
 }
