@@ -22,6 +22,19 @@ export const TRANSFORM_LABELS: Record<ForkTransform, string> = {
   copy: "Copy as-is",
 };
 
+/** Short slug describing a transform, for auto-naming the fork property. */
+const TRANSFORM_SLUG: Record<ForkTransform, string> = {
+  date: "normalized",
+  "strip-links": "as-text",
+  "wrap-links": "as-links",
+  copy: "copy",
+};
+
+/** Smart default fork property name: "<source> fork <descriptor>". */
+export function defaultForkName(source: string, transform: ForkTransform): string {
+  return `${source}-fork-${TRANSFORM_SLUG[transform]}`;
+}
+
 export interface PropertyForkDef {
   source: string;
   target: string;
@@ -101,7 +114,12 @@ class ForkModal extends Modal {
       for (const [k, label] of Object.entries(TRANSFORM_LABELS)) dd.addOption(k, label);
       dd.setValue(this.transform);
       dd.onChange((v) => {
+        const prevAuto = defaultForkName(this.usage.name, this.transform);
         this.transform = v as ForkTransform;
+        // If the user hasn't customized the name, keep it in sync with the transform.
+        if (this.targetEl && this.targetEl.value.trim() === prevAuto) {
+          this.targetEl.value = defaultForkName(this.usage.name, this.transform);
+        }
         this.updatePreview();
       });
     });
@@ -122,7 +140,7 @@ class ForkModal extends Modal {
 
     this.forkSettings.push(
       new Setting(contentEl).setName("Fork property name").addText((t) => {
-        t.setValue(`${this.usage.name}-bases`);
+        t.setValue(defaultForkName(this.usage.name, this.transform));
         this.targetEl = t.inputEl;
       }),
       new Setting(contentEl)
@@ -159,14 +177,10 @@ class ForkModal extends Modal {
     }
     this.running = true;
     try {
-      const changes = await applyFork(this.plugin, {
-        source: this.usage.name,
-        target,
-        transform: this.transform,
-      });
+      // Record the fork FIRST so it's always listed/manageable in settings,
+      // even if the initial transform below errors on some file. (Ordering
+      // this after applyFork was the bug: a thrown transform skipped the push.)
       if (this.mode === "fork") {
-        // Always record the fork so it's listed/manageable in settings; the
-        // live-sync checkbox only decides whether it auto-recomputes (active).
         this.plugin.settings.propertyForks.push({
           source: this.usage.name,
           target,
@@ -174,6 +188,18 @@ class ForkModal extends Modal {
           active: this.liveSync,
         });
         await this.plugin.savePluginData();
+      }
+      let changes = 0;
+      try {
+        changes = await applyFork(this.plugin, {
+          source: this.usage.name,
+          target,
+          transform: this.transform,
+        });
+      } catch (e) {
+        new Notice(`Fork saved, but the initial compute failed: ${e instanceof Error ? e.message : String(e)}`);
+        this.close();
+        return;
       }
       new Notice(
         `${this.usage.name}: ${this.mode === "fork" ? `forked into "${target}"` : "converted"} in ${changes} file${changes === 1 ? "" : "s"}.` +
