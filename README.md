@@ -51,8 +51,9 @@ revertible.
 ### Conditional formatting
 
 Color Bases rows by rules (first match wins): property, operator
-(equals/contains/compare/empty), value, and a theme-tinted color. Managed in
-the plugin settings.
+(equals/contains/compare/empty), value, and a color — pick from the
+theme-tinted palette or choose any custom color with a color picker (applied
+at the same subtle tint strength). Managed in the plugin settings.
 
 ### CSV import & export
 

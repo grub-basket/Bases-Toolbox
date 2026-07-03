@@ -7,7 +7,9 @@ export interface FormatRule {
   property: string;
   op: FormatOp;
   value: string;
-  color: string; // key of RULE_COLORS
+  color: string; // key of RULE_COLORS, or "custom"
+  /** Hex color (e.g. #ff9800) used when color === "custom". */
+  customColor?: string;
   enabled: boolean;
 }
 
@@ -33,6 +35,21 @@ export const OP_LABELS: Record<FormatOp, string> = {
   empty: "is empty",
   "not-empty": "is not empty",
 };
+
+export const CUSTOM_COLOR = "custom";
+export const DEFAULT_CUSTOM_HEX = "#ff9800";
+
+/** Resolves a rule to its CSS background tint (palette var or custom hex). */
+export function ruleColor(rule: FormatRule): string | null {
+  if (rule.color === CUSTOM_COLOR) {
+    const m = (rule.customColor ?? DEFAULT_CUSTOM_HEX).match(/^#?([0-9a-fA-F]{6})$/);
+    if (!m) return null;
+    const n = parseInt(m[1], 16);
+    // same 0.18 alpha as the palette tints, so custom rows blend in
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, 0.18)`;
+  }
+  return RULE_COLORS[rule.color] ?? null;
+}
 
 /** Theme-aware tints via Obsidian's extended color palette variables. */
 export const RULE_COLORS: Record<string, string> = {
@@ -98,7 +115,7 @@ function decorateRow(plugin: BasesToolboxPlugin, row: HTMLElement): void {
     const key = findKey(fm, rule.property);
     const value = key === null ? undefined : fm[key];
     if (matches(rule, value)) {
-      color = RULE_COLORS[rule.color] ?? null;
+      color = ruleColor(rule);
       break; // first matching rule wins
     }
   }

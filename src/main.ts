@@ -3,6 +3,8 @@ import { AllowedValuesAuditModal, installAllowedValuePicker } from "./allowed-va
 import { openBulkEdit } from "./bulk-edit";
 import { installCellZoomTracking, openCellZoom } from "./cell-zoom";
 import {
+  CUSTOM_COLOR,
+  DEFAULT_CUSTOM_HEX,
   FormatOp,
   FormatRule,
   OP_LABELS,
@@ -305,14 +307,25 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           rule.op === "empty" || rule.op === "not-empty" ? "" : ` “${rule.value}”`
         }`
       );
+      let ruleSwatch: HTMLInputElement | null = null;
       setting.addDropdown((dd) => {
         for (const c of Object.keys(RULE_COLORS)) dd.addOption(c, c);
+        dd.addOption(CUSTOM_COLOR, "custom…");
         dd.setValue(rule.color);
         dd.onChange(async (v) => {
           rule.color = v;
+          if (ruleSwatch) ruleSwatch.style.display = v === CUSTOM_COLOR ? "" : "none";
           await this.plugin.savePluginData();
           redecorateAll(this.plugin);
         });
+      });
+      ruleSwatch = setting.controlEl.createEl("input", { type: "color" });
+      ruleSwatch.value = rule.customColor ?? DEFAULT_CUSTOM_HEX;
+      ruleSwatch.style.display = rule.color === CUSTOM_COLOR ? "" : "none";
+      ruleSwatch.addEventListener("input", async () => {
+        rule.customColor = ruleSwatch?.value ?? DEFAULT_CUSTOM_HEX;
+        await this.plugin.savePluginData();
+        redecorateAll(this.plugin);
       });
       setting.addToggle((t) =>
         t.setValue(rule.enabled).onChange(async (v) => {
@@ -340,7 +353,8 @@ class BasesToolboxSettingTab extends PluginSettingTab {
     let valueEl: HTMLInputElement | null = null;
     let opEl: HTMLSelectElement | null = null;
     let colorEl: HTMLSelectElement | null = null;
-    new Setting(containerEl)
+    let swatchEl: HTMLInputElement | null = null;
+    const addSetting = new Setting(containerEl)
       .setName("Add rule")
       .addText((t) => {
         t.setPlaceholder("property");
@@ -356,25 +370,34 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       })
       .addDropdown((dd) => {
         for (const c of Object.keys(RULE_COLORS)) dd.addOption(c, c);
+        dd.addOption(CUSTOM_COLOR, "custom…");
         colorEl = dd.selectEl;
+        dd.onChange((v) => {
+          if (swatchEl) swatchEl.style.display = v === CUSTOM_COLOR ? "" : "none";
+        });
+      });
+    swatchEl = addSetting.controlEl.createEl("input", { type: "color" });
+    swatchEl.value = DEFAULT_CUSTOM_HEX;
+    swatchEl.style.display = "none";
+    addSetting.addButton((b) =>
+      b.setButtonText("Add").onClick(async () => {
+        const property = propEl?.value.trim() ?? "";
+        if (!property) return;
+        const color = colorEl?.value ?? "red";
+        const rule: FormatRule = {
+          id: `${Date.now()}-${this.plugin.settings.formatRules.length}`,
+          property,
+          op: (opEl?.value ?? "equals") as FormatOp,
+          value: valueEl?.value ?? "",
+          color,
+          ...(color === CUSTOM_COLOR ? { customColor: swatchEl?.value ?? DEFAULT_CUSTOM_HEX } : {}),
+          enabled: true,
+        };
+        this.plugin.settings.formatRules.push(rule);
+        await this.plugin.savePluginData();
+        redecorateAll(this.plugin);
+        this.display();
       })
-      .addButton((b) =>
-        b.setButtonText("Add").onClick(async () => {
-          const property = propEl?.value.trim() ?? "";
-          if (!property) return;
-          const rule: FormatRule = {
-            id: `${Date.now()}-${this.plugin.settings.formatRules.length}`,
-            property,
-            op: (opEl?.value ?? "equals") as FormatOp,
-            value: valueEl?.value ?? "",
-            color: colorEl?.value ?? "red",
-            enabled: true,
-          };
-          this.plugin.settings.formatRules.push(rule);
-          await this.plugin.savePluginData();
-          redecorateAll(this.plugin);
-          this.display();
-        })
-      );
+    );
   }
 }
