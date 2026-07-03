@@ -26,6 +26,8 @@ export interface PropertyForkDef {
   source: string;
   target: string;
   transform: ForkTransform;
+  /** Live sync runs only for active forks; inactive keeps the def but pauses. */
+  active?: boolean;
 }
 
 function transformScalar(v: unknown, t: ForkTransform): unknown {
@@ -165,6 +167,7 @@ class ForkModal extends Modal {
           source: this.usage.name,
           target,
           transform: this.transform,
+          active: true,
         });
         await this.plugin.savePluginData();
       }
@@ -234,6 +237,7 @@ export function installForkSync(plugin: BasesToolboxPlugin): void {
         unknown
       >;
       for (const def of plugin.settings.propertyForks) {
+        if (def.active === false) continue; // paused
         const sourceKey = findKey(fm, def.source);
         if (sourceKey === null) continue;
         const next = transformValue(fm[sourceKey], def.transform);
