@@ -28,6 +28,8 @@ export interface PropertyForkDef {
   transform: ForkTransform;
   /** Live sync runs only for active forks; inactive keeps the def but pauses. */
   active?: boolean;
+  /** Suppress the "source/target property missing" warning for this fork. */
+  ignoreWarning?: boolean;
 }
 
 function transformScalar(v: unknown, t: ForkTransform): unknown {
@@ -125,7 +127,7 @@ class ForkModal extends Modal {
       }),
       new Setting(contentEl)
         .setName("Keep in live sync")
-        .setDesc("Whenever the original property changes, the fork is recomputed automatically. Manage active syncs in the plugin settings.")
+        .setDesc("Recompute the fork automatically whenever the source changes. Either way the fork is listed in settings, where you can pause or edit it.")
         .addToggle((t) => t.setValue(this.liveSync).onChange((v) => (this.liveSync = v)))
     );
 
@@ -162,18 +164,20 @@ class ForkModal extends Modal {
         target,
         transform: this.transform,
       });
-      if (this.mode === "fork" && this.liveSync) {
+      if (this.mode === "fork") {
+        // Always record the fork so it's listed/manageable in settings; the
+        // live-sync checkbox only decides whether it auto-recomputes (active).
         this.plugin.settings.propertyForks.push({
           source: this.usage.name,
           target,
           transform: this.transform,
-          active: true,
+          active: this.liveSync,
         });
         await this.plugin.savePluginData();
       }
       new Notice(
         `${this.usage.name}: ${this.mode === "fork" ? `forked into "${target}"` : "converted"} in ${changes} file${changes === 1 ? "" : "s"}.` +
-          (this.mode === "fork" && this.liveSync ? " Live sync is on." : "")
+          (this.mode === "fork" ? (this.liveSync ? " Live sync is on." : " Listed in settings (sync paused).") : "")
       );
       this.close();
     } finally {

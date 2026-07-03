@@ -421,3 +421,32 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
 .bases-toolbox-chip-icon { display: inline-flex; align-items: center; }
 .bases-toolbox-chip-icon svg { width: var(--font-ui-small); height: var(--font-ui-small); }
 .bases-toolbox-chips-empty { font-size: var(--font-ui-small); color: var(--text-muted); }
+
+/* Conditional formatting panel (narrow-friendly cards) */
+.bases-toolbox-cfview { padding: var(--size-4-2); }
+.bases-toolbox-cfcard {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-2-3);
+  margin-bottom: var(--size-2-3);
+}
+.bases-toolbox-cfcard-head {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  margin-bottom: var(--size-2-2);
+}
+.bases-toolbox-cfcard-summary {
+  flex: 1;
+  font-weight: var(--font-medium);
+  font-size: var(--font-ui-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bases-toolbox-cfcard-body { display: flex; flex-direction: column; gap: var(--size-2-2); }
+.bases-toolbox-cfcard-body input[type=text] { width: 100%; }
+.bases-toolbox-cfcard-row { display: flex; gap: var(--size-2-2); align-items: center; }
+.bases-toolbox-cfcard-row select { flex: 1; }
+.bases-toolbox-cfcard-row input[type=text] { flex: 1; }
+.bases-toolbox-cfcard-add { border-style: dashed; }

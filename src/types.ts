@@ -50,6 +50,10 @@ export interface BasesToolboxSettings {
   companionExts: string;
   /** Extensions to EXCLUDE from companioning (comma-separated, no dot). */
   companionExcludeExts: string;
+  /** Companion the whole vault (off by default — scope to folders instead). */
+  companionVaultWide: boolean;
+  /** Folders to limit auto/retroactive companioning to (one path per line). */
+  companionFolders: string;
   /** Automatically create companions for newly added non-md files. */
   companionAuto: boolean;
 }
@@ -66,6 +70,8 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   companionsFolder: "",
   companionExts: "",
   companionExcludeExts: "",
+  companionVaultWide: false,
+  companionFolders: "",
   companionAuto: false,
 };
 
