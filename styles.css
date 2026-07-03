@@ -139,8 +139,8 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   min-width: 140px;
 }
 
-.bases-toolbox-doctor-invalid {
-  border-color: var(--text-error) !important;
+input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
+  border-color: var(--text-error);
   box-shadow: 0 0 0 1px var(--text-error);
 }
 

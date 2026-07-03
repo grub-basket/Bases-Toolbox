@@ -3,9 +3,6 @@ import type BasesToolboxPlugin from "./main";
 import { openFindReplaceView } from "./find-replace-view";
 import { EMPTY_DISPLAY, PropertyUsage, valueToDisplay } from "./scan";
 
-/** Sentinel for the "match every value" dropdown option. */
-const ALL_VALUES = "__bt_all_values__";
-
 export class PropertySuggestModal extends FuzzySuggestModal<PropertyUsage> {
   private plugin: BasesToolboxPlugin;
   private items: PropertyUsage[];

@@ -123,16 +123,16 @@ function decorateRow(plugin: BasesToolboxPlugin, row: HTMLElement): void {
   }
 
   if (color) {
-    row.style.backgroundColor = color;
+    row.setCssStyles({ backgroundColor: color });
     row.dataset.btFormatted = "1";
   } else if (row.dataset.btFormatted) {
-    row.style.removeProperty("background-color");
+    row.setCssStyles({ backgroundColor: "" });
     delete row.dataset.btFormatted;
   }
 }
 
 export function redecorateAll(plugin: BasesToolboxPlugin): void {
-  document.querySelectorAll<HTMLElement>(".bases-tr").forEach((r) => decorateRow(plugin, r));
+  activeDocument.querySelectorAll<HTMLElement>(".bases-tr").forEach((r) => decorateRow(plugin, r));
 }
 
 export function installConditionalFormatting(plugin: BasesToolboxPlugin): void {
@@ -142,13 +142,14 @@ export function installConditionalFormatting(plugin: BasesToolboxPlugin): void {
     if (!plugin.settings.formatRules.length) return;
     for (const mutation of mutations) {
       for (const node of Array.from(mutation.addedNodes)) {
-        if (!(node instanceof HTMLElement)) continue;
-        if (node.matches(".bases-tr")) decorateRow(plugin, node);
-        else if (node.querySelector?.(".bases-tr")) refresh();
+        if (!node.instanceOf(HTMLElement)) continue;
+        const el = node as HTMLElement;
+        if (el.matches(".bases-tr")) decorateRow(plugin, el);
+        else if (el.querySelector(".bases-tr")) refresh();
       }
     }
   });
-  observer.observe(document.body, { childList: true, subtree: true });
+  observer.observe(activeDocument.body, { childList: true, subtree: true });
   plugin.register(() => observer.disconnect());
 
   // Frontmatter edits re-evaluate rules for visible rows.

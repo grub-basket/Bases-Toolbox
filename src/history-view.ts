@@ -119,7 +119,7 @@ export class HistoryView extends ItemView {
 
     if (!entry.revertedAt) {
       const btn = box.createEl("button", { text: "Revert selected" });
-      btn.addEventListener("click", async () => {
+      btn.addEventListener("click", () => void (async () => {
         btn.disabled = true;
         const paths = this.checked.get(entry) ?? new Set<string>();
         const all = paths.size === entry.changes.length;
@@ -131,7 +131,7 @@ export class HistoryView extends ItemView {
           })
         );
         this.render();
-      });
+      })());
     }
   }
 }

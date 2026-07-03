@@ -146,7 +146,7 @@ export async function mergeNotes(
   }
 
   const rewritten = await rewriteBacklinks(plugin, source, target);
-  await app.vault.trash(source, false); // vault .trash — recoverable
+  await app.fileManager.trashFile(source); // respects the user deletion preference
 
   new Notice(
     `Merged "${source.basename}" into "${target.basename}"` +
@@ -390,7 +390,7 @@ export class DuplicateFinderModal extends Modal {
       }
       const btn = box.createEl("button", { text: `Merge ${group.length - 1} into kept note` });
       let armed = false;
-      btn.addEventListener("click", async () => {
+      btn.addEventListener("click", () => void (async () => {
         if (!armed) {
           armed = true;
           btn.setText(`Really merge ${group.length - 1} note${group.length === 2 ? "" : "s"} away? Click again`);
@@ -402,7 +402,7 @@ export class DuplicateFinderModal extends Modal {
           if (file !== keep) await mergeNotes(this.plugin, keep, file);
         }
         box.createDiv({ cls: "bases-toolbox-fr-info", text: "Merged. Sources are in the vault trash." });
-      });
+      })());
     }
   }
 }

@@ -162,11 +162,11 @@ export default class BasesToolboxPlugin extends Plugin {
   }
 
   onunload(): void {
-    document.body.removeClass("bases-toolbox-multiline-lists");
+    activeDocument.body.removeClass("bases-toolbox-multiline-lists");
   }
 
   applyMultilineListCells(): void {
-    document.body.toggleClass("bases-toolbox-multiline-lists", this.settings.multilineListCells);
+    activeDocument.body.toggleClass("bases-toolbox-multiline-lists", this.settings.multilineListCells);
   }
 
   async activatePropertyIndex(): Promise<void> {
@@ -284,13 +284,15 @@ class BasesToolboxSettingTab extends PluginSettingTab {
             b
               .setIcon("trash")
               .setTooltip("Stop syncing (properties stay as they are)")
-              .onClick(async () => {
-                this.plugin.settings.propertyForks = this.plugin.settings.propertyForks.filter(
-                  (d) => d !== def
-                );
-                await this.plugin.savePluginData();
-                this.display();
-              })
+              .onClick(() =>
+                void (async () => {
+                  this.plugin.settings.propertyForks = this.plugin.settings.propertyForks.filter(
+                    (d) => d !== def
+                  );
+                  await this.plugin.savePluginData();
+                  this.display();
+                })()
+              )
           );
       }
     }
@@ -354,14 +356,14 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         dd.setValue(rule.color);
         dd.onChange(async (v) => {
           rule.color = v;
-          if (ruleSwatch) ruleSwatch.style.display = v === CUSTOM_COLOR ? "" : "none";
+          ruleSwatch?.setCssStyles({ display: v === CUSTOM_COLOR ? "" : "none" });
           await this.plugin.savePluginData();
           redecorateAll(this.plugin);
         });
       });
       ruleSwatch = setting.controlEl.createEl("input", { type: "color" });
       ruleSwatch.value = rule.customColor ?? DEFAULT_CUSTOM_HEX;
-      ruleSwatch.style.display = rule.color === CUSTOM_COLOR ? "" : "none";
+      ruleSwatch.setCssStyles({ display: rule.color === CUSTOM_COLOR ? "" : "none" });
       ruleSwatch.addEventListener("input", async () => {
         rule.customColor = ruleSwatch?.value ?? DEFAULT_CUSTOM_HEX;
         await this.plugin.savePluginData();
@@ -378,14 +380,16 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         b
           .setIcon("trash")
           .setTooltip("Delete rule")
-          .onClick(async () => {
-            this.plugin.settings.formatRules = this.plugin.settings.formatRules.filter(
-              (r) => r !== rule
-            );
-            await this.plugin.savePluginData();
-            redecorateAll(this.plugin);
-            this.display();
-          })
+          .onClick(() =>
+            void (async () => {
+              this.plugin.settings.formatRules = this.plugin.settings.formatRules.filter(
+                (r) => r !== rule
+              );
+              await this.plugin.savePluginData();
+              redecorateAll(this.plugin);
+              this.display();
+            })()
+          )
       );
     }
 
@@ -413,12 +417,12 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         dd.addOption(CUSTOM_COLOR, "custom…");
         colorEl = dd.selectEl;
         dd.onChange((v) => {
-          if (swatchEl) swatchEl.style.display = v === CUSTOM_COLOR ? "" : "none";
+          swatchEl?.setCssStyles({ display: v === CUSTOM_COLOR ? "" : "none" });
         });
       });
     swatchEl = addSetting.controlEl.createEl("input", { type: "color" });
     swatchEl.value = DEFAULT_CUSTOM_HEX;
-    swatchEl.style.display = "none";
+    swatchEl.setCssStyles({ display: "none" });
     addSetting.addButton((b) =>
       b.setButtonText("Add").onClick(async () => {
         const property = propEl?.value.trim() ?? "";

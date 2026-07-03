@@ -14,7 +14,7 @@ function guardedNumberInput(target: EventTarget | null): HTMLInputElement | null
 
 export function installNumberGuard(plugin: BasesToolboxPlugin): void {
   plugin.registerDomEvent(
-    document,
+    activeDocument,
     "keydown",
     (e: KeyboardEvent) => {
       const s = plugin.settings;
@@ -32,7 +32,7 @@ export function installNumberGuard(plugin: BasesToolboxPlugin): void {
         !e.ctrlKey &&
         !e.metaKey &&
         !e.altKey &&
-        !/[0-9.,\-]/.test(e.key) // comma: decimal separator in many locales
+        !/[0-9.,-]/.test(e.key) // comma: decimal separator in many locales
       ) {
         // Swallows "e", "+", letters — everything a number input would
         // otherwise accept beyond digits, "." and "-".
@@ -43,14 +43,14 @@ export function installNumberGuard(plugin: BasesToolboxPlugin): void {
   );
 
   plugin.registerDomEvent(
-    document,
+    activeDocument,
     "wheel",
     (e: WheelEvent) => {
       if (!plugin.settings.blockArrowAndWheel) return;
       const input = guardedNumberInput(e.target);
       // Chromium only spins the value when the input is focused; scrolling
       // past an unfocused input is left alone so the page still scrolls.
-      if (input && input === document.activeElement) e.preventDefault();
+      if (input && input === activeDocument.activeElement) e.preventDefault();
     },
     { capture: true, passive: false }
   );

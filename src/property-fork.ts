@@ -111,7 +111,7 @@ class ForkModal extends Modal {
         dd.setValue(this.mode);
         dd.onChange((v) => {
           this.mode = v as "in-place" | "fork";
-          for (const s of this.forkSettings) s.settingEl.style.display = v === "fork" ? "" : "none";
+          for (const s of this.forkSettings) s.settingEl.setCssStyles({ display: v === "fork" ? "" : "none" });
           this.updatePreview();
         });
       });
@@ -248,7 +248,7 @@ export function installForkSync(plugin: BasesToolboxPlugin): void {
             const value = transformValue(liveFm[sk], def.transform);
             liveFm[findKey(liveFm, def.target) ?? def.target] = value;
           })
-          .finally(() => setTimeout(() => syncing.delete(file.path), 500));
+          .finally(() => window.setTimeout(() => syncing.delete(file.path), 500));
       }
     })
   );

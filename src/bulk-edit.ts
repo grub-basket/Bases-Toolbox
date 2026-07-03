@@ -1,4 +1,4 @@
-import { Modal, Notice, Setting, TFile } from "obsidian";
+import { ItemView, Modal, Notice, Setting, TFile } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { parseReplacement } from "./find-replace";
 import { findKey, getPropertyType, parseValueForProperty, valueToDisplay } from "./scan";
@@ -16,11 +16,11 @@ type BulkMode = "set" | "set-missing" | "append" | "remove" | "delete";
 export function activeBaseResults(
   plugin: BasesToolboxPlugin
 ): { files: TFile[]; name: string } | null {
-  const view = plugin.app.workspace.activeLeaf?.view as unknown as {
+  const view = plugin.app.workspace.getActiveViewOfType(ItemView) as unknown as {
     getViewType?: () => string;
     file?: TFile;
     controller?: { results?: unknown };
-  };
+  } | null;
   if (view?.getViewType?.() !== "bases") return null;
   const results = view.controller?.results;
   if (!(results instanceof Map)) return null;
@@ -140,7 +140,7 @@ export class BulkEditModal extends Modal {
   }
 
   private setNewNameVisible(show: boolean): void {
-    if (this.newNameSetting) this.newNameSetting.settingEl.style.display = show ? "" : "none";
+    this.newNameSetting?.settingEl.setCssStyles({ display: show ? "" : "none" });
   }
 
   private updateValueDesc(): void {

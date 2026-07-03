@@ -13,7 +13,7 @@ const LIST_TYPES = new Set(["multitext", "tags", "aliases"]);
 function eligible(el: EventTarget | null): HTMLElement | null {
   if (!(el instanceof HTMLElement)) return null;
   const editable =
-    el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el.isContentEditable;
+    el.instanceOf(HTMLInputElement) || el.instanceOf(HTMLTextAreaElement) || el.isContentEditable;
   if (!editable) return null;
   if (!el.closest(".bases-td, .metadata-property")) return null;
   return el;
@@ -24,7 +24,7 @@ let lastFocused: HTMLElement | null = null;
 /** Track the last focused cell/property editor — the command palette steals focus. */
 export function installCellZoomTracking(plugin: BasesToolboxPlugin): void {
   plugin.registerDomEvent(
-    document,
+    activeDocument,
     "focusin",
     (e: FocusEvent) => {
       const el = eligible(e.target);
@@ -88,7 +88,7 @@ async function resolveBasesCell(
 
 async function resolveTarget(plugin: BasesToolboxPlugin): Promise<ResolvedCell | null> {
   const el =
-    eligible(document.activeElement) ?? (lastFocused?.isConnected ? lastFocused : null);
+    eligible(activeDocument.activeElement) ?? (lastFocused?.isConnected ? lastFocused : null);
   if (!el) return null;
   const td = el.closest<HTMLElement>(".bases-td");
   if (td) return resolveBasesCell(plugin, td);

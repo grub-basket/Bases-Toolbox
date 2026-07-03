@@ -155,9 +155,8 @@ function showPicker(
 ): void {
   dismissMenu();
   const rect = anchor.getBoundingClientRect();
-  menuEl = document.body.createDiv({ cls: "bases-toolbox-picker" });
-  menuEl.style.left = `${rect.left}px`;
-  menuEl.style.top = `${rect.bottom + 2}px`;
+  menuEl = activeDocument.body.createDiv({ cls: "bases-toolbox-picker" });
+  menuEl.setCssStyles({ left: `${rect.left}px`, top: `${rect.bottom + 2}px` });
   for (const value of values) {
     const item = menuEl.createDiv({ cls: "bases-toolbox-picker-item", text: value });
     // mousedown fires before the input's blur, so the pick isn't lost
@@ -178,14 +177,14 @@ function showPicker(
 
 export function installAllowedValuePicker(plugin: BasesToolboxPlugin): void {
   plugin.registerDomEvent(
-    document,
+    activeDocument,
     "focusin",
     (e: FocusEvent) => {
       dismissMenu();
       const el = e.target;
       if (!(el instanceof HTMLElement)) return;
       const editable =
-        el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el.isContentEditable;
+        el.instanceOf(HTMLInputElement) || el.instanceOf(HTMLTextAreaElement) || el.isContentEditable;
       if (!editable) return;
 
       const direct = resolveEditor(plugin, el);
@@ -200,7 +199,7 @@ export function installAllowedValuePicker(plugin: BasesToolboxPlugin): void {
         if (!resolved) return;
         // Bases juggles focus while opening the inline editor, so accept any
         // focus that is still inside the same cell (and anchor to it).
-        const ae = document.activeElement;
+        const ae = activeDocument.activeElement;
         const anchor =
           ae instanceof HTMLElement && td.contains(ae) ? ae : el.isConnected ? el : null;
         if (!anchor) return;
@@ -211,20 +210,20 @@ export function installAllowedValuePicker(plugin: BasesToolboxPlugin): void {
     { capture: true }
   );
   plugin.registerDomEvent(
-    document,
+    activeDocument,
     "focusout",
     () =>
-      setTimeout(() => {
+      window.setTimeout(() => {
         // Keep the picker while focus stays inside an editable cell/property —
         // dismissing on every focus transition would kill the picker the
         // moment it opens (focus moving INTO the editor is itself a focusout).
-        const ae = document.activeElement;
+        const ae = activeDocument.activeElement;
         if (ae instanceof HTMLElement && ae.closest(".bases-td, .metadata-property")) return;
         dismissMenu();
       }, 150),
     { capture: true }
   );
-  plugin.registerDomEvent(document, "keydown", (e: KeyboardEvent) => {
+  plugin.registerDomEvent(activeDocument, "keydown", (e: KeyboardEvent) => {
     if (e.key === "Escape") dismissMenu();
   });
   plugin.register(dismissMenu);

@@ -69,8 +69,7 @@ class RollupModal extends Modal {
       dd.setValue(this.agg);
       dd.onChange((v) => {
         this.agg = v as Agg;
-        if (this.sourceSetting)
-          this.sourceSetting.settingEl.style.display = v === "count" ? "none" : "";
+        this.sourceSetting?.settingEl.setCssStyles({ display: v === "count" ? "none" : "" });
       });
     });
 
@@ -81,7 +80,7 @@ class RollupModal extends Modal {
         t.setPlaceholder("e.g. hours");
         this.sourcePropEl = t.inputEl;
       });
-    this.sourceSetting.settingEl.style.display = "none";
+    this.sourceSetting.settingEl.setCssStyles({ display: "none" });
 
     new Setting(contentEl)
       .setName("Write into property")

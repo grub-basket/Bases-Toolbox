@@ -1,4 +1,4 @@
-import { Notice, TFile, parseYaml } from "obsidian";
+import { ItemView, Notice, TFile, parseYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { toCsvCell } from "./csv-core";
 import { findKey } from "./scan";
@@ -10,11 +10,11 @@ import { findKey } from "./scan";
  */
 export async function exportBaseCsv(plugin: BasesToolboxPlugin): Promise<void> {
   const app = plugin.app;
-  const view = app.workspace.activeLeaf?.view as unknown as {
+  const view = app.workspace.getActiveViewOfType(ItemView) as unknown as {
     getViewType?: () => string;
     file?: TFile;
     controller?: { results?: unknown };
-  };
+  } | null;
   if (view?.getViewType?.() !== "bases" || !view.file) {
     new Notice("Open a base first — export works on the active base view.");
     return;
@@ -34,7 +34,7 @@ export async function exportBaseCsv(plugin: BasesToolboxPlugin): Promise<void> {
   }
   const views = Array.isArray(doc.views) ? (doc.views as Record<string, unknown>[]) : [];
   const viewLabel = view.file
-    ? document
+    ? activeDocument
         .querySelector(".workspace-leaf.mod-active .bases-toolbar-views-menu")
         ?.textContent?.trim()
     : undefined;

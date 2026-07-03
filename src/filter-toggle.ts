@@ -1,6 +1,5 @@
 import { FuzzySuggestModal, Modal, Notice, Setting, TFile, parseYaml, stringifyYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { DisabledFilter } from "./types";
 
 interface FilterRow {
   scope: string; // "" = base-level

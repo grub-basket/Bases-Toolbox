@@ -24,7 +24,7 @@ interface TypeSpec {
   /** A safe auto-suggestion (display text for the input), or null. */
   suggest: (v: unknown) => string | null;
   /** Parse the user's input text into a frontmatter value, or null if invalid. */
-  parse: (text: string) => unknown | null;
+  parse: (text: string) => unknown;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

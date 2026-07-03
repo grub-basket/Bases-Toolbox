@@ -143,7 +143,7 @@ export class PropertyIndexView extends ItemView {
       await right.setViewState({ type: "all-properties", active: true });
       leaf = right;
       // Give the freshly created view a beat to build its DOM.
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => window.setTimeout(r, 150));
     }
     await workspace.revealLeaf(leaf);
     const input = leaf.view.containerEl.querySelector<HTMLInputElement>('input[type="search"]');
