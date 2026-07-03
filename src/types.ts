@@ -42,6 +42,8 @@ export interface BasesToolboxSettings {
   allowedValues: Record<string, string[]>;
   /** Live-synced property forks (source → target with a transform). */
   propertyForks: import("./property-fork").PropertyForkDef[];
+  /** Last-used companions destination ("" = adjacent to each file). */
+  companionsFolder: string;
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -52,6 +54,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   formatRules: [],
   allowedValues: {},
   propertyForks: [],
+  companionsFolder: "",
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */

@@ -1,6 +1,7 @@
 import { App, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
 import { AllowedValuesAuditModal, installAllowedValuePicker } from "./allowed-values";
 import { openBulkEdit } from "./bulk-edit";
+import { CompanionNotesModal } from "./companion-notes";
 import { installCellZoomTracking, openCellZoom } from "./cell-zoom";
 import {
   CUSTOM_COLOR,
@@ -114,6 +115,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "find-duplicates",
       name: "Find duplicate notes",
       callback: () => new DuplicateFinderModal(this).open(),
+    });
+
+    this.addCommand({
+      id: "companion-notes",
+      name: "Create companion notes for non-Markdown files",
+      callback: () => new CompanionNotesModal(this).open(),
     });
 
     this.addCommand({

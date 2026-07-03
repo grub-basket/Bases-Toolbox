@@ -158,6 +158,21 @@ a picker of the allowed values, and the **Audit allowed values** command
 lists every value that falls outside a pinned list, with one-click jumps
 into find & replace.
 
+### Companion notes for non-Markdown files
+
+Command: **Create companion notes for non-Markdown files**. Bases only reads
+frontmatter from `.md` files — images, PDFs, audio, and other attachments
+are invisible to it. This scans a folder (or the vault), optionally filtered
+by extension, and creates one companion note per file (named
+`<file>.<ext>.md`) whose frontmatter replicates the file's metadata —
+`file-name`, `file-ext`, `file-size`, `file-created`, `file-modified`,
+`file-path` — plus a `companion-of` link and an embed of the file in the
+body. Companions live adjacent to their files by default, or collected into
+a designated folder mirroring the source structure. Re-running refreshes the
+`file-*` properties while preserving anything you added to a companion;
+originals are never touched, and files derived from notes (like encrypted
+shadows) are never companioned.
+
 ### Inline-field migration
 
 Command: **Migrate inline fields to properties**. Scans for Dataview-style
