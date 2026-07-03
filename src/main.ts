@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
+import { App, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
 import { AllowedValuesAuditModal, installAllowedValuePicker } from "./allowed-values";
 import { openBulkEdit } from "./bulk-edit";
 import { CompanionNotesModal, MetadataStampModal, installCompanionAuto } from "./companion-notes";
@@ -166,6 +166,27 @@ export default class BasesToolboxPlugin extends Plugin {
       callback: () => void this.activatePropertyIndex(),
     });
 
+    this.addCommand({
+      id: "toggle-number-guard",
+      name: "Toggle number guard (arrow keys & scroll wheel)",
+      callback: () => void this.toggleSetting("blockArrowAndWheel", "Number guard"),
+    });
+
+    this.addCommand({
+      id: "toggle-digits-only",
+      name: "Toggle digits-only typing on number properties",
+      callback: () => void this.toggleSetting("digitsOnlyTyping", "Digits-only typing"),
+    });
+
+    this.addCommand({
+      id: "toggle-multiline-list-cells",
+      name: "Toggle multiline list cells",
+      callback: () =>
+        void this.toggleSetting("multilineListCells", "Multiline list cells", () =>
+          this.applyMultilineListCells()
+        ),
+    });
+
     this.addRibbonIcon("table-properties", "Open property index", () =>
       void this.activatePropertyIndex()
     );
@@ -181,6 +202,18 @@ export default class BasesToolboxPlugin extends Plugin {
 
   applyMultilineListCells(): void {
     activeDocument.body.toggleClass("bases-toolbox-multiline-lists", this.settings.multilineListCells);
+  }
+
+  /** Flips a boolean setting from a command, persists, and notifies. */
+  async toggleSetting(
+    key: "blockArrowAndWheel" | "digitsOnlyTyping" | "multilineListCells",
+    label: string,
+    after?: () => void
+  ): Promise<void> {
+    this.settings[key] = !this.settings[key];
+    after?.();
+    await this.savePluginData();
+    new Notice(`${label}: ${this.settings[key] ? "on" : "off"}.`);
   }
 
   async activatePropertyIndex(): Promise<void> {
@@ -303,6 +336,31 @@ class BasesToolboxSettingTab extends PluginSettingTab {
                   this.plugin.settings.propertyForks = this.plugin.settings.propertyForks.filter(
                     (d) => d !== def
                   );
+                  await this.plugin.savePluginData();
+                  this.display();
+                })()
+              )
+          );
+      }
+    }
+
+    const pinned = Object.entries(this.plugin.settings.allowedValues);
+    if (pinned.length) {
+      new Setting(containerEl)
+        .setName("Pinned allowed values")
+        .setDesc("Properties whose values are restricted to a pinned list (pin more from the property index).")
+        .setHeading();
+      for (const [prop, values] of pinned) {
+        new Setting(containerEl)
+          .setName(prop)
+          .setDesc(`${values.length} allowed: ${values.slice(0, 8).join(", ")}${values.length > 8 ? "…" : ""}`)
+          .addExtraButton((b) =>
+            b
+              .setIcon("trash")
+              .setTooltip("Remove pin")
+              .onClick(() =>
+                void (async () => {
+                  delete this.plugin.settings.allowedValues[prop];
                   await this.plugin.savePluginData();
                   this.display();
                 })()
