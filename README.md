@@ -176,9 +176,11 @@ body. Companions live adjacent to their files by default, or collected into
 a designated folder mirroring the source structure. Re-running refreshes the
 `file-*` properties while preserving anything you added to a companion;
 originals are never touched, and files derived from notes (like version
-files other plugins create) are never companioned. Settings offer a default
-destination, an extension filter, and an opt-in **auto mode** that creates a
-companion whenever a matching file is added to the vault.
+files other plugins create) are never companioned. Every non-Markdown file is eligible by default; settings let you **exclude
+specific extensions** (managed as chips, with every file type found in your
+vault listed so you can click to exclude it), set a default destination, and
+turn on an opt-in **auto mode** that companions files as they're added —
+enabling it also companions eligible files that already existed.
 
 ### Stamp file metadata into note properties
 

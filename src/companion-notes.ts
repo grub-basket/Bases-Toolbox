@@ -44,11 +44,12 @@ export function parseExts(raw: string): Set<string> {
   );
 }
 
-/** Whether this file should get a companion under the given filters. */
+/** Whether this file should get a companion. `exclude` is a blacklist of
+ *  extensions (opt-out): every non-Markdown file is eligible except those. */
 export function companionEligible(
   file: TFile,
   folder: string,
-  exts: Set<string>,
+  exclude: Set<string>,
   dest: string
 ): boolean {
   if (file.extension === "md") return false;
@@ -56,10 +57,38 @@ export function companionEligible(
   // History plugin's version file for a companion) — companioning
   // derivatives cascades forever between two plugins' watchers.
   if (file.name.includes(".md.")) return false;
+  if (exclude.has(file.extension.toLowerCase())) return false; // blacklisted
   if (folder && !file.path.startsWith(folder + "/")) return false;
-  if (exts.size && !exts.has(file.extension.toLowerCase())) return false;
   if (dest && file.path.startsWith(dest + "/")) return false;
   return true;
+}
+
+/** Every distinct non-Markdown extension currently in the vault, sorted. */
+export function vaultExtensions(plugin: BasesToolboxPlugin): string[] {
+  const exts = new Set<string>();
+  for (const f of plugin.app.vault.getFiles()) {
+    if (f.extension === "md" || f.name.includes(".md.")) continue;
+    if (f.extension) exts.add(f.extension.toLowerCase());
+  }
+  return [...exts].sort();
+}
+
+/**
+ * Companions every eligible pre-existing file (used when auto mode is first
+ * enabled — so files created BEFORE the setting was on still get companions).
+ * Returns how many were created.
+ */
+export async function companionExistingFiles(plugin: BasesToolboxPlugin): Promise<number> {
+  const dest = plugin.settings.companionsFolder;
+  const exclude = parseExts(plugin.settings.companionExcludeExts);
+  let created = 0;
+  for (const file of plugin.app.vault.getFiles()) {
+    if (!companionEligible(file, "", exclude, dest)) continue;
+    if (plugin.app.vault.getAbstractFileByPath(companionPathFor(file, dest))) continue;
+    await createOrRefreshCompanion(plugin, file, dest);
+    created++;
+  }
+  return created;
 }
 
 export function companionPathFor(file: TFile, dest: string): string {
@@ -112,7 +141,7 @@ export function installCompanionAuto(plugin: BasesToolboxPlugin): void {
       if (!armed || !plugin.settings.companionAuto) return;
       if (!(file instanceof TFile)) return;
       const dest = plugin.settings.companionsFolder;
-      if (!companionEligible(file, "", parseExts(plugin.settings.companionExts), dest)) return;
+      if (!companionEligible(file, "", parseExts(plugin.settings.companionExcludeExts), dest)) return;
       void createOrRefreshCompanion(plugin, file, dest);
     })
   );
@@ -159,11 +188,11 @@ export class CompanionNotesModal extends Modal {
       });
 
     new Setting(contentEl)
-      .setName("Extensions")
-      .setDesc("Only these extensions (comma/space separated). Leave empty for every non-Markdown file.")
+      .setName("Exclude extensions")
+      .setDesc("Skip these extensions (comma/space separated). Manage the full list with chips in the plugin settings.")
       .addText((t) => {
-        t.setPlaceholder("e.g. png, jpg, pdf");
-        t.setValue(this.plugin.settings.companionExts);
+        t.setPlaceholder("e.g. tmp, log");
+        t.setValue(this.plugin.settings.companionExcludeExts);
         this.extsEl = t.inputEl;
       });
 
@@ -192,12 +221,12 @@ export class CompanionNotesModal extends Modal {
     root.empty();
 
     const folder = this.folderEl?.value.trim().replace(/^\/+|\/+$/g, "") ?? "";
-    const exts = parseExts(this.extsEl?.value ?? "");
+    const exclude = parseExts(this.extsEl?.value ?? "");
     const dest = this.destEl?.value.trim().replace(/^\/+|\/+$/g, "") ?? "";
 
     this.plans = [];
     for (const file of this.app.vault.getFiles()) {
-      if (!companionEligible(file, folder, exts, dest)) continue;
+      if (!companionEligible(file, folder, exclude, dest)) continue;
       const companionPath = companionPathFor(file, dest);
       this.plans.push({
         file,
@@ -233,7 +262,7 @@ export class CompanionNotesModal extends Modal {
     try {
       const dest = this.destEl?.value.trim().replace(/^\/+|\/+$/g, "") ?? "";
       this.plugin.settings.companionsFolder = dest;
-      this.plugin.settings.companionExts = this.extsEl?.value.trim() ?? "";
+      this.plugin.settings.companionExcludeExts = this.extsEl?.value.trim() ?? "";
       await this.plugin.savePluginData();
 
       let created = 0;

@@ -46,8 +46,10 @@ export interface BasesToolboxSettings {
   removedForks: import("./property-fork").PropertyForkDef[];
   /** Last-used companions destination ("" = adjacent to each file). */
   companionsFolder: string;
-  /** Default extension filter for companions ("" = all non-md). */
+  /** Legacy include-filter (unused since 0.1.4 — see companionExcludeExts). */
   companionExts: string;
+  /** Extensions to EXCLUDE from companioning (comma-separated, no dot). */
+  companionExcludeExts: string;
   /** Automatically create companions for newly added non-md files. */
   companionAuto: boolean;
 }
@@ -63,6 +65,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   removedForks: [],
   companionsFolder: "",
   companionExts: "",
+  companionExcludeExts: "",
   companionAuto: false,
 };
 

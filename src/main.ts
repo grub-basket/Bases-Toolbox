@@ -1,7 +1,14 @@
 import { App, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, setIcon } from "obsidian";
 import { AllowedValuesAuditModal, installAllowedValuePicker } from "./allowed-values";
 import { openBulkEdit } from "./bulk-edit";
-import { CompanionNotesModal, MetadataStampModal, installCompanionAuto } from "./companion-notes";
+import {
+  CompanionNotesModal,
+  MetadataStampModal,
+  companionExistingFiles,
+  installCompanionAuto,
+  parseExts,
+  vaultExtensions,
+} from "./companion-notes";
 import { installCellZoomTracking, openCellZoom } from "./cell-zoom";
 import {
   CUSTOM_COLOR,
@@ -508,26 +515,26 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         });
       });
 
-    new Setting(containerEl)
-      .setName("Companion extensions")
-      .setDesc("Only companion these extensions (comma separated). Empty = every non-Markdown file.")
-      .addText((t) => {
-        t.setPlaceholder("e.g. png, jpg, pdf");
-        t.setValue(this.plugin.settings.companionExts);
-        t.onChange(async (v) => {
-          this.plugin.settings.companionExts = v.trim();
-          await this.plugin.savePluginData();
-        });
-      });
+    this.renderCompanionExtensions(containerEl);
 
     new Setting(containerEl)
       .setName("Auto-create companions for new files")
-      .setDesc("When a matching non-Markdown file is added to the vault, its companion is created automatically (using the destination and extensions above).")
+      .setDesc("When a non-excluded file is added to the vault, its companion is created automatically. Turning this on also companions eligible files that already exist.")
       .addToggle((t) =>
-        t.setValue(this.plugin.settings.companionAuto).onChange(async (v) => {
-          this.plugin.settings.companionAuto = v;
-          await this.plugin.savePluginData();
-        })
+        t.setValue(this.plugin.settings.companionAuto).onChange((v) =>
+          void (async () => {
+            this.plugin.settings.companionAuto = v;
+            await this.plugin.savePluginData();
+            if (v) {
+              const n = await companionExistingFiles(this.plugin);
+              new Notice(
+                n
+                  ? `Auto companions on. Companioned ${n} existing file${n === 1 ? "" : "s"}.`
+                  : "Auto companions on."
+              );
+            }
+          })()
+        )
       );
 
     new Setting(containerEl)
@@ -710,6 +717,76 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       this.saveAndPaint();
       this.display();
     });
+  }
+
+  private renderCompanionExtensions(containerEl: HTMLElement): void {
+    const excluded = parseExts(this.plugin.settings.companionExcludeExts);
+    const setExcluded = async (next: Set<string>) => {
+      this.plugin.settings.companionExcludeExts = [...next].sort().join(", ");
+      await this.plugin.savePluginData();
+      this.display();
+    };
+
+    // Add-to-blacklist text box.
+    let addEl: HTMLInputElement | null = null;
+    const add = () => {
+      const v = (addEl?.value ?? "").trim().toLowerCase().replace(/^\./, "");
+      if (!v) return;
+      excluded.add(v);
+      void setExcluded(excluded);
+    };
+    new Setting(containerEl)
+      .setName("Excluded extensions")
+      .setDesc("Companions are created for every non-Markdown file EXCEPT these extensions. Click a chip to remove it; click a detected extension below to exclude it.")
+      .addText((t) => {
+        t.setPlaceholder(".tmp");
+        addEl = t.inputEl;
+        t.inputEl.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            add();
+          }
+        });
+      })
+      .addExtraButton((b) => b.setIcon("plus").setTooltip("Exclude this extension").onClick(add));
+
+    // Excluded chips (X to remove).
+    const exclDiv = containerEl.createDiv({ cls: "bases-toolbox-chips" });
+    if (!excluded.size) {
+      exclDiv.createSpan({ cls: "bases-toolbox-chips-empty", text: "Nothing excluded — every non-Markdown file gets a companion." });
+    } else {
+      for (const ext of [...excluded].sort()) {
+        const chip = exclDiv.createSpan({ cls: "bases-toolbox-chip" });
+        chip.createSpan({ text: `.${ext}` });
+        setIcon(chip.createSpan({ cls: "bases-toolbox-chip-icon" }), "x");
+        chip.setAttribute("aria-label", `Stop excluding .${ext}`);
+        chip.addEventListener("click", () => {
+          excluded.delete(ext);
+          void setExcluded(excluded);
+        });
+      }
+    }
+
+    // Detected extensions in the vault (not excluded) — click to exclude.
+    const detected = vaultExtensions(this.plugin).filter((e) => !excluded.has(e));
+    new Setting(containerEl)
+      .setName("Extensions in your vault")
+      .setDesc("Non-Markdown file types found in this vault. Click one to exclude it from companioning.");
+    const detDiv = containerEl.createDiv({ cls: "bases-toolbox-chips" });
+    if (!detected.length) {
+      detDiv.createSpan({ cls: "bases-toolbox-chips-empty", text: "None (or all are already excluded)." });
+    } else {
+      for (const ext of detected) {
+        const chip = detDiv.createSpan({ cls: "bases-toolbox-chip bases-toolbox-chip-muted" });
+        chip.createSpan({ text: `.${ext}` });
+        setIcon(chip.createSpan({ cls: "bases-toolbox-chip-icon" }), "plus");
+        chip.setAttribute("aria-label", `Exclude .${ext}`);
+        chip.addEventListener("click", () => {
+          excluded.add(ext);
+          void setExcluded(excluded);
+        });
+      }
+    }
   }
 
   private renderAddRule(containerEl: HTMLElement): void {

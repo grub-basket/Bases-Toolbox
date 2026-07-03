@@ -392,3 +392,32 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   font-size: var(--font-ui-smaller);
   padding: var(--size-2-1) var(--size-2-3);
 }
+
+/* Extension chips (companion settings) */
+.bases-toolbox-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-2-2);
+  padding: var(--size-2-2) 0 var(--size-4-2) 0;
+}
+.bases-toolbox-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2-1);
+  padding: var(--size-2-1) var(--size-2-3);
+  border-radius: var(--radius-l);
+  background-color: var(--background-modifier-hover);
+  font-size: var(--font-ui-small);
+  cursor: pointer;
+  user-select: none;
+}
+.bases-toolbox-chip:hover { background-color: var(--background-modifier-active-hover); }
+.bases-toolbox-chip-muted {
+  background-color: transparent;
+  border: 1px dashed var(--background-modifier-border-hover);
+  color: var(--text-muted);
+}
+.bases-toolbox-chip-icon { display: inline-flex; align-items: center; }
+.bases-toolbox-chip-icon svg { width: var(--font-ui-small); height: var(--font-ui-small); }
+.bases-toolbox-chips-empty { font-size: var(--font-ui-small); color: var(--text-muted); }
