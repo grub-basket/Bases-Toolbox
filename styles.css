@@ -279,3 +279,13 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   font-size: var(--font-ui-small);
   padding: var(--size-2-2) 0;
 }
+
+/* Settings deep-link flash */
+.bases-toolbox-flash {
+  animation: bases-toolbox-flash-kf 1.6s ease-out;
+  border-radius: var(--radius-m);
+}
+@keyframes bases-toolbox-flash-kf {
+  0%, 40% { background-color: var(--text-selection); }
+  100% { background-color: transparent; }
+}

@@ -187,6 +187,18 @@ export default class BasesToolboxPlugin extends Plugin {
         ),
     });
 
+    this.addCommand({
+      id: "open-settings",
+      name: "Open Bases Toolbox settings",
+      callback: () => this.openSettingsSection(),
+    });
+
+    this.addCommand({
+      id: "open-conditional-formatting",
+      name: "Open conditional formatting rules",
+      callback: () => this.openSettingsSection("formatting"),
+    });
+
     this.addRibbonIcon("table-properties", "Open property index", () =>
       void this.activatePropertyIndex()
     );
@@ -214,6 +226,30 @@ export default class BasesToolboxPlugin extends Plugin {
     after?.();
     await this.savePluginData();
     new Notice(`${label}: ${this.settings[key] ? "on" : "off"}.`);
+  }
+
+  /**
+   * Opens the plugin's settings tab, optionally scrolling a section into view
+   * and flashing it. `app.setting` is undocumented but stable — probe defensively.
+   */
+  openSettingsSection(section?: string): void {
+    const setting = (this.app as unknown as {
+      setting?: { open: () => void; openTabById: (id: string) => void };
+    }).setting;
+    if (!setting) {
+      new Notice("Couldn't open settings — open them manually and find Bases Toolbox.");
+      return;
+    }
+    setting.open();
+    setting.openTabById(this.manifest.id);
+    if (!section) return;
+    window.setTimeout(() => {
+      const el = activeDocument.querySelector<HTMLElement>(`[data-bt-section="${section}"]`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.addClass("bases-toolbox-flash");
+      window.setTimeout(() => el.removeClass("bases-toolbox-flash"), 1600);
+    }, 120);
   }
 
   async activatePropertyIndex(): Promise<void> {
@@ -452,7 +488,8 @@ class BasesToolboxSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Conditional formatting")
       .setDesc("Color Bases rows by property value. The first matching rule wins.")
-      .setHeading();
+      .setHeading()
+      .settingEl.setAttribute("data-bt-section", "formatting");
 
     for (const rule of this.plugin.settings.formatRules) {
       const setting = new Setting(containerEl).setName(
