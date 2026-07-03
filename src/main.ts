@@ -367,11 +367,21 @@ class BasesToolboxSettingTab extends PluginSettingTab {
 
     this.renderFormatRules(containerEl);
 
+    // ---- Property forks (own section; heading always shows so the builder
+    // has a clear home even before any fork exists) ----
+    new Setting(containerEl)
+      .setName("Property forks")
+      .setDesc("Keep a second copy of a property in a different format (dates, wikilinks), recomputed live when the source changes.")
+      .setHeading();
+
+    new Setting(containerEl)
+      .setName("Add a fork")
+      .setDesc("Open the builder to convert or fork a property's format. Enable live sync there to manage it below.")
+      .addButton((b) =>
+        b.setButtonText("Fork builder…").setCta().onClick(() => new ForkPropertyPicker(this.plugin).open())
+      );
+
     if (this.plugin.settings.propertyForks.length) {
-      new Setting(containerEl)
-        .setName("Live property forks")
-        .setDesc("Forks recomputed automatically when their source property changes.")
-        .setHeading();
       for (const def of [...this.plugin.settings.propertyForks]) {
         // Intuitive rename catch: if the source or target property no longer
         // exists in the vault, the fork is probably broken (a property rename
@@ -425,14 +435,6 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         );
       }
     }
-
-    // Add-fork builder access from settings.
-    new Setting(containerEl)
-      .setName("Add a fork")
-      .setDesc("Convert or fork a property's format (dates, wikilinks). Enable live sync in the builder to list it above.")
-      .addButton((b) =>
-        b.setButtonText("Fork builder…").onClick(() => new ForkPropertyPicker(this.plugin).open())
-      );
 
     // Restore deleted forks.
     if (this.plugin.settings.removedForks.length) {
@@ -793,7 +795,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
     // A custom flex row (matching the rule rows) instead of a Setting — the
     // Setting name column truncates to "A… r…" once the controls get wide.
     const row = containerEl.createDiv({ cls: "bases-toolbox-cf-rule bases-toolbox-cf-add" });
-    row.createSpan({ cls: "bases-toolbox-cf-addlabel", text: "Add rule" });
+    row.createSpan({ cls: "bases-toolbox-cf-addlabel", text: "Add formatting rule" });
 
     const propEl = row.createEl("input", {
       type: "text",
