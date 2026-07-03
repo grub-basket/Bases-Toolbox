@@ -196,47 +196,80 @@ function decorateRow(plugin: BasesToolboxPlugin, row: HTMLElement): void {
   }
 }
 
+/** Every document that could hold a base view — main window plus popouts. */
+function allBaseDocuments(plugin: BasesToolboxPlugin): Set<Document> {
+  const docs = new Set<Document>();
+  docs.add(activeDocument);
+  docs.add(document);
+  plugin.app.workspace.iterateAllLeaves((leaf) => {
+    const doc = leaf.view?.containerEl?.ownerDocument;
+    if (doc) docs.add(doc);
+  });
+  return docs;
+}
+
 export function redecorateAll(plugin: BasesToolboxPlugin): void {
-  activeDocument.querySelectorAll<HTMLElement>(".bases-tr").forEach((r) => decorateRow(plugin, r));
+  for (const doc of allBaseDocuments(plugin)) {
+    doc.querySelectorAll<HTMLElement>(".bases-tr").forEach((r) => decorateRow(plugin, r));
+  }
+}
+
+/**
+ * Re-decorate now AND on the next frame AND after a short delay. Bases may
+ * re-render its table shortly after a settings change or a modal close
+ * (which fires no workspace event), so a single pass can be wiped — the
+ * later passes catch the re-render. This is what makes a new rule show up
+ * without an app reload.
+ */
+export function scheduleRedecorate(plugin: BasesToolboxPlugin): void {
+  redecorateAll(plugin);
+  window.requestAnimationFrame(() => redecorateAll(plugin));
+  window.setTimeout(() => redecorateAll(plugin), 250);
 }
 
 export function installConditionalFormatting(plugin: BasesToolboxPlugin): void {
-  const refresh = debounce(() => redecorateAll(plugin), 200, true);
-  plugin.refreshConditionalFormatting = refresh;
+  const refresh = debounce(() => redecorateAll(plugin), 150, true);
+  plugin.refreshConditionalFormatting = () => scheduleRedecorate(plugin);
 
-  const observer = new MutationObserver((mutations) => {
-    if (!plugin.settings.formatRules.length) return;
-    for (const mutation of mutations) {
-      // Row recycled to a different file (virtualization) → re-evaluate it.
-      if (mutation.type === "attributes") {
-        const t = mutation.target;
-        if (t.instanceOf(HTMLElement)) {
-          const row = (t as HTMLElement).closest<HTMLElement>(".bases-tr");
-          if (row) decorateRow(plugin, row);
+  const observe = (doc: Document) => {
+    const observer = new MutationObserver((mutations) => {
+      if (!plugin.settings.formatRules.length) return;
+      for (const mutation of mutations) {
+        // Row recycled to a different file (virtualization) → re-evaluate it.
+        if (mutation.type === "attributes") {
+          const t = mutation.target;
+          if (t.instanceOf(HTMLElement)) {
+            const row = (t as HTMLElement).closest<HTMLElement>(".bases-tr");
+            if (row) decorateRow(plugin, row);
+          }
+          continue;
         }
-        continue;
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (!node.instanceOf(HTMLElement)) continue;
+          const el = node as HTMLElement;
+          if (el.matches(".bases-tr")) decorateRow(plugin, el);
+          else if (el.querySelector(".bases-tr")) refresh();
+        }
       }
-      for (const node of Array.from(mutation.addedNodes)) {
-        if (!node.instanceOf(HTMLElement)) continue;
-        const el = node as HTMLElement;
-        if (el.matches(".bases-tr")) decorateRow(plugin, el);
-        else if (el.querySelector(".bases-tr")) refresh();
-      }
-    }
-  });
-  observer.observe(activeDocument.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    // data-href changes when Bases recycles a row for a different file
-    attributeFilter: ["data-href"],
-  });
-  plugin.register(() => observer.disconnect());
+    });
+    observer.observe(doc.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-href"], // Bases recycles rows by swapping this
+    });
+    plugin.register(() => observer.disconnect());
+  };
+  observe(document);
+  // A popout window opened later gets its own observer.
+  plugin.registerEvent(
+    plugin.app.workspace.on("window-open", (win) => observe(win.doc))
+  );
 
-  // Re-apply whenever the view context changes — this is what makes rule
-  // edits show up the moment you return to the base from settings.
+  // Re-apply on every signal that a base view may have (re)rendered.
   plugin.registerEvent(plugin.app.metadataCache.on("changed", () => refresh()));
   plugin.registerEvent(plugin.app.workspace.on("active-leaf-change", () => refresh()));
-  plugin.registerEvent(plugin.app.workspace.on("layout-change", () => refresh()));
-  refresh();
+  plugin.registerEvent(plugin.app.workspace.on("layout-change", () => scheduleRedecorate(plugin)));
+  plugin.registerEvent(plugin.app.workspace.on("resize", () => refresh()));
+  scheduleRedecorate(plugin);
 }

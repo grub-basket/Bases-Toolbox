@@ -13,8 +13,8 @@ import {
   RULE_COLORS,
   colorLabel,
   installConditionalFormatting,
-  redecorateAll,
   ruleSwatchColor,
+  scheduleRedecorate,
 } from "./conditional-format";
 import { exportBaseCsv } from "./csv-export";
 import { CsvImportModal } from "./csv-import";
@@ -491,7 +491,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
 
   private saveAndPaint(): void {
     void this.plugin.savePluginData();
-    redecorateAll(this.plugin);
+    scheduleRedecorate(this.plugin);
   }
 
   private renderFormatRules(containerEl: HTMLElement): void {
