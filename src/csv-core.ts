@@ -207,6 +207,11 @@ export function toCsvCell(value: unknown): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+/** Unwraps [[wikilinks]] (keeping aliases) to plain text. */
+export function stripWikilinks(s: string): string {
+  return cleanValue(s);
+}
+
 function cleanValue(s: string): string {
   return s.replace(/\[\[([^\]|]+)(\|([^\]]+))?\]\]/g, (_, target, __, alias) => alias ?? target);
 }

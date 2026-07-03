@@ -25,6 +25,7 @@ import { InlineFieldMigratorModal } from "./inline-fields";
 import { DuplicateFinderModal, startMerge } from "./merge";
 import { installNumberGuard } from "./number-guard";
 import { PropertyIndexView, VIEW_TYPE_PROPERTY_INDEX } from "./property-index";
+import { ForkPropertyPicker, TRANSFORM_LABELS, installForkSync } from "./property-fork";
 import { openRollup } from "./rollup";
 import { PropertyCache } from "./scan";
 import { BasesToolboxSettings, DEFAULT_SETTINGS, DisabledFilter, HistoryEntry, PluginData } from "./types";
@@ -43,6 +44,7 @@ export default class BasesToolboxPlugin extends Plugin {
     installCellZoomTracking(this);
     installConditionalFormatting(this);
     installAllowedValuePicker(this);
+    installForkSync(this);
 
     const dirty = () => this.propertyCache.markDirty();
     this.registerEvent(this.app.metadataCache.on("changed", dirty));
@@ -70,6 +72,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "find-replace-history",
       name: "Find & replace history",
       callback: () => void openHistoryView(this),
+    });
+
+    this.addCommand({
+      id: "fork-property",
+      name: "Convert or fork a property's format",
+      callback: () => new ForkPropertyPicker(this).open(),
     });
 
     this.addCommand({
@@ -262,6 +270,30 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       );
 
     this.renderFormatRules(containerEl);
+
+    if (this.plugin.settings.propertyForks.length) {
+      new Setting(containerEl)
+        .setName("Live property forks")
+        .setDesc("Forks recomputed automatically when their source property changes.")
+        .setHeading();
+      for (const def of [...this.plugin.settings.propertyForks]) {
+        new Setting(containerEl)
+          .setName(`${def.source} → ${def.target}`)
+          .setDesc(TRANSFORM_LABELS[def.transform])
+          .addExtraButton((b) =>
+            b
+              .setIcon("trash")
+              .setTooltip("Stop syncing (properties stay as they are)")
+              .onClick(async () => {
+                this.plugin.settings.propertyForks = this.plugin.settings.propertyForks.filter(
+                  (d) => d !== def
+                );
+                await this.plugin.savePluginData();
+                this.display();
+              })
+          );
+      }
+    }
 
     new Setting(containerEl)
       .setName("History cap")

@@ -40,6 +40,8 @@ export interface BasesToolboxSettings {
   formatRules: import("./conditional-format").FormatRule[];
   /** Pinned allowed values per property (key: lowercase property name). */
   allowedValues: Record<string, string[]>;
+  /** Live-synced property forks (source → target with a transform). */
+  propertyForks: import("./property-fork").PropertyForkDef[];
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -49,6 +51,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   multilineListCells: false,
   formatRules: [],
   allowedValues: {},
+  propertyForks: [],
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */

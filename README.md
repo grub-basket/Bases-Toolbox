@@ -137,6 +137,19 @@ inputs that still don't match are marked red and the file is left untouched;
 an empty input means "skip" — a value is never erased. Applied fixes are
 logged to history and revertible.
 
+### Convert or fork a property's format
+
+Command: **Convert or fork a property's format**. For frontmatter that
+predates Bases — dates like `3/4/2024` or `February 3 2025`, or values
+wrapped in `[[wikilinks]]` where you want raw text (or vice versa). Pick a
+property and a transform (normalize dates → YYYY-MM-DD, unwrap wikilinks,
+wrap in wikilinks, plain copy), preview the effect, then either **convert in
+place** or **fork into a second property** so you keep your original format
+AND a Bases-friendly variant side by side. Forks can be kept in **live
+sync** — edit the original and the fork recomputes automatically (active
+syncs are listed and removable in the plugin settings). Every apply is
+history-logged and revertible.
+
 ### Allowed values (pinned)
 
 From the property index, pin the allowed values of any property (pin icon).
