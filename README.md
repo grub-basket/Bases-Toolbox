@@ -50,7 +50,7 @@ revertible.
 
 ### Conditional formatting
 
-Color Bases rows — or individual cells — by rules. Each rule has a
+Color Bases rows — or individual cells — by rules, on all bases or a chosen subset of them (a per-rule sheet picker). Each rule has a
 property, operator (equals/contains/compare/empty), value, a **scope**
 (color the whole Row or just that property's Cell), and a color from the
 theme palette or a custom color picker (applied at a subtle tint). Rules are

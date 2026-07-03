@@ -79,7 +79,7 @@ class ForkModal extends Modal {
   private usage: PropertyUsage;
   private transform: ForkTransform = "date";
   private mode: "in-place" | "fork" = "fork";
-  private liveSync = false;
+  private liveSync = true;
   private targetEl: HTMLInputElement | null = null;
   private forkSettings: Setting[] = [];
   private previewEl: HTMLElement | null = null;
@@ -256,4 +256,59 @@ export function installForkSync(plugin: BasesToolboxPlugin): void {
       }
     })
   );
+}
+
+/**
+ * Repoints an existing fork after a property rename (or fixes a typo):
+ * edit the source, target, and transform in place. Purely edits the def —
+ * live sync then uses the new names.
+ */
+export class ForkRenameModal extends Modal {
+  private plugin: BasesToolboxPlugin;
+  private def: PropertyForkDef;
+  private onDone: () => void;
+
+  constructor(plugin: BasesToolboxPlugin, def: PropertyForkDef, onDone: () => void) {
+    super(plugin.app);
+    this.plugin = plugin;
+    this.def = def;
+    this.onDone = onDone;
+  }
+
+  onOpen(): void {
+    this.titleEl.setText("Edit fork");
+    const { contentEl } = this;
+    let source = this.def.source;
+    let target = this.def.target;
+    let transform = this.def.transform;
+
+    new Setting(contentEl).setName("Source property").addText((t) => {
+      t.setValue(source).onChange((v) => (source = v.trim()));
+    });
+    new Setting(contentEl).setName("Fork property").addText((t) => {
+      t.setValue(target).onChange((v) => (target = v.trim()));
+    });
+    new Setting(contentEl).setName("Transform").addDropdown((dd) => {
+      for (const [k, label] of Object.entries(TRANSFORM_LABELS)) dd.addOption(k, label);
+      dd.setValue(transform).onChange((v) => (transform = v as ForkTransform));
+    });
+
+    new Setting(contentEl).addButton((b) =>
+      b
+        .setButtonText("Save")
+        .setCta()
+        .onClick(async () => {
+          if (!source || !target) {
+            new Notice("Source and fork property names are required.");
+            return;
+          }
+          this.def.source = source;
+          this.def.target = target;
+          this.def.transform = transform;
+          await this.plugin.savePluginData();
+          this.onDone();
+          this.close();
+        })
+    );
+  }
 }

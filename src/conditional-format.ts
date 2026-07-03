@@ -1,4 +1,4 @@
-import { TFile, debounce } from "obsidian";
+import { Modal, Notice, Setting, TFile, debounce } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { findKey } from "./scan";
 
@@ -14,6 +14,8 @@ export interface FormatRule {
   customColor?: string;
   /** Color the whole row (default) or only this property's cell. */
   scope?: FormatScope;
+  /** Base file paths this rule applies to; empty/undefined = all bases. */
+  bases?: string[];
   enabled: boolean;
 }
 
@@ -152,7 +154,22 @@ function clearRow(row: HTMLElement): void {
   });
 }
 
-function decorateRow(plugin: BasesToolboxPlugin, row: HTMLElement): void {
+/** The .base path whose view contains this row (embed src or owning leaf). */
+function basePathForRow(plugin: BasesToolboxPlugin, row: HTMLElement): string | undefined {
+  const embed = row.closest<HTMLElement>(".bases-embed");
+  if (embed) {
+    const src = (embed.getAttribute("src") ?? "").split("#")[0];
+    const active = plugin.app.workspace.getActiveFile()?.path ?? "";
+    return plugin.app.metadataCache.getFirstLinkpathDest(src, active)?.path;
+  }
+  for (const leaf of plugin.app.workspace.getLeavesOfType("bases")) {
+    const view = leaf.view as unknown as { containerEl?: HTMLElement; file?: TFile };
+    if (view.containerEl?.contains(row)) return view.file?.path;
+  }
+  return undefined;
+}
+
+function decorateRow(plugin: BasesToolboxPlugin, row: HTMLElement, basePath?: string): void {
   clearRow(row); // always start clean so removed/changed rules don't linger
   const href = row.querySelector("[data-href]")?.getAttribute("data-href");
   const file = href ? plugin.app.vault.getAbstractFileByPath(href) : null;
@@ -162,11 +179,16 @@ function decorateRow(plugin: BasesToolboxPlugin, row: HTMLElement): void {
     unknown
   >;
 
+  // Resolve which base this row belongs to only if some rule is base-scoped.
+  const anyScoped = plugin.settings.formatRules.some((r) => r.bases?.length);
+  const bp = !anyScoped ? undefined : basePath !== undefined ? basePath : basePathForRow(plugin, row);
+
   let rowColor: string | null = null;
   const cellColors = new Map<number, string>(); // column index → color
 
   for (const rule of plugin.settings.formatRules) {
     if (!rule.enabled || !rule.property) continue;
+    if (rule.bases?.length && !(bp && rule.bases.includes(bp))) continue;
     const key = findKey(fm, rule.property);
     const value = key === null ? undefined : fm[key];
     if (!matches(rule, value)) continue;
@@ -209,8 +231,21 @@ function allBaseDocuments(plugin: BasesToolboxPlugin): Set<Document> {
 }
 
 export function redecorateAll(plugin: BasesToolboxPlugin): void {
+  const done = new WeakSet<HTMLElement>();
+  // Base tabs (and popouts): base path is the leaf's file — pass it directly.
+  for (const leaf of plugin.app.workspace.getLeavesOfType("bases")) {
+    const view = leaf.view as unknown as { containerEl?: HTMLElement; file?: TFile };
+    const basePath = view.file?.path;
+    view.containerEl?.querySelectorAll<HTMLElement>(".bases-tr").forEach((r) => {
+      decorateRow(plugin, r, basePath);
+      done.add(r);
+    });
+  }
+  // Embedded bases and anything else — decorateRow resolves the base itself.
   for (const doc of allBaseDocuments(plugin)) {
-    doc.querySelectorAll<HTMLElement>(".bases-tr").forEach((r) => decorateRow(plugin, r));
+    doc.querySelectorAll<HTMLElement>(".bases-tr").forEach((r) => {
+      if (!done.has(r)) decorateRow(plugin, r);
+    });
   }
 }
 
@@ -272,4 +307,68 @@ export function installConditionalFormatting(plugin: BasesToolboxPlugin): void {
   plugin.registerEvent(plugin.app.workspace.on("layout-change", () => scheduleRedecorate(plugin)));
   plugin.registerEvent(plugin.app.workspace.on("resize", () => refresh()));
   scheduleRedecorate(plugin);
+}
+
+
+/**
+ * Picks which bases (sheets) a formatting rule applies to. Empty selection =
+ * all bases. Lists every .base file in the vault as a checklist.
+ */
+export class BaseScopeModal extends Modal {
+  private plugin: BasesToolboxPlugin;
+  private selected: Set<string>;
+  private onSave: (paths: string[]) => void;
+
+  constructor(plugin: BasesToolboxPlugin, current: string[], onSave: (paths: string[]) => void) {
+    super(plugin.app);
+    this.plugin = plugin;
+    this.selected = new Set(current);
+    this.onSave = onSave;
+  }
+
+  onOpen(): void {
+    this.titleEl.setText("Apply rule to which sheets?");
+    const { contentEl } = this;
+    contentEl.createDiv({
+      cls: "bases-toolbox-fr-info",
+      text: "Select the bases this rule colors. Select none to apply it to every base.",
+    });
+
+    const bases = this.app.vault.getFiles().filter((f) => f.extension === "base");
+    if (!bases.length) {
+      contentEl.createDiv({ cls: "bases-toolbox-fr-info", text: "No .base files in this vault yet." });
+    }
+    const list = contentEl.createDiv({ cls: "bases-toolbox-pin-list" });
+    for (const base of bases.sort((a, b) => a.path.localeCompare(b.path))) {
+      const rowEl = list.createDiv({ cls: "bases-toolbox-dup-row" });
+      const cb = rowEl.createEl("input", { type: "checkbox" });
+      cb.checked = this.selected.has(base.path);
+      cb.addEventListener("change", () => {
+        if (cb.checked) this.selected.add(base.path);
+        else this.selected.delete(base.path);
+      });
+      rowEl.createSpan({ text: ` ${base.path}` });
+    }
+
+    new Setting(contentEl)
+      .addButton((b) =>
+        b
+          .setButtonText("Apply to all")
+          .onClick(() => {
+            this.selected.clear();
+            this.onSave([]);
+            new Notice("Rule now applies to all sheets.");
+            this.close();
+          })
+      )
+      .addButton((b) =>
+        b
+          .setButtonText("Save")
+          .setCta()
+          .onClick(() => {
+            this.onSave([...this.selected]);
+            this.close();
+          })
+      );
+  }
 }

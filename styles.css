@@ -376,3 +376,19 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
 .bases-toolbox-index-file-link:hover {
   text-decoration: underline;
 }
+
+.bases-toolbox-index-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  margin-bottom: var(--size-4-2);
+}
+.bases-toolbox-index-toolbar .bases-toolbox-index-search {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.bases-toolbox-cf-sheets {
+  font-size: var(--font-ui-smaller);
+  padding: var(--size-2-1) var(--size-2-3);
+}
