@@ -1,7 +1,7 @@
-import { Modal, Notice, Setting, TFile } from "obsidian";
+import { Notice, TFile } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { findKey } from "./scan";
-import { HistoryEntry } from "./types";
+import { ChangeRecord, HistoryEntry } from "./types";
 
 interface RevertReport {
   restored: number;
@@ -15,17 +15,36 @@ interface RevertReport {
 
 const sameValue = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
+export interface RevertOptions {
+  /** Restrict the revert to these file paths (undefined = all). */
+  paths?: Set<string>;
+  /** Also overwrite files whose value drifted (was edited again) since. */
+  force?: boolean;
+}
+
+/** True when the change is still "in effect" in this frontmatter (no drift). */
+export function changeInEffect(fm: Record<string, unknown>, change: ChangeRecord): boolean {
+  const key = findKey(fm, change.property);
+  if (change.deleted) return key === null; // deletion still holds
+  if (key === null) return false; // property gone (renamed/removed)
+  if (change.newValue === undefined) return true; // legacy record: assume yes
+  return sameValue(fm[key], change.newValue);
+}
+
 /**
- * Best-effort revert: a file is only restored when the property still exists
- * in it and still holds the value the operation wrote. Renamed properties,
- * re-edited values, and missing files are skipped and counted, not clobbered.
+ * Best-effort revert: a file is only restored when the operation's change is
+ * still in effect (unless `force`). Renamed properties, re-edited values, and
+ * missing files are skipped and counted, not clobbered. A `paths` subset
+ * reverts only those files; the entry is marked reverted only on a full pass.
  */
 export async function revertEntry(
   plugin: BasesToolboxPlugin,
-  entry: HistoryEntry
+  entry: HistoryEntry,
+  opts: RevertOptions = {}
 ): Promise<RevertReport> {
   const report: RevertReport = { restored: 0, propertyMissing: 0, valueChanged: 0, fileMissing: 0 };
   for (const change of entry.changes) {
+    if (opts.paths && !opts.paths.has(change.path)) continue;
     const file = plugin.app.vault.getAbstractFileByPath(change.path);
     if (!(file instanceof TFile)) {
       report.fileMissing++;
@@ -33,21 +52,30 @@ export async function revertEntry(
     }
     await plugin.app.fileManager.processFrontMatter(file, (fm) => {
       const key = findKey(fm, change.property);
-      if (key === null) {
-        report.propertyMissing++;
+      if (!opts.force && !changeInEffect(fm, change)) {
+        if (key === null && !change.deleted) report.propertyMissing++;
+        else report.valueChanged++;
         return;
       }
-      // Legacy entries (no newValue recorded) revert unconditionally.
-      if (change.newValue !== undefined && !sameValue(fm[key], change.newValue)) {
-        report.valueChanged++;
-        return;
+      if (change.created) {
+        if (key !== null) delete fm[key];
+      } else if (change.deleted) {
+        fm[key ?? change.property] = change.oldValue;
+      } else {
+        if (key === null) {
+          // force-restoring onto a renamed/removed property re-adds it
+          fm[change.property] = change.oldValue;
+        } else fm[key] = change.oldValue;
       }
-      if (change.created) delete fm[key];
-      else fm[key] = change.oldValue;
       report.restored++;
     });
   }
-  entry.revertedAt = Date.now();
+  // Mark reverted only after a full pass with no drift-skips left — otherwise
+  // the entry stays active so the user can retry (e.g. force-revert the
+  // drifted files). Missing files can't be retried and don't block marking.
+  if (!opts.paths && report.valueChanged + report.propertyMissing === 0) {
+    entry.revertedAt = Date.now();
+  }
   await plugin.savePluginData();
   return report;
 }
@@ -78,71 +106,4 @@ export function describeEntry(entry: HistoryEntry): string {
   const from = entry.find === null ? "all values" : `“${entry.find}”`;
   const to = entry.replace.trim() === "" ? "(cleared)" : `“${entry.replace}”`;
   return `${entry.property}: ${from} → ${to}`;
-}
-
-export class HistoryModal extends Modal {
-  private plugin: BasesToolboxPlugin;
-
-  constructor(plugin: BasesToolboxPlugin) {
-    super(plugin.app);
-    this.plugin = plugin;
-  }
-
-  onOpen(): void {
-    this.titleEl.setText("Find & replace history");
-    this.render();
-  }
-
-  private render(): void {
-    const { contentEl } = this;
-    contentEl.empty();
-
-    if (!this.plugin.history.length) {
-      contentEl.createDiv({ cls: "bases-toolbox-fr-info", text: "No operations yet." });
-      return;
-    }
-
-    contentEl.createDiv({
-      cls: "bases-toolbox-fr-info",
-      text: "Reverts are best-effort: files whose value was edited again, whose property was renamed or removed, or that no longer exist are skipped.",
-    });
-
-    new Setting(contentEl)
-      .setName(`${this.plugin.history.length} operation${this.plugin.history.length === 1 ? "" : "s"} logged`)
-      .addButton((b) => {
-        let armed = false;
-        b.setButtonText("Clear history").onClick(async () => {
-          if (!armed) {
-            armed = true;
-            b.setButtonText("Click again to confirm");
-            b.buttonEl.addClass("mod-warning");
-            return;
-          }
-          await this.plugin.clearHistory();
-          this.render();
-        });
-      });
-
-    for (const entry of [...this.plugin.history].reverse()) {
-      const n = entry.changes.length;
-      const when = new Date(entry.timestamp).toLocaleString();
-      const setting = new Setting(contentEl)
-        .setName(describeEntry(entry))
-        .setDesc(`${when} · ${n} file${n === 1 ? "" : "s"} changed`);
-      if (entry.revertedAt) {
-        setting.controlEl.createSpan({
-          cls: "bases-toolbox-history-reverted",
-          text: "reverted",
-        });
-      } else {
-        setting.addButton((b) =>
-          b.setButtonText("Revert").onClick(async () => {
-            b.setDisabled(true);
-            reportNotice(entry, await revertEntry(this.plugin, entry));
-            this.render();
-          })
-        );
-      }
-    }
-  }
 }

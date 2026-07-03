@@ -242,6 +242,7 @@ export class FindReplaceView extends ItemView {
           replace: this.replace,
           timestamp: Date.now(),
           changes,
+          source: "find & replace",
         });
       }
       new Notice(`${usage.name}: updated ${changes.length} file${changes.length === 1 ? "" : "s"}.`);

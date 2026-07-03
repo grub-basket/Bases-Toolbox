@@ -12,13 +12,16 @@ once. Works on list properties too (the matched item is replaced in place;
 a global override collapses the list to the new value). Leaving the
 replacement empty clears the value.
 
-Every run is logged. **Find & replace history** lists all past operations
-(newest first, uncapped by default — an optional cap and a clear-history
-action live in the settings) and each one can be reverted;
-**Undo last find & replace** reverts the newest entry. The log survives app
-restarts. Reverts are best-effort: a file is only restored if the property
-still exists in it and still holds the value the operation wrote — renamed
-properties, values edited since, and deleted files are skipped and reported.
+Every run is logged. **Find & replace history** opens as a main-area tab
+listing all past operations (newest first, uncapped by default — an optional
+cap and a clear-history action live in the settings). Each entry expands into
+per-file rows showing old → new with an "edited since" badge on drifted
+files; revert all of an operation or just the files you check.
+**Undo last find & replace** reverts the newest active entry. Reverts are
+best-effort: files whose value was edited again are skipped and reported —
+unless you enable the force toggle, which overwrites them. An entry only
+counts as reverted once nothing from it remains in effect, so you can always
+retry. The log survives app restarts.
 
 ### Number input guard
 
@@ -30,10 +33,12 @@ in the plugin settings and are on by default.
 
 ### Bulk edit base results
 
-Command: **Bulk edit properties of base results**. With a base open, set (or
-create) a property on every file the view currently shows — filters, search,
-everything applied. Logged in history, revertible; reverting a bulk-create
-deletes the property again.
+Command: **Bulk edit properties of base results**. With a base open, act on
+every file the view currently shows — filters, search, everything applied.
+Five modes: **set** (replace), **set only if missing** (backfill defaults
+without clobbering), **append** / **remove** list items, and **delete the
+property** entirely. All logged in history and revertible; reverting a
+bulk-create deletes the property again, reverting a delete restores it.
 
 ### Rollups into real properties
 

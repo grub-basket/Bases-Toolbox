@@ -166,6 +166,7 @@ class RollupModal extends Modal {
           replace: `rollup: ${this.agg}${this.agg === "count" ? "" : ` of ${sourceProp}`} (${this.direction})`,
           timestamp: Date.now(),
           changes,
+          source: "rollup",
         });
       }
       new Notice(`${targetProp}: computed in ${changes.length} of ${this.files.length} files.`);

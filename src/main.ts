@@ -16,7 +16,8 @@ import { installEmbedOptions } from "./embed-options";
 import { openFilterToggle } from "./filter-toggle";
 import { PropertySuggestModal } from "./find-replace";
 import { FindReplaceView, VIEW_TYPE_FIND_REPLACE } from "./find-replace-view";
-import { HistoryModal, undoLatest } from "./history";
+import { undoLatest } from "./history";
+import { HistoryView, VIEW_TYPE_HISTORY, openHistoryView } from "./history-view";
 import { InlineFieldMigratorModal } from "./inline-fields";
 import { DuplicateFinderModal, startMerge } from "./merge";
 import { installNumberGuard } from "./number-guard";
@@ -47,6 +48,7 @@ export default class BasesToolboxPlugin extends Plugin {
 
     this.registerView(VIEW_TYPE_PROPERTY_INDEX, (leaf) => new PropertyIndexView(leaf, this));
     this.registerView(VIEW_TYPE_FIND_REPLACE, (leaf) => new FindReplaceView(leaf, this));
+    this.registerView(VIEW_TYPE_HISTORY, (leaf) => new HistoryView(leaf, this));
 
     this.addCommand({
       id: "find-replace-property-values",
@@ -63,7 +65,7 @@ export default class BasesToolboxPlugin extends Plugin {
     this.addCommand({
       id: "find-replace-history",
       name: "Find & replace history",
-      callback: () => new HistoryModal(this).open(),
+      callback: () => void openHistoryView(this),
     });
 
     this.addCommand({

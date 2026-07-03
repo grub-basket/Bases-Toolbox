@@ -6,7 +6,7 @@ import { ChangeRecord } from "./types";
 
 const NEW_PROPERTY = "__bt_new_property__";
 
-type BulkMode = "set" | "append" | "remove";
+type BulkMode = "set" | "set-missing" | "append" | "remove" | "delete";
 
 /**
  * Reads the current result set of the active Bases view via its controller —
@@ -108,8 +108,10 @@ export class BulkEditModal extends Modal {
       .setDesc("Append and Remove treat the property as a list.")
       .addDropdown((dd) => {
         dd.addOption("set", "Set (replace the value)");
+        dd.addOption("set-missing", "Set only if missing");
         dd.addOption("append", "Append items");
         dd.addOption("remove", "Remove items");
+        dd.addOption("delete", "Delete the property");
         dd.setValue(this.mode);
         dd.onChange((v) => {
           this.mode = v as BulkMode;
@@ -145,7 +147,11 @@ export class BulkEditModal extends Modal {
     this.valueDescEl?.setText(
       this.mode === "set"
         ? "Applied to all files. Empty clears the property. For list properties: one item per line."
-        : this.mode === "append"
+        : this.mode === "set-missing"
+          ? "Applied only to files where the property is missing. One value for all."
+          : this.mode === "delete"
+            ? "The property is removed entirely from every file (value box is ignored). Revertible."
+            : this.mode === "append"
           ? "One item per line. Added to each file's existing list (duplicates skipped); a scalar value becomes the first list item."
           : "One item per line. Matching items are removed from each file's list; a matching scalar value is cleared."
     );
@@ -165,7 +171,7 @@ export class BulkEditModal extends Modal {
       .map((s) => s.trim())
       .filter(Boolean)
       .map((line) => parseReplacement(line, getPropertyType(this.app, property)));
-    if (this.mode !== "set" && !items.length) {
+    if ((this.mode === "append" || this.mode === "remove") && !items.length) {
       new Notice(`Nothing to ${this.mode} — enter one item per line.`);
       return;
     }
@@ -181,6 +187,11 @@ export class BulkEditModal extends Modal {
           const cur = existed ? fm[key as string] : undefined;
           const value = this.nextValue(cur, existed, setValue, items);
           if (value === SKIP) return;
+          if (this.mode === "delete") {
+            record = { path: file.path, property, oldValue: Array.isArray(cur) ? cur.slice() : cur, deleted: true };
+            delete fm[key as string];
+            return;
+          }
           if (existed && JSON.stringify(cur) === JSON.stringify(value)) return; // no-op
           record = {
             path: file.path,
@@ -200,10 +211,11 @@ export class BulkEditModal extends Modal {
           replace: rawValue,
           timestamp: Date.now(),
           changes,
+          source: `bulk edit: ${this.baseName}`,
         });
       }
       new Notice(
-        `${property}: ${this.mode === "set" ? "set" : this.mode === "append" ? "appended" : "removed"} in ${changes.length} of ${this.files.length} files.`
+        `${property}: ${this.mode} applied in ${changes.length} of ${this.files.length} files.`
       );
       this.close();
     } finally {
@@ -219,6 +231,8 @@ export class BulkEditModal extends Modal {
     items: unknown[]
   ): unknown {
     if (this.mode === "set") return setValue;
+    if (this.mode === "set-missing") return existed ? SKIP : setValue;
+    if (this.mode === "delete") return existed ? null : SKIP; // value unused; SKIP when absent
     if (this.mode === "append") {
       const base = Array.isArray(cur) ? cur.slice() : !existed || cur === null ? [] : [cur];
       let added = false;

@@ -10,6 +10,8 @@ export interface ChangeRecord {
   newValue?: unknown;
   /** True when the operation created the property; revert deletes it. */
   created?: boolean;
+  /** True when the operation deleted the property; revert restores oldValue. */
+  deleted?: boolean;
 }
 
 export interface HistoryEntry {
@@ -19,8 +21,10 @@ export interface HistoryEntry {
   replace: string;
   timestamp: number;
   changes: ChangeRecord[];
-  /** Set once the entry has been reverted (even partially). */
+  /** Set once the entry has been fully reverted. */
   revertedAt?: number;
+  /** Which feature produced the entry (find & replace, bulk edit, rollup…). */
+  source?: string;
 }
 
 export interface BasesToolboxSettings {

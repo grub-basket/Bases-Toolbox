@@ -209,6 +209,7 @@ export class InlineFieldMigratorModal extends Modal {
           replace: "migrated to frontmatter",
           timestamp: Date.now(),
           changes,
+          source: "inline-field migration",
         });
       }
       new Notice(
