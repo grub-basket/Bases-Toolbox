@@ -56,7 +56,7 @@ property, operator (equals/contains/compare/empty), value, a **scope**
 theme palette or a custom color picker (applied at a subtle tint). Rules are
 fully editable inline, reorderable (they apply top-to-bottom; first match
 wins per row and per cell), and each shows a color swatch. Changes apply to
-open bases in real time. Managed in the plugin settings.
+open bases in real time. Managed in the plugin settings or a dedicated sidebar panel (command: **Open conditional formatting panel**) that pops out to a main tab.
 
 ### CSV import & export
 

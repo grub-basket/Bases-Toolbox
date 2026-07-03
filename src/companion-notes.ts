@@ -1,4 +1,4 @@
-import { ButtonComponent, Modal, Notice, Setting, TFile, TFolder, normalizePath } from "obsidian";
+import { ButtonComponent, Modal, Notice, Setting, TFile, TFolder, ToggleComponent, normalizePath } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { findKey } from "./scan";
 import { ChangeRecord } from "./types";
@@ -44,23 +44,39 @@ export function parseExts(raw: string): Set<string> {
   );
 }
 
-/** Whether this file should get a companion. `exclude` is a blacklist of
+/** Extensions never companioned regardless of settings (edit-history version files). */
+const ALWAYS_IGNORE_EXT = new Set(["edtz"]);
+
+/** Whether this file's TYPE is eligible. `exclude` is a blacklist of
  *  extensions (opt-out): every non-Markdown file is eligible except those. */
-export function companionEligible(
-  file: TFile,
-  folder: string,
-  exclude: Set<string>,
-  dest: string
-): boolean {
+export function companionEligible(file: TFile, exclude: Set<string>, dest: string): boolean {
   if (file.extension === "md") return false;
+  if (ALWAYS_IGNORE_EXT.has(file.extension.toLowerCase())) return false;
   // Never companion a file DERIVED from a note (e.g. "X.md.edtz" — the Edit
-  // History plugin's version file for a companion) — companioning
-  // derivatives cascades forever between two plugins' watchers.
+  // History plugin's version file) — companioning derivatives cascades.
   if (file.name.includes(".md.")) return false;
   if (exclude.has(file.extension.toLowerCase())) return false; // blacklisted
-  if (folder && !file.path.startsWith(folder + "/")) return false;
   if (dest && file.path.startsWith(dest + "/")) return false;
   return true;
+}
+
+/** Parses the folder-scope setting into a normalized path list. */
+export function parseFolders(raw: string): string[] {
+  return raw
+    .split(/[\n,;]+/)
+    .map((f) => f.trim().replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean);
+}
+
+/** Is the file inside any of the scope folders? (empty folders → false) */
+export function fileInFolders(file: TFile, folders: string[]): boolean {
+  return folders.some((f) => file.path === f || file.path.startsWith(f + "/"));
+}
+
+/** The configured auto/retroactive scope: whole vault, or specific folders. */
+export function inCompanionScope(plugin: BasesToolboxPlugin, file: TFile): boolean {
+  if (plugin.settings.companionVaultWide) return true;
+  return fileInFolders(file, parseFolders(plugin.settings.companionFolders));
 }
 
 /** Every distinct non-Markdown extension currently in the vault, sorted. */
@@ -83,7 +99,7 @@ export async function companionExistingFiles(plugin: BasesToolboxPlugin): Promis
   const exclude = parseExts(plugin.settings.companionExcludeExts);
   let created = 0;
   for (const file of plugin.app.vault.getFiles()) {
-    if (!companionEligible(file, "", exclude, dest)) continue;
+    if (!companionEligible(file, exclude, dest) || !inCompanionScope(plugin, file)) continue;
     if (plugin.app.vault.getAbstractFileByPath(companionPathFor(file, dest))) continue;
     await createOrRefreshCompanion(plugin, file, dest);
     created++;
@@ -141,7 +157,8 @@ export function installCompanionAuto(plugin: BasesToolboxPlugin): void {
       if (!armed || !plugin.settings.companionAuto) return;
       if (!(file instanceof TFile)) return;
       const dest = plugin.settings.companionsFolder;
-      if (!companionEligible(file, "", parseExts(plugin.settings.companionExcludeExts), dest)) return;
+      if (!companionEligible(file, parseExts(plugin.settings.companionExcludeExts), dest)) return;
+      if (!inCompanionScope(plugin, file)) return;
       void createOrRefreshCompanion(plugin, file, dest);
     })
   );
@@ -157,7 +174,8 @@ interface CompanionPlan {
 
 export class CompanionNotesModal extends Modal {
   private plugin: BasesToolboxPlugin;
-  private folderEl: HTMLInputElement | null = null;
+  private folderEl: HTMLTextAreaElement | null = null;
+  private vaultWideToggle: ToggleComponent | null = null;
   private extsEl: HTMLInputElement | null = null;
   private destEl: HTMLInputElement | null = null;
   private resultsEl: HTMLElement | null = null;
@@ -180,11 +198,20 @@ export class CompanionNotesModal extends Modal {
     });
 
     new Setting(contentEl)
-      .setName("Folder scope")
-      .setDesc("Only files under this folder. Leave empty for the whole vault.")
-      .addText((t) => {
-        t.setPlaceholder("e.g. Attachments");
+      .setName("Folders")
+      .setDesc("Companion files under these folders (one per line). Required unless 'Whole vault' is on below.")
+      .addTextArea((t) => {
+        t.setPlaceholder("Attachments\nProjects/assets");
+        t.setValue(this.plugin.settings.companionFolders);
         this.folderEl = t.inputEl;
+      });
+
+    new Setting(contentEl)
+      .setName("Whole vault")
+      .setDesc("Companion every eligible file in the vault (off by default — prefer scoping to folders).")
+      .addToggle((t) => {
+        t.setValue(this.plugin.settings.companionVaultWide);
+        this.vaultWideToggle = t;
       });
 
     new Setting(contentEl)
@@ -220,13 +247,22 @@ export class CompanionNotesModal extends Modal {
     if (!root) return;
     root.empty();
 
-    const folder = this.folderEl?.value.trim().replace(/^\/+|\/+$/g, "") ?? "";
+    const folders = parseFolders(this.folderEl?.value ?? "");
+    const vaultWide = this.vaultWideToggle?.getValue() ?? false;
     const exclude = parseExts(this.extsEl?.value ?? "");
     const dest = this.destEl?.value.trim().replace(/^\/+|\/+$/g, "") ?? "";
+    if (!vaultWide && !folders.length) {
+      root.createDiv({
+        cls: "bases-toolbox-fr-warning",
+        text: "Add at least one folder, or turn on Whole vault.",
+      });
+      return;
+    }
 
     this.plans = [];
     for (const file of this.app.vault.getFiles()) {
-      if (!companionEligible(file, folder, exclude, dest)) continue;
+      if (!companionEligible(file, exclude, dest)) continue;
+      if (!vaultWide && !fileInFolders(file, folders)) continue;
       const companionPath = companionPathFor(file, dest);
       this.plans.push({
         file,
@@ -263,6 +299,8 @@ export class CompanionNotesModal extends Modal {
       const dest = this.destEl?.value.trim().replace(/^\/+|\/+$/g, "") ?? "";
       this.plugin.settings.companionsFolder = dest;
       this.plugin.settings.companionExcludeExts = this.extsEl?.value.trim() ?? "";
+      this.plugin.settings.companionFolders = this.folderEl?.value.trim() ?? "";
+      this.plugin.settings.companionVaultWide = this.vaultWideToggle?.getValue() ?? false;
       await this.plugin.savePluginData();
 
       let created = 0;

@@ -28,6 +28,7 @@ import { exportBaseCsv } from "./csv-export";
 import { CsvImportModal } from "./csv-import";
 import { installEmbedOptions } from "./embed-options";
 import { openFilterToggle } from "./filter-toggle";
+import { ConditionalFormatView, VIEW_TYPE_CONDITIONAL_FORMAT, openConditionalFormatView } from "./conditional-format-view";
 import { FormatDoctorView, VIEW_TYPE_FORMAT_DOCTOR, openFormatDoctor } from "./format-doctor";
 import { PropertySuggestModal } from "./find-replace";
 import { FindReplaceView, VIEW_TYPE_FIND_REPLACE } from "./find-replace-view";
@@ -70,6 +71,7 @@ export default class BasesToolboxPlugin extends Plugin {
     this.registerView(VIEW_TYPE_FIND_REPLACE, (leaf) => new FindReplaceView(leaf, this));
     this.registerView(VIEW_TYPE_HISTORY, (leaf) => new HistoryView(leaf, this));
     this.registerView(VIEW_TYPE_FORMAT_DOCTOR, (leaf) => new FormatDoctorView(leaf, this));
+    this.registerView(VIEW_TYPE_CONDITIONAL_FORMAT, (leaf) => new ConditionalFormatView(leaf, this));
 
     this.addCommand({
       id: "find-replace-property-values",
@@ -208,8 +210,14 @@ export default class BasesToolboxPlugin extends Plugin {
 
     this.addCommand({
       id: "open-conditional-formatting",
-      name: "Open conditional formatting rules",
+      name: "Open conditional formatting rules (settings)",
       callback: () => this.openSettingsSection("formatting"),
+    });
+
+    this.addCommand({
+      id: "open-conditional-formatting-panel",
+      name: "Open conditional formatting panel",
+      callback: () => void openConditionalFormatView(this),
     });
 
     this.addRibbonIcon("table-properties", "Open property index", () =>
@@ -389,11 +397,12 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         // pointing at the old name). Flag it and offer a one-click fix.
         const sourceMissing = !this.plugin.propertyCache.usage(def.source);
         const targetMissing = !this.plugin.propertyCache.usage(def.target);
-        const warn = sourceMissing
-          ? ` · ⚠ source “${def.source}” not found — renamed or removed?`
-          : targetMissing
-            ? ` · ⚠ target “${def.target}” not found — a rename here means the fork recreates the old name`
-            : "";
+        const warn =
+          def.ignoreWarning || (!sourceMissing && !targetMissing)
+            ? ""
+            : sourceMissing
+              ? ` · ⚠ source “${def.source}” not found — renamed or removed?`
+              : ` · ⚠ target “${def.target}” not found — a rename here means the fork recreates the old name`;
         const setting = new Setting(containerEl)
           .setName(`${def.source} → ${def.target}`)
           .setDesc(`${TRANSFORM_LABELS[def.transform]}${def.active === false ? " · paused" : ""}${warn}`);
@@ -405,6 +414,20 @@ class BasesToolboxSettingTab extends PluginSettingTab {
             .setTooltip("Edit source / target property names")
             .onClick(() => new ForkRenameModal(this.plugin, def, () => this.display()).open())
         );
+        if (warn) {
+          setting.addExtraButton((b) =>
+            b
+              .setIcon("bell-off")
+              .setTooltip("Ignore this warning (the fork is fine as-is)")
+              .onClick(() =>
+                void (async () => {
+                  def.ignoreWarning = true;
+                  await this.plugin.savePluginData();
+                  this.display();
+                })()
+              )
+          );
+        }
         setting.addToggle((t) =>
           t
             .setTooltip("Active — recompute the fork when the source changes")
@@ -513,6 +536,28 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         t.setValue(this.plugin.settings.companionsFolder);
         t.onChange(async (v) => {
           this.plugin.settings.companionsFolder = v.trim().replace(/^\/+|\/+$/g, "");
+          await this.plugin.savePluginData();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Whole vault")
+      .setDesc("Auto mode companions every eligible file in the vault. Off by default — scope to folders below instead.")
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.companionVaultWide).onChange(async (v) => {
+          this.plugin.settings.companionVaultWide = v;
+          await this.plugin.savePluginData();
+        })
+      );
+
+    new Setting(containerEl)
+      .setName("Companion folders")
+      .setDesc("Auto mode only companions files under these folders (one path per line). Ignored when Whole vault is on.")
+      .addTextArea((t) => {
+        t.setPlaceholder("Attachments\nProjects/assets");
+        t.setValue(this.plugin.settings.companionFolders);
+        t.onChange(async (v) => {
+          this.plugin.settings.companionFolders = v;
           await this.plugin.savePluginData();
         });
       });
