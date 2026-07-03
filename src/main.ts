@@ -618,60 +618,54 @@ class BasesToolboxSettingTab extends PluginSettingTab {
   }
 
   private renderAddRule(containerEl: HTMLElement): void {
-    let propEl: HTMLInputElement | null = null;
-    let opEl: HTMLSelectElement | null = null;
-    let valEl: HTMLInputElement | null = null;
-    let scopeEl: HTMLSelectElement | null = null;
-    let colorEl: HTMLSelectElement | null = null;
-    let customEl: HTMLInputElement | null = null;
-    const add = new Setting(containerEl).setName("Add rule");
-    add.addText((t) => {
-      t.setPlaceholder("property");
-      propEl = t.inputEl;
+    // A custom flex row (matching the rule rows) instead of a Setting — the
+    // Setting name column truncates to "A… r…" once the controls get wide.
+    const row = containerEl.createDiv({ cls: "bases-toolbox-cf-rule bases-toolbox-cf-add" });
+    row.createSpan({ cls: "bases-toolbox-cf-addlabel", text: "Add rule" });
+
+    const propEl = row.createEl("input", {
+      type: "text",
+      cls: "bases-toolbox-cf-prop",
+      attr: { placeholder: "property" },
     });
-    add.addDropdown((dd) => {
-      for (const [k, label] of Object.entries(OP_LABELS)) dd.addOption(k, label);
-      opEl = dd.selectEl;
+    const opEl = row.createEl("select", { cls: "dropdown bases-toolbox-cf-op" });
+    for (const [k, label] of Object.entries(OP_LABELS)) opEl.createEl("option", { value: k, text: label });
+    const valEl = row.createEl("input", {
+      type: "text",
+      cls: "bases-toolbox-cf-val",
+      attr: { placeholder: "value" },
     });
-    add.addText((t) => {
-      t.setPlaceholder("value");
-      valEl = t.inputEl;
-    });
-    add.addDropdown((dd) => {
-      dd.addOption("row", "Row");
-      dd.addOption("cell", "Cell");
-      scopeEl = dd.selectEl;
-    });
-    add.addDropdown((dd) => {
-      for (const c of Object.keys(RULE_COLORS)) dd.addOption(c, colorLabel(c));
-      dd.addOption(CUSTOM_COLOR, colorLabel(CUSTOM_COLOR));
-      colorEl = dd.selectEl;
-      dd.onChange((v) => customEl?.setCssStyles({ display: v === CUSTOM_COLOR ? "" : "none" }));
-    });
-    customEl = add.controlEl.createEl("input", { type: "color", cls: "bases-toolbox-color-input" });
+    const scopeEl = row.createEl("select", { cls: "dropdown bases-toolbox-cf-scope" });
+    scopeEl.createEl("option", { value: "row", text: "Row" });
+    scopeEl.createEl("option", { value: "cell", text: "Cell" });
+    const colorEl = row.createEl("select", { cls: "dropdown bases-toolbox-cf-colorsel" });
+    for (const c of Object.keys(RULE_COLORS)) colorEl.createEl("option", { value: c, text: colorLabel(c) });
+    colorEl.createEl("option", { value: CUSTOM_COLOR, text: colorLabel(CUSTOM_COLOR) });
+    const customEl = row.createEl("input", { type: "color", cls: "bases-toolbox-color-input" });
     customEl.value = DEFAULT_CUSTOM_HEX;
     customEl.setCssStyles({ display: "none" });
-    add.addButton((b) =>
-      b.setButtonText("Add").setCta().onClick(() => {
-        const property = propEl?.value.trim() ?? "";
-        if (!property) return;
-        const colorKey = colorEl?.value ?? "red";
-        this.plugin.settings.formatRules.push({
-          id: `${Date.now()}-${this.plugin.settings.formatRules.length}`,
-          property,
-          op: (opEl?.value ?? "equals") as FormatOp,
-          value: valEl?.value ?? "",
-          scope: (scopeEl?.value ?? "row") as FormatScope,
-          color: colorKey,
-          ...(colorKey === CUSTOM_COLOR
-            ? { customColor: customEl?.value ?? DEFAULT_CUSTOM_HEX }
-            : {}),
-          enabled: true,
-        });
-        this.saveAndPaint();
-        this.display();
-      })
+    colorEl.addEventListener("change", () =>
+      customEl.setCssStyles({ display: colorEl.value === CUSTOM_COLOR ? "" : "none" })
     );
+
+    const addBtn = row.createEl("button", { cls: "mod-cta", text: "Add" });
+    addBtn.addEventListener("click", () => {
+      const property = propEl.value.trim();
+      if (!property) return;
+      const colorKey = colorEl.value;
+      this.plugin.settings.formatRules.push({
+        id: `${Date.now()}-${this.plugin.settings.formatRules.length}`,
+        property,
+        op: opEl.value as FormatOp,
+        value: valEl.value,
+        scope: scopeEl.value as FormatScope,
+        color: colorKey,
+        ...(colorKey === CUSTOM_COLOR ? { customColor: customEl.value } : {}),
+        enabled: true,
+      });
+      this.saveAndPaint();
+      this.display();
+    });
   }
 
 }
