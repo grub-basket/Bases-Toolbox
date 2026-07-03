@@ -44,6 +44,10 @@ export interface BasesToolboxSettings {
   propertyForks: import("./property-fork").PropertyForkDef[];
   /** Last-used companions destination ("" = adjacent to each file). */
   companionsFolder: string;
+  /** Default extension filter for companions ("" = all non-md). */
+  companionExts: string;
+  /** Automatically create companions for newly added non-md files. */
+  companionAuto: boolean;
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -55,6 +59,8 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   allowedValues: {},
   propertyForks: [],
   companionsFolder: "",
+  companionExts: "",
+  companionAuto: false,
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */

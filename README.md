@@ -170,8 +170,20 @@ by extension, and creates one companion note per file (named
 body. Companions live adjacent to their files by default, or collected into
 a designated folder mirroring the source structure. Re-running refreshes the
 `file-*` properties while preserving anything you added to a companion;
-originals are never touched, and files derived from notes (like encrypted
-shadows) are never companioned.
+originals are never touched, and files derived from notes (like version
+files other plugins create) are never companioned. Settings offer a default
+destination, an extension filter, and an opt-in **auto mode** that creates a
+companion whenever a matching file is added to the vault.
+
+### Stamp file metadata into note properties
+
+Command: **Stamp file metadata into note properties**. Filesystem
+created/modified times get destroyed by syncs, copies, and migrations —
+frontmatter travels with the note forever. This snapshots each Markdown
+note's current times into properties of your choosing (default `created` /
+`modified`), scoped to a folder or the vault. Set-if-missing by default, so
+existing values are respected; overwrite is opt-in. Logged to history and
+revertible.
 
 ### Inline-field migration
 

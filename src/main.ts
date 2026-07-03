@@ -1,7 +1,7 @@
 import { App, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
 import { AllowedValuesAuditModal, installAllowedValuePicker } from "./allowed-values";
 import { openBulkEdit } from "./bulk-edit";
-import { CompanionNotesModal } from "./companion-notes";
+import { CompanionNotesModal, MetadataStampModal, installCompanionAuto } from "./companion-notes";
 import { installCellZoomTracking, openCellZoom } from "./cell-zoom";
 import {
   CUSTOM_COLOR,
@@ -46,6 +46,7 @@ export default class BasesToolboxPlugin extends Plugin {
     installConditionalFormatting(this);
     installAllowedValuePicker(this);
     installForkSync(this);
+    installCompanionAuto(this);
 
     const dirty = () => this.propertyCache.markDirty();
     this.registerEvent(this.app.metadataCache.on("changed", dirty));
@@ -121,6 +122,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "companion-notes",
       name: "Create companion notes for non-Markdown files",
       callback: () => new CompanionNotesModal(this).open(),
+    });
+
+    this.addCommand({
+      id: "metadata-stamp",
+      name: "Stamp file metadata into note properties",
+      callback: () => new MetadataStampModal(this).open(),
     });
 
     this.addCommand({
@@ -303,6 +310,45 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           );
       }
     }
+
+    new Setting(containerEl)
+      .setName("Companion notes")
+      .setDesc("Companions make non-Markdown files queryable in Bases. Run via the command \u201cCreate companion notes for non-Markdown files\u201d.")
+      .setHeading();
+
+    new Setting(containerEl)
+      .setName("Companion destination")
+      .setDesc("Empty = companions live adjacent to their files. A folder path collects them there instead (mirroring the source structure).")
+      .addText((t) => {
+        t.setPlaceholder("(adjacent)");
+        t.setValue(this.plugin.settings.companionsFolder);
+        t.onChange(async (v) => {
+          this.plugin.settings.companionsFolder = v.trim().replace(/^\/+|\/+$/g, "");
+          await this.plugin.savePluginData();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Companion extensions")
+      .setDesc("Only companion these extensions (comma separated). Empty = every non-Markdown file.")
+      .addText((t) => {
+        t.setPlaceholder("e.g. png, jpg, pdf");
+        t.setValue(this.plugin.settings.companionExts);
+        t.onChange(async (v) => {
+          this.plugin.settings.companionExts = v.trim();
+          await this.plugin.savePluginData();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Auto-create companions for new files")
+      .setDesc("When a matching non-Markdown file is added to the vault, its companion is created automatically (using the destination and extensions above).")
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.companionAuto).onChange(async (v) => {
+          this.plugin.settings.companionAuto = v;
+          await this.plugin.savePluginData();
+        })
+      );
 
     new Setting(containerEl)
       .setName("History cap")
