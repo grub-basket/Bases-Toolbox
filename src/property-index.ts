@@ -41,13 +41,17 @@ export class PropertyIndexView extends ItemView {
     root.empty();
     root.addClass("bases-toolbox-index");
 
-    this.addAction("layout", "Open in a main tab", () => void this.openInMainTab());
-
-    const searchEl = root.createEl("input", {
+    this.addAction("picture-in-picture-2", "Open in a main tab", () => void this.openInMainTab());
+    const toolbar = root.createDiv({ cls: "bases-toolbox-index-toolbar" });
+    const searchEl = toolbar.createEl("input", {
       type: "search",
       placeholder: "Filter properties…",
       cls: "bases-toolbox-index-search",
     });
+    const popoutBtn = toolbar.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
+    setIcon(popoutBtn, "picture-in-picture-2");
+    popoutBtn.setAttribute("aria-label", "Open the property index in a main tab");
+    popoutBtn.addEventListener("click", () => void this.openInMainTab());
     searchEl.addEventListener("input", () => {
       this.search = searchEl.value.toLowerCase();
       this.renderList();
@@ -261,6 +265,12 @@ export class PropertyIndexView extends ItemView {
     );
     menu.addItem((i) =>
       i.setTitle("Open to the right").setIcon("separator-vertical").onClick(() => void this.app.workspace.getLeaf("split").openFile(file))
+    );
+    menu.addItem((i) =>
+      i
+        .setTitle("Open below")
+        .setIcon("separator-horizontal")
+        .onClick(() => void this.app.workspace.getLeaf("split", "horizontal").openFile(file))
     );
     menu.showAtMouseEvent(e);
   }

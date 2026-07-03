@@ -15,6 +15,7 @@ import {
   installConditionalFormatting,
   ruleSwatchColor,
   scheduleRedecorate,
+  BaseScopeModal,
 } from "./conditional-format";
 import { exportBaseCsv } from "./csv-export";
 import { CsvImportModal } from "./csv-import";
@@ -29,7 +30,7 @@ import { InlineFieldMigratorModal } from "./inline-fields";
 import { DuplicateFinderModal, startMerge } from "./merge";
 import { installNumberGuard } from "./number-guard";
 import { PropertyIndexView, VIEW_TYPE_PROPERTY_INDEX } from "./property-index";
-import { ForkPropertyPicker, TRANSFORM_LABELS, installForkSync } from "./property-fork";
+import { ForkPropertyPicker, ForkRenameModal, TRANSFORM_LABELS, installForkSync } from "./property-fork";
 import { openRollup } from "./rollup";
 import { PropertyCache } from "./scan";
 import { BasesToolboxSettings, DEFAULT_SETTINGS, DisabledFilter, HistoryEntry, PluginData } from "./types";
@@ -365,9 +366,28 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         .setDesc("Forks recomputed automatically when their source property changes.")
         .setHeading();
       for (const def of [...this.plugin.settings.propertyForks]) {
+        // Intuitive rename catch: if the source or target property no longer
+        // exists in the vault, the fork is probably broken (a property rename
+        // in the All Properties view rewrites keys but leaves the fork def
+        // pointing at the old name). Flag it and offer a one-click fix.
+        const sourceMissing = !this.plugin.propertyCache.usage(def.source);
+        const targetMissing = !this.plugin.propertyCache.usage(def.target);
+        const warn = sourceMissing
+          ? ` · ⚠ source “${def.source}” not found — renamed or removed?`
+          : targetMissing
+            ? ` · ⚠ target “${def.target}” not found — a rename here means the fork recreates the old name`
+            : "";
         const setting = new Setting(containerEl)
           .setName(`${def.source} → ${def.target}`)
-          .setDesc(`${TRANSFORM_LABELS[def.transform]}${def.active === false ? " · paused" : ""}`);
+          .setDesc(`${TRANSFORM_LABELS[def.transform]}${def.active === false ? " · paused" : ""}${warn}`);
+        if (warn) setting.descEl.addClass("bases-toolbox-fr-warning");
+        // Fix names inline (repoint a fork after a property rename).
+        setting.addExtraButton((b) =>
+          b
+            .setIcon("pencil")
+            .setTooltip("Edit source / target property names")
+            .onClick(() => new ForkRenameModal(this.plugin, def, () => this.display()).open())
+        );
         setting.addToggle((t) =>
           t
             .setTooltip("Active — recompute the fork when the source changes")
@@ -620,6 +640,20 @@ class BasesToolboxSettingTab extends PluginSettingTab {
     scope.addEventListener("change", () => {
       rule.scope = scope.value as FormatScope;
       this.saveAndPaint();
+    });
+
+    // Which sheets (bases) this rule applies to — all, or a chosen subset.
+    const sheetsBtn = row.createEl("button", { cls: "bases-toolbox-cf-sheets" });
+    const sheetLabel = () =>
+      rule.bases?.length ? `${rule.bases.length} sheet${rule.bases.length === 1 ? "" : "s"}` : "All sheets";
+    sheetsBtn.setText(sheetLabel());
+    sheetsBtn.setAttribute("aria-label", "Choose which bases this rule applies to");
+    sheetsBtn.addEventListener("click", () => {
+      new BaseScopeModal(this.plugin, rule.bases ?? [], (sel) => {
+        rule.bases = sel.length ? sel : undefined;
+        sheetsBtn.setText(sheetLabel());
+        this.saveAndPaint();
+      }).open();
     });
 
     const color = row.createEl("select", { cls: "dropdown bases-toolbox-cf-colorsel" });
