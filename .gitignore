@@ -3,3 +3,4 @@ main.js
 *.map
 .DS_Store
 .deploy-target
+dev-docs/
