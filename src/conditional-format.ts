@@ -45,6 +45,36 @@ export const OP_LABELS: Record<FormatOp, string> = {
 export const CUSTOM_COLOR = "custom";
 export const DEFAULT_CUSTOM_HEX = "#ff9800";
 
+/**
+ * Identity of a rule's *condition* — property, operator, value, scope, and the
+ * set of bases it targets. Two rules with the same key fire on the same cells,
+ * so the second is redundant (color aside). Used to warn on duplicates.
+ */
+export function ruleMatchKey(r: FormatRule): string {
+  const needsValue = r.op !== "empty" && r.op !== "not-empty";
+  const bases = r.bases?.length ? [...r.bases].sort().join("|") : "*";
+  return [
+    r.property.trim().toLowerCase(),
+    r.op,
+    needsValue ? r.value.trim().toLowerCase() : "",
+    r.scope ?? "row",
+    bases,
+  ].join("§");
+}
+
+/**
+ * Index of the first rule matching `candidate`'s condition, or -1. Pass
+ * `excludeIndex` to skip the candidate's own slot when checking an existing row.
+ */
+export function findDuplicateRule(
+  rules: FormatRule[],
+  candidate: FormatRule,
+  excludeIndex = -1
+): number {
+  const key = ruleMatchKey(candidate);
+  return rules.findIndex((r, i) => i !== excludeIndex && ruleMatchKey(r) === key);
+}
+
 /** Display label for a color key ("red" → "Red", "custom" → "Custom…"). */
 export function colorLabel(key: string): string {
   if (key === CUSTOM_COLOR) return "Custom…";

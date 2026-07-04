@@ -35,6 +35,44 @@ export function defaultForkName(source: string, transform: ForkTransform): strin
   return `${source}-fork-${TRANSFORM_SLUG[transform]}`;
 }
 
+/** Reverse of TRANSFORM_SLUG, for recognizing fork-shaped property names. */
+const SLUG_TRANSFORM: Record<string, ForkTransform> = {
+  normalized: "date",
+  "as-text": "strip-links",
+  "as-links": "wrap-links",
+  copy: "copy",
+};
+
+/**
+ * Finds fork-shaped properties in the vault that aren't tracked in settings —
+ * e.g. forks created before live-sync recording existed. A property named
+ * "<source>-fork-<slug>" whose source still exists, and which isn't already a
+ * managed or recently-removed fork, is offered for adoption so it can be
+ * managed (pause / edit / live-sync) rather than left orphaned.
+ */
+export function detectUnmanagedForks(plugin: BasesToolboxPlugin): PropertyForkDef[] {
+  const managed = new Set(
+    plugin.settings.propertyForks.map((d) => d.target.toLowerCase())
+  );
+  const removed = new Set(
+    plugin.settings.removedForks.map((d) => d.target.toLowerCase())
+  );
+  const props = plugin.propertyCache.get();
+  const sourceByLower = new Map(props.map((u) => [u.name.toLowerCase(), u.name]));
+  const re = /^(.+)-fork-(normalized|as-text|as-links|copy)$/;
+  const out: PropertyForkDef[] = [];
+  for (const u of props) {
+    const m = u.name.match(re);
+    if (!m) continue;
+    const targetLower = u.name.toLowerCase();
+    if (managed.has(targetLower) || removed.has(targetLower)) continue;
+    const source = sourceByLower.get(m[1].toLowerCase());
+    if (!source) continue; // source property must still exist
+    out.push({ source, target: u.name, transform: SLUG_TRANSFORM[m[2]] });
+  }
+  return out;
+}
+
 export interface PropertyForkDef {
   source: string;
   target: string;
@@ -208,6 +246,9 @@ class ForkModal extends Modal {
       this.close();
     } finally {
       this.running = false;
+      // Refresh the settings tab if it's open so the new fork appears without
+      // a vault reload (the modal can be launched from the settings builder).
+      this.plugin.settingTab?.refreshIfOpen();
     }
   }
 }

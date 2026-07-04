@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
+import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import {
   BaseScopeModal,
@@ -10,9 +10,11 @@ import {
   OP_LABELS,
   RULE_COLORS,
   colorLabel,
+  findDuplicateRule,
   ruleSwatchColor,
   scheduleRedecorate,
 } from "./conditional-format";
+import { attachPropertySuggest, attachValueSuggest } from "./suggest";
 
 export const VIEW_TYPE_CONDITIONAL_FORMAT = "bases-toolbox-conditional-format";
 
@@ -122,6 +124,7 @@ export class ConditionalFormatView extends ItemView {
     const body = card.createDiv({ cls: "bases-toolbox-cfcard-body" });
     const prop = body.createEl("input", { type: "text", attr: { placeholder: "property" } });
     prop.value = rule.property;
+    attachPropertySuggest(this.plugin, prop);
     prop.addEventListener("input", () => {
       rule.property = prop.value.trim();
       summary.setText(prop.value);
@@ -134,6 +137,7 @@ export class ConditionalFormatView extends ItemView {
     op.value = rule.op;
     const val = opRow.createEl("input", { type: "text", attr: { placeholder: "value" } });
     val.value = rule.value;
+    attachValueSuggest(this.plugin, val, () => rule.property);
     const syncVal = () =>
       val.setCssStyles({ display: rule.op === "empty" || rule.op === "not-empty" ? "none" : "" });
     syncVal();
@@ -188,6 +192,15 @@ export class ConditionalFormatView extends ItemView {
         this.save();
       }).open();
     });
+
+    // Flag a rule that duplicates an earlier one's condition.
+    const dupOf = findDuplicateRule(rules, rule, index);
+    if (dupOf !== -1 && dupOf < index) {
+      card.addClass("bases-toolbox-cf-dup");
+      const msg = `Duplicate condition — same as rule #${dupOf + 1} above`;
+      card.setAttribute("aria-label", msg);
+      card.setAttribute("title", msg);
+    }
   }
 
   private renderAddCard(root: HTMLElement): void {
@@ -195,10 +208,12 @@ export class ConditionalFormatView extends ItemView {
     card.createDiv({ cls: "bases-toolbox-cfcard-summary", text: "Add rule" });
     const body = card.createDiv({ cls: "bases-toolbox-cfcard-body" });
     const prop = body.createEl("input", { type: "text", attr: { placeholder: "property" } });
+    attachPropertySuggest(this.plugin, prop);
     const opRow = body.createDiv({ cls: "bases-toolbox-cfcard-row" });
     const op = opRow.createEl("select", { cls: "dropdown" });
     for (const [k, label] of Object.entries(OP_LABELS)) op.createEl("option", { value: k, text: label });
     const val = opRow.createEl("input", { type: "text", attr: { placeholder: "value" } });
+    attachValueSuggest(this.plugin, val, () => prop.value.trim());
     const styleRow = body.createDiv({ cls: "bases-toolbox-cfcard-row" });
     const scope = styleRow.createEl("select", { cls: "dropdown" });
     scope.createEl("option", { value: "row", text: "Row" });
@@ -210,7 +225,7 @@ export class ConditionalFormatView extends ItemView {
     add.addEventListener("click", () => {
       const property = prop.value.trim();
       if (!property) return;
-      this.plugin.settings.formatRules.push({
+      const candidate: FormatRule = {
         id: `${Date.now()}-${this.plugin.settings.formatRules.length}`,
         property,
         op: op.value as FormatOp,
@@ -218,7 +233,13 @@ export class ConditionalFormatView extends ItemView {
         scope: scope.value as FormatScope,
         color: color.value,
         enabled: true,
-      });
+      };
+      const dup = findDuplicateRule(this.plugin.settings.formatRules, candidate);
+      if (dup !== -1) {
+        new Notice(`That condition already exists (rule #${dup + 1}).`);
+        return;
+      }
+      this.plugin.settings.formatRules.push(candidate);
       this.save();
       this.render();
     });

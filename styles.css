@@ -450,3 +450,49 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
 .bases-toolbox-cfcard-row select { flex: 1; }
 .bases-toolbox-cfcard-row input[type=text] { flex: 1; }
 .bases-toolbox-cfcard-add { border-style: dashed; }
+
+/* Duplicate-condition flag (settings rows and panel cards) */
+.bases-toolbox-cf-dup {
+  border-left: 3px solid var(--color-orange);
+  background: rgba(var(--color-orange-rgb), 0.06);
+}
+.bases-toolbox-cf-dup::after {
+  content: "duplicate";
+  font-size: var(--font-ui-smaller);
+  color: var(--color-orange);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: auto;
+  padding-left: var(--size-2-2);
+  align-self: center;
+}
+
+/* In-settings feature reference */
+.bases-toolbox-ref {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-2-3) var(--size-4-2);
+  margin-bottom: var(--size-4-4);
+}
+.bases-toolbox-ref > summary {
+  cursor: pointer;
+  font-weight: var(--font-medium);
+  color: var(--text-normal);
+}
+.bases-toolbox-ref-group {
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+  margin: var(--size-4-3) 0 var(--size-2-1);
+}
+.bases-toolbox-ref-note {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  margin-bottom: var(--size-2-2);
+}
+.bases-toolbox-ref-list { display: flex; flex-direction: column; gap: var(--size-2-1); }
+.bases-toolbox-ref-item {
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  line-height: var(--line-height-tight);
+}
+.bases-toolbox-ref-item strong { color: var(--text-normal); }
