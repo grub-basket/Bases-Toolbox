@@ -3,6 +3,7 @@ import type BasesToolboxPlugin from "./main";
 import { PinValuesModal } from "./allowed-values";
 import { openFindReplaceView } from "./find-replace-view";
 import { parseReplacement, replaceIn } from "./find-replace";
+import { ForkTargetDeleteModal, forksTargeting } from "./property-fork";
 import { PropertyUsage, findKey } from "./scan";
 import { ChangeRecord } from "./types";
 import {
@@ -455,21 +456,43 @@ export class PropertyIndexView extends ItemView {
         : scope === "value"
           ? `the ${n} file${n === 1 ? "" : "s"} with value “${value}”`
           : `all ${n} file${n === 1 ? "" : "s"}`;
+
+    // If this property is the TARGET of an active fork, a plain delete gets
+    // undone by live sync within a beat — route through the fork-aware modal so
+    // the user pauses/removes the rule first. (Covers property/value/file scope.)
+    const targeting = forksTargeting(this.plugin, name);
+    if (targeting.length) {
+      new ForkTargetDeleteModal(this.plugin, name, targeting, where, () =>
+        this.runDelete(name, files, scope, value, type)
+      ).open();
+      return;
+    }
+
     new ConfirmModal(this.plugin, {
       title: `Delete “${name}”?`,
       body: `Removes “${name}” from ${where}. Undoable from find & replace history; every removal is logged to deletions/${name}.jsonl.`,
       confirmText: "Delete property",
       danger: true,
-      onConfirm: () =>
-        void (async () => {
-          const result: DeleteResult = await deletePropertyFromFiles(this.plugin, name, files, { scope, value, type });
-          this.plugin.propertyCache.markDirty();
-          this.renderList();
-          if (result.count)
-            notifyDeletion(this.plugin, result, `“${name}” from ${result.count} file${result.count === 1 ? "" : "s"}`);
-          else new Notice("Nothing to delete — no files still had that property.");
-        })(),
+      onConfirm: () => this.runDelete(name, files, scope, value, type),
     }).open();
+  }
+
+  /** Performs the delete at the given scope, refreshes, and notifies. */
+  private runDelete(
+    name: string,
+    files: TFile[],
+    scope: "property" | "value" | "file",
+    value: string | undefined,
+    type: string | null
+  ): void {
+    void (async () => {
+      const result: DeleteResult = await deletePropertyFromFiles(this.plugin, name, files, { scope, value, type });
+      this.plugin.propertyCache.markDirty();
+      this.renderList();
+      if (result.count)
+        notifyDeletion(this.plugin, result, `“${name}” from ${result.count} file${result.count === 1 ? "" : "s"}`);
+      else new Notice("Nothing to delete — no files still had that property.");
+    })();
   }
 
   /** Opens every given file in its own new tab (confirming past a threshold). */

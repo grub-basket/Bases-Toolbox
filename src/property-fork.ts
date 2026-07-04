@@ -293,6 +293,87 @@ export async function applyFork(
   return changes.length;
 }
 
+/* ---------- fork-target delete guard ---------- */
+
+/**
+ * Active forks whose TARGET is `property`. Deleting such a property is the root
+ * cause of the "deletion doesn't stick / revert doesn't take" confusion: live
+ * sync sees the still-present source and instantly recomputes the target back.
+ * Only ACTIVE forks matter — a paused fork won't respawn anything. Matched
+ * case-insensitively (frontmatter keys resolve case-insensitively too).
+ */
+export function forksTargeting(plugin: BasesToolboxPlugin, property: string): PropertyForkDef[] {
+  const p = property.toLowerCase();
+  return plugin.settings.propertyForks.filter(
+    (d) => d.active !== false && d.target.toLowerCase() === p
+  );
+}
+
+/** Pauses the given forks (keeps them listed/restorable) and persists. */
+export async function pauseForks(plugin: BasesToolboxPlugin, defs: PropertyForkDef[]): Promise<void> {
+  for (const d of defs) d.active = false;
+  await plugin.savePluginData();
+}
+
+/** Removes the given forks to removedForks (restorable, capped 20) and persists. */
+export async function removeForks(plugin: BasesToolboxPlugin, defs: PropertyForkDef[]): Promise<void> {
+  const set = new Set(defs);
+  plugin.settings.propertyForks = plugin.settings.propertyForks.filter((d) => !set.has(d));
+  plugin.settings.removedForks.unshift(...defs);
+  plugin.settings.removedForks = plugin.settings.removedForks.slice(0, 20);
+  await plugin.savePluginData();
+}
+
+/**
+ * Shown when the user tries to delete a property that an ACTIVE fork writes to.
+ * A plain delete would be undone by live sync within a beat, so we make the user
+ * first pause or remove the fork rule — then run the caller's delete via
+ * `onProceed`. Cancel leaves everything untouched.
+ */
+export class ForkTargetDeleteModal extends Modal {
+  constructor(
+    private plugin: BasesToolboxPlugin,
+    private property: string,
+    private forks: PropertyForkDef[],
+    private where: string,
+    private onProceed: () => void
+  ) {
+    super(plugin.app);
+  }
+
+  onOpen(): void {
+    this.titleEl.setText(`“${this.property}” is kept by a live fork`);
+    const { contentEl } = this;
+    const sources = [...new Set(this.forks.map((f) => f.source))].join("”, “");
+    contentEl.createEl("p", {
+      text:
+        `“${this.property}” is a live-synced fork of “${sources}”. If you just delete it, live sync will ` +
+        `recompute it from the source almost immediately — that's why deleting it (or reverting the delete) ` +
+        `“doesn't stick.” Pause or remove the fork rule first.`,
+    });
+    contentEl.createEl("p", {
+      cls: "bases-toolbox-fr-info",
+      text: `Then this removes “${this.property}” from ${this.where}. Undoable from history.`,
+    });
+
+    const finish = async (disposition: "pause" | "remove") => {
+      if (disposition === "pause") await pauseForks(this.plugin, this.forks);
+      else await removeForks(this.plugin, this.forks);
+      this.plugin.settingTab?.refreshIfOpen();
+      this.close();
+      this.onProceed();
+    };
+
+    new Setting(contentEl)
+      .addButton((b) => b.setButtonText("Pause sync & delete").setCta().onClick(() => void finish("pause")))
+      .addButton((b) => {
+        b.setButtonText("Remove rule & delete").onClick(() => void finish("remove"));
+        b.buttonEl.addClass("mod-warning");
+      })
+      .addButton((b) => b.setButtonText("Cancel").onClick(() => this.close()));
+  }
+}
+
 /* ---------- live sync ---------- */
 
 const syncing = new Set<string>();
