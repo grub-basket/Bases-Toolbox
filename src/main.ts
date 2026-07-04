@@ -19,11 +19,13 @@ import {
   OP_LABELS,
   RULE_COLORS,
   colorLabel,
+  findDuplicateRule,
   installConditionalFormatting,
   ruleSwatchColor,
   scheduleRedecorate,
   BaseScopeModal,
 } from "./conditional-format";
+import { attachPropertySuggest, attachValueSuggest } from "./suggest";
 import { exportBaseCsv } from "./csv-export";
 import { CsvImportModal } from "./csv-import";
 import { installEmbedOptions } from "./embed-options";
@@ -38,7 +40,13 @@ import { InlineFieldMigratorModal } from "./inline-fields";
 import { DuplicateFinderModal, startMerge } from "./merge";
 import { installNumberGuard } from "./number-guard";
 import { PropertyIndexView, VIEW_TYPE_PROPERTY_INDEX } from "./property-index";
-import { ForkPropertyPicker, ForkRenameModal, TRANSFORM_LABELS, installForkSync } from "./property-fork";
+import {
+  ForkPropertyPicker,
+  ForkRenameModal,
+  TRANSFORM_LABELS,
+  detectUnmanagedForks,
+  installForkSync,
+} from "./property-fork";
 import { openRollup } from "./rollup";
 import { PropertyCache } from "./scan";
 import { BasesToolboxSettings, DEFAULT_SETTINGS, DisabledFilter, HistoryEntry, PluginData } from "./types";
@@ -50,6 +58,8 @@ export default class BasesToolboxPlugin extends Plugin {
   propertyCache: PropertyCache = new PropertyCache(this.app);
   /** Debounced re-decorate, set by installConditionalFormatting. */
   refreshConditionalFormatting?: () => void;
+  /** The settings tab, so modals can refresh it live. Set when it mounts. */
+  settingTab?: BasesToolboxSettingTab;
 
   async onload(): Promise<void> {
     await this.loadPluginData();
@@ -326,14 +336,28 @@ export default class BasesToolboxPlugin extends Plugin {
 
 class BasesToolboxSettingTab extends PluginSettingTab {
   private plugin: BasesToolboxPlugin;
+  /** True while the tab is on screen — gates live re-renders from modals. */
+  private mounted = false;
 
   constructor(app: App, plugin: BasesToolboxPlugin) {
     super(app, plugin);
     this.plugin = plugin;
+    plugin.settingTab = this;
+  }
+
+  hide(): void {
+    this.mounted = false;
+    super.hide();
+  }
+
+  /** Re-render only if the tab is currently open (e.g. after a fork is added). */
+  refreshIfOpen(): void {
+    if (this.mounted) this.display();
   }
 
   display(): void {
     const { containerEl } = this;
+    this.mounted = true;
     containerEl.empty();
 
     new Setting(containerEl)
@@ -456,6 +480,40 @@ class BasesToolboxSettingTab extends PluginSettingTab {
               })()
             )
         );
+      }
+    }
+
+    // Adopt fork-shaped properties that aren't tracked yet (e.g. forks made
+    // before live-sync recording existed, or before the listing bug fix).
+    const unmanaged = detectUnmanagedForks(this.plugin);
+    if (unmanaged.length) {
+      const adopt = async (defs: typeof unmanaged) => {
+        for (const def of defs) this.plugin.settings.propertyForks.push({ ...def, active: true });
+        await this.plugin.savePluginData();
+        this.display();
+      };
+      new Setting(containerEl)
+        .setName("Detected forks not yet managed")
+        .setDesc(
+          "Fork-shaped properties found in your vault that aren't tracked here. Adopt one to manage it — pause, edit, or keep it in live sync."
+        )
+        .setHeading()
+        .addButton((b) =>
+          b
+            .setButtonText(`Adopt all (${unmanaged.length})`)
+            .onClick(() => void adopt(unmanaged))
+        );
+      for (const def of unmanaged) {
+        const count = this.plugin.propertyCache.usage(def.target)?.count ?? 0;
+        new Setting(containerEl)
+          .setName(`${def.source} → ${def.target}`)
+          .setDesc(`${TRANSFORM_LABELS[def.transform]} · found in ${count} file${count === 1 ? "" : "s"}`)
+          .addButton((b) =>
+            b
+              .setButtonText("Adopt")
+              .setCta()
+              .onClick(() => void adopt([def]))
+          );
       }
     }
 
@@ -622,6 +680,90 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           b.buttonEl.removeClass("mod-warning");
         });
       });
+
+    this.renderReference(containerEl);
+  }
+
+  /**
+   * A full, in-app catalogue of everything the plugin offers — commands,
+   * panels, and automatic features — so users never have to leave Obsidian to
+   * discover what's here. Collapsed by default to keep settings tidy.
+   */
+  private renderReference(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Reference").setHeading();
+    const details = containerEl.createEl("details", { cls: "bases-toolbox-ref" });
+    details.createEl("summary", {
+      text: "Everything in Bases Toolbox — commands, panels & features",
+    });
+
+    const groups: { title: string; note?: string; items: [string, string][] }[] = [
+      {
+        title: "Panels & tabs",
+        note: "Open from the command palette; each can pop out into its own tab.",
+        items: [
+          ["Property index", "Vault-wide list of every property, its values, and the files using each — also on the left ribbon (table icon)."],
+          ["Find & replace", "Panel for bulk-editing a property's values across the vault."],
+          ["Find & replace history", "Browse past operations and revert them individually or in full."],
+          ["Property format doctor", "Scans for inconsistent value formats and helps fix them."],
+          ["Conditional formatting", "Manage coloring rules in a side panel; pop out to a tab."],
+        ],
+      },
+      {
+        title: "Commands",
+        note: "Run from the command palette (Cmd/Ctrl-P).",
+        items: [
+          ["Find & replace property values", "Bulk-edit one property's values vault-wide (override, or find-and-replace)."],
+          ["Undo last find & replace", "Revert the most recent operation."],
+          ["Find & replace history", "Open the revert log."],
+          ["Convert or fork a property's format", "Normalize dates or (un)wrap wikilinks — in place or into a second property."],
+          ["Property format doctor", "Open the format-inconsistency scanner."],
+          ["Audit allowed values", "Find values outside a property's pinned allowed set."],
+          ["Compute rollup into property", "Aggregate linked notes' values into a property."],
+          ["Migrate inline fields to properties", "Convert inline “key:: value” fields into frontmatter."],
+          ["Merge current note into another", "Combine two notes and their properties."],
+          ["Find duplicate notes", "Detect near-duplicate notes by a configurable heuristic."],
+          ["Create companion notes for non-Markdown files", "Make PDFs, images, etc. queryable in Bases."],
+          ["Stamp file metadata into note properties", "Write durable created/modified dates into frontmatter."],
+          ["Import CSV as notes", "Turn a CSV into notes with frontmatter."],
+          ["Export base results as CSV", "Export the current base view."],
+          ["Bulk edit properties of base results", "Edit properties across the rows a base returns."],
+          ["Zoom into focused cell", "Open a large editor for the focused Bases cell."],
+          ["Toggle base filters", "Quickly enable or disable a base's filters."],
+          ["Open property index", "Reveal the property index panel."],
+          ["Toggle number guard", "Block arrow-key / scroll-wheel changes on number properties."],
+          ["Toggle digits-only typing", "Swallow non-numeric keystrokes on number properties."],
+          ["Toggle multiline list cells", "Stack list values one per line in Bases tables."],
+          ["Open Bases Toolbox settings", "Jump straight to these settings."],
+          ["Open conditional formatting rules (settings)", "Jump to the rules editor here."],
+          ["Open conditional formatting panel", "Open the rules manager in a side panel."],
+        ],
+      },
+      {
+        title: "Automatic features",
+        note: "Active in the background once enabled — no command needed.",
+        items: [
+          ["Conditional formatting", "Colors Bases rows or cells by value, per your rules."],
+          ["Number guard & digits-only typing", "Protect number properties from accidental changes."],
+          ["Multiline list cells", "Show list-property values stacked in Bases tables."],
+          ["Allowed-value dropdowns", "Pinned properties become restricted pick-lists."],
+          ["Property forks (live sync)", "A forked property recomputes whenever its source changes."],
+          ["Embed options", "Extra controls on embedded bases."],
+          ["Cell zoom", "Enlarge a focused Bases cell for easier editing."],
+          ["Auto companions", "New non-Markdown files get companion notes automatically (when enabled)."],
+        ],
+      },
+    ];
+
+    for (const g of groups) {
+      details.createEl("div", { cls: "bases-toolbox-ref-group", text: g.title });
+      if (g.note) details.createEl("div", { cls: "bases-toolbox-ref-note", text: g.note });
+      const list = details.createDiv({ cls: "bases-toolbox-ref-list" });
+      for (const [term, desc] of g.items) {
+        const item = list.createDiv({ cls: "bases-toolbox-ref-item" });
+        item.createEl("strong", { text: term });
+        item.createSpan({ text: ` — ${desc}` });
+      }
+    }
   }
 
   private saveAndPaint(): void {
@@ -659,6 +801,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       attr: { placeholder: "property" },
     });
     prop.value = rule.property;
+    attachPropertySuggest(this.plugin, prop);
     prop.addEventListener("input", () => {
       rule.property = prop.value.trim();
       this.saveAndPaint();
@@ -674,6 +817,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       attr: { placeholder: "value" },
     });
     val.value = rule.value;
+    attachValueSuggest(this.plugin, val, () => rule.property);
     const syncVal = () =>
       val.setCssStyles({ display: rule.op === "empty" || rule.op === "not-empty" ? "none" : "" });
     syncVal();
@@ -764,6 +908,15 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       this.saveAndPaint();
       this.display();
     });
+
+    // Flag a rule that duplicates the condition of an earlier one (redundant).
+    const dupOf = findDuplicateRule(rules, rule, index);
+    if (dupOf !== -1 && dupOf < index) {
+      row.addClass("bases-toolbox-cf-dup");
+      const msg = `Duplicate condition — same as rule #${dupOf + 1} above`;
+      row.setAttribute("aria-label", msg);
+      row.setAttribute("title", msg);
+    }
   }
 
   private renderCompanionExtensions(containerEl: HTMLElement): void {
@@ -847,6 +1000,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       cls: "bases-toolbox-cf-prop",
       attr: { placeholder: "property" },
     });
+    attachPropertySuggest(this.plugin, propEl);
     const opEl = row.createEl("select", { cls: "dropdown bases-toolbox-cf-op" });
     for (const [k, label] of Object.entries(OP_LABELS)) opEl.createEl("option", { value: k, text: label });
     const valEl = row.createEl("input", {
@@ -854,6 +1008,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       cls: "bases-toolbox-cf-val",
       attr: { placeholder: "value" },
     });
+    attachValueSuggest(this.plugin, valEl, () => propEl.value.trim());
     const scopeEl = row.createEl("select", { cls: "dropdown bases-toolbox-cf-scope" });
     scopeEl.createEl("option", { value: "row", text: "Row" });
     scopeEl.createEl("option", { value: "cell", text: "Cell" });
@@ -872,7 +1027,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       const property = propEl.value.trim();
       if (!property) return;
       const colorKey = colorEl.value;
-      this.plugin.settings.formatRules.push({
+      const candidate: FormatRule = {
         id: `${Date.now()}-${this.plugin.settings.formatRules.length}`,
         property,
         op: opEl.value as FormatOp,
@@ -881,7 +1036,14 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         color: colorKey,
         ...(colorKey === CUSTOM_COLOR ? { customColor: customEl.value } : {}),
         enabled: true,
-      });
+      };
+      // Refuse an exact-condition duplicate of an existing rule.
+      const dup = findDuplicateRule(this.plugin.settings.formatRules, candidate);
+      if (dup !== -1) {
+        new Notice(`That condition already exists (rule #${dup + 1}).`);
+        return;
+      }
+      this.plugin.settings.formatRules.push(candidate);
       this.saveAndPaint();
       this.display();
     });
