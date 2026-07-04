@@ -264,7 +264,12 @@ export class AllowedValuesAuditModal extends Modal {
 
   onOpen(): void {
     this.titleEl.setText("Pinned allowed-values audit");
+    this.render();
+  }
+
+  private render(): void {
     const { contentEl } = this;
+    contentEl.empty();
     const pins = Object.entries(this.plugin.settings.allowedValues);
     if (!pins.length) {
       contentEl.createDiv({
@@ -286,6 +291,24 @@ export class AllowedValuesAuditModal extends Modal {
         new Setting(contentEl)
           .setName(value)
           .setDesc(`${count} file${count === 1 ? "" : "s"} — not in the allowed list`)
+          // Adopt the offending value INTO the allowed list (it stops being a
+          // violation) — the alternative to replacing it.
+          .addButton((b) =>
+            b
+              .setButtonText("Add to allowed")
+              .setTooltip(`Add “${value}” to ${usage.name}'s allowed list`)
+              .onClick(() =>
+                void (async () => {
+                  const key = usage.name.toLowerCase();
+                  const list = this.plugin.settings.allowedValues[key] ?? [];
+                  if (!list.includes(value)) list.push(value);
+                  this.plugin.settings.allowedValues[key] = list;
+                  await this.plugin.savePluginData();
+                  new Notice(`Added “${value}” to ${usage.name}'s allowed list.`);
+                  this.render();
+                })()
+              )
+          )
           .addButton((b) =>
             b.setButtonText("Find & replace").onClick(() => {
               void openFindReplaceView(this.plugin, usage.name, value);
