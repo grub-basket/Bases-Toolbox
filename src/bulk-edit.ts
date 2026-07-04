@@ -128,7 +128,7 @@ export class BulkEditModal extends Modal {
 
     contentEl.createDiv({
       cls: "bases-toolbox-fr-warning",
-      text: "Logged in Property & Value History — the operation can be reverted from there.",
+      text: "Logged in Frontmatter (properties & values) History — the operation can be reverted from there.",
     });
 
     new Setting(contentEl).addButton((b) =>
