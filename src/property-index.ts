@@ -80,12 +80,28 @@ export class PropertyIndexView extends ItemView {
       placeholder: "Filter properties…",
       cls: "bases-toolbox-index-search",
     });
+    const clearBtn = toolbar.createSpan({
+      cls: "bases-toolbox-index-btn clickable-icon bases-toolbox-index-clear",
+    });
+    setIcon(clearBtn, "x");
+    clearBtn.setAttribute("aria-label", "Clear filter");
+    const syncClear = () => clearBtn.toggleClass("bases-toolbox-hidden", searchEl.value === "");
+    clearBtn.addEventListener("click", () => {
+      searchEl.value = "";
+      this.search = "";
+      syncClear();
+      this.renderList();
+      searchEl.focus();
+    });
     const popoutBtn = toolbar.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
     setIcon(popoutBtn, "picture-in-picture-2");
     popoutBtn.setAttribute("aria-label", "Open the property index in a main tab");
     popoutBtn.addEventListener("click", () => void this.openInMainTab());
+    searchEl.value = this.search;
+    syncClear();
     searchEl.addEventListener("input", () => {
       this.search = searchEl.value;
+      syncClear();
       this.renderList();
     });
 

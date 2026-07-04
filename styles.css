@@ -387,6 +387,9 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   flex: 1;
   margin-bottom: 0;
 }
+.bases-toolbox-hidden {
+  display: none !important;
+}
 
 .bases-toolbox-cf-sheets {
   font-size: var(--font-ui-smaller);
