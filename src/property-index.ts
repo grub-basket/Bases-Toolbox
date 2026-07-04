@@ -2,7 +2,9 @@ import { ItemView, Menu, Notice, TFile, WorkspaceLeaf, debounce, setIcon } from 
 import type BasesToolboxPlugin from "./main";
 import { PinValuesModal } from "./allowed-values";
 import { openFindReplaceView } from "./find-replace-view";
-import { PropertyUsage } from "./scan";
+import { parseReplacement, replaceIn } from "./find-replace";
+import { PropertyUsage, findKey } from "./scan";
+import { ChangeRecord } from "./types";
 import {
   ConfirmModal,
   DeleteResult,
@@ -97,49 +99,43 @@ export class PropertyIndexView extends ItemView {
       header
         .createSpan({ cls: "bases-toolbox-index-prop-count", text: String(usage.count) })
         .setAttribute("aria-label", `${usage.count} file${usage.count === 1 ? "" : "s"} have this property`);
-      const frBtn = header.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
-      setIcon(frBtn, "replace");
-      frBtn.setAttribute("aria-label", "Find & replace values");
-      frBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        void openFindReplaceView(this.plugin, usage.name);
-      });
-      const copyBtn = header.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
-      setIcon(copyBtn, "copy");
-      copyBtn.setAttribute("aria-label", "Copy property name");
-      copyBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        void navigator.clipboard.writeText(usage.name);
-      });
-      const searchBtn = header.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
-      setIcon(searchBtn, "search");
-      searchBtn.setAttribute("aria-label", "Show in All properties view");
-      searchBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        void this.openInAllProperties(usage.name);
-      });
-      const pinBtn = header.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
-      setIcon(pinBtn, "pin");
-      const pinned = !!this.plugin.settings.allowedValues[usage.name.toLowerCase()];
-      if (pinned) pinBtn.addClass("bases-toolbox-pin-active");
-      pinBtn.setAttribute(
-        "aria-label",
-        pinned ? "Allowed values pinned — edit" : "Pin allowed values"
-      );
-      pinBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        new PinValuesModal(this.plugin, usage).open();
-      });
+      // All actions are inline icons; CSS container queries collapse the
+      // lower-priority ones (`bt-extra`) into the ⋯ overflow (`bt-more`) when
+      // the panel is narrow, and show them all in the wide main-tab popout.
+      const mkIcon = (icon: string, label: string, cls: string, fn: (e: MouseEvent) => void) => {
+        const b = header.createSpan({ cls: `bases-toolbox-index-btn clickable-icon ${cls}` });
+        setIcon(b, icon);
+        b.setAttribute("aria-label", label);
+        b.addEventListener("click", (e) => {
+          e.stopPropagation();
+          fn(e);
+        });
+        return b;
+      };
 
-      // Less-common actions (open-all / rename / delete) live in a ⋯ menu so
-      // the header doesn't overflow the narrow panel.
-      const moreBtn = header.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
-      setIcon(moreBtn, "more-horizontal");
-      moreBtn.setAttribute("aria-label", "More actions (open all, rename, delete)");
-      moreBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.propertyMenu(e, usage);
-      });
+      const pinned = !!this.plugin.settings.allowedValues[usage.name.toLowerCase()];
+      mkIcon("replace", "Find & replace values", "bt-core", () =>
+        void openFindReplaceView(this.plugin, usage.name)
+      );
+      mkIcon("copy", "Copy property name", "bt-core", () => void navigator.clipboard.writeText(usage.name));
+      mkIcon("search", "Show in All properties view", "bt-extra", () =>
+        void this.openInAllProperties(usage.name)
+      );
+      const pinBtn = mkIcon(
+        "pin",
+        pinned ? "Allowed values pinned — edit" : "Pin allowed values",
+        "bt-extra",
+        () => new PinValuesModal(this.plugin, usage).open()
+      );
+      if (pinned) pinBtn.addClass("bases-toolbox-pin-active");
+      mkIcon("external-link", `Open all ${usage.count} file${usage.count === 1 ? "" : "s"} in new tabs`, "bt-extra", () =>
+        void this.openAllInTabs(usage.files)
+      );
+      mkIcon("pencil", "Rename property", "bt-extra", () => this.promptRename(usage));
+      mkIcon("trash-2", "Delete from every file", "bt-extra bases-toolbox-index-del", () =>
+        this.confirmDelete(usage.name, usage.files, "property", undefined, usage.type)
+      );
+      mkIcon("more-horizontal", "More actions", "bt-more", (e) => this.propertyMenu(e, usage));
 
       header.addEventListener("contextmenu", (e) => {
         e.preventDefault();
@@ -239,6 +235,14 @@ export class PropertyIndexView extends ItemView {
         void openFindReplaceView(this.plugin, usage.name, display);
       });
 
+      const renameValBtn = valueRow.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
+      setIcon(renameValBtn, "pencil");
+      renameValBtn.setAttribute("aria-label", `Rename this value across ${files.length} file${files.length === 1 ? "" : "s"}`);
+      renameValBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.promptRenameValue(usage, display, files);
+      });
+
       const copyValBtn = valueRow.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
       setIcon(copyValBtn, "clipboard-copy");
       copyValBtn.setAttribute("aria-label", "Copy this value");
@@ -308,7 +312,7 @@ export class PropertyIndexView extends ItemView {
     await this.app.workspace.getLeaf(sameTab ? false : "tab").openFile(file);
   }
 
-  /** ⋯ menu for a property: open-all, rename, delete. */
+  /** ⋯ menu for a property (the overflow shown when the panel is narrow). */
   private propertyMenu(e: MouseEvent, usage: PropertyUsage): void {
     const menu = new Menu();
     menu.addItem((i) =>
@@ -317,12 +321,11 @@ export class PropertyIndexView extends ItemView {
         .setIcon("external-link")
         .onClick(() => void this.openAllInTabs(usage.files))
     );
+    menu.addItem((i) => i.setTitle("Rename property…").setIcon("pencil").onClick(() => this.promptRename(usage)));
     menu.addItem((i) =>
-      i
-        .setTitle("Rename property…")
-        .setIcon("pencil")
-        .onClick(() => this.promptRename(usage))
+      i.setTitle("Show in All properties view").setIcon("search").onClick(() => void this.openInAllProperties(usage.name))
     );
+    menu.addItem((i) => i.setTitle("Pin allowed values…").setIcon("pin").onClick(() => new PinValuesModal(this.plugin, usage).open()));
     menu.addSeparator();
     menu.addItem((i) =>
       i
@@ -348,6 +351,58 @@ export class PropertyIndexView extends ItemView {
           new Notice(
             `Renamed “${usage.name}” → “${newName}” in ${renamed} file${renamed === 1 ? "" : "s"}` +
               (merged ? `, folded into an existing property in ${merged}.` : ".")
+          );
+        })(),
+    }).open();
+  }
+
+  /**
+   * Renames one value of a property across the files that hold it — e.g.
+   * status "todo" → "in progress". Reuses the find & replace value engine
+   * (list-aware, dedupes) and logs to history so it's undoable.
+   */
+  private promptRenameValue(usage: PropertyUsage, oldDisplay: string, files: TFile[]): void {
+    new PromptModal(this.plugin, {
+      title: `Rename value “${oldDisplay}”`,
+      body: `Changes “${oldDisplay}” to a new value in ${files.length} file${files.length === 1 ? "" : "s"} where “${usage.name}” has it. Undoable from history.`,
+      initial: oldDisplay,
+      confirmText: "Rename value",
+      onSubmit: (raw) =>
+        void (async () => {
+          if (raw === oldDisplay) return;
+          const replacement = parseReplacement(raw, usage.type);
+          const changes: ChangeRecord[] = [];
+          for (const file of new Set(files)) {
+            await this.app.fileManager.processFrontMatter(file, (fm) => {
+              const k = findKey(fm, usage.name);
+              if (k === null) return;
+              const { changed, value } = replaceIn(fm[k], oldDisplay, replacement);
+              if (!changed) return;
+              changes.push({
+                path: file.path,
+                property: usage.name,
+                oldValue: Array.isArray(fm[k]) ? (fm[k] as unknown[]).slice() : fm[k],
+                newValue: Array.isArray(value) ? value.slice() : value,
+              });
+              fm[k] = value;
+            });
+          }
+          if (changes.length) {
+            await this.plugin.addHistoryEntry({
+              property: usage.name,
+              find: oldDisplay,
+              replace: raw,
+              timestamp: Date.now(),
+              changes,
+              source: "property index rename value",
+            });
+          }
+          this.plugin.propertyCache.markDirty();
+          this.renderList();
+          new Notice(
+            changes.length
+              ? `Renamed “${oldDisplay}” → “${raw}” in ${changes.length} file${changes.length === 1 ? "" : "s"}.`
+              : "No files changed."
           );
         })(),
     }).open();
@@ -442,6 +497,11 @@ export class PropertyIndexView extends ItemView {
           .setTitle(`Open all ${files.length} in new tabs`)
           .setIcon("external-link")
           .onClick(() => void this.openAllInTabs(files))
+      );
+    }
+    if (value !== undefined && usage) {
+      menu.addItem((i) =>
+        i.setTitle("Rename value…").setIcon("pencil").onClick(() => this.promptRenameValue(usage, value, files))
       );
     }
     if (value !== undefined) {
