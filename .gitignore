@@ -4,3 +4,7 @@ main.js
 .DS_Store
 .deploy-target
 dev-docs/
+
+# Internal Claude working docs (session recaps, request log). Not for publishing.
+.claude/requests-log.md
+.claude/chat-history/
