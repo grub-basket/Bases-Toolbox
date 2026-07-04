@@ -8,3 +8,8 @@ dev-docs/
 # Internal Claude working docs (session recaps, request log). Not for publishing.
 .claude/requests-log.md
 .claude/chat-history/
+
+# Local dev test harness (isolated obs-dev instance; carries local vault paths).
+scripts/obs-dev
+scripts/obs-dev.mjs
+scripts/cdp.mjs
