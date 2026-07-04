@@ -15,6 +15,7 @@ import {
   scheduleRedecorate,
 } from "./conditional-format";
 import { attachPropertySuggest, attachValueSuggest } from "./suggest";
+import { installSidebarAction } from "./view-refresh";
 
 export const VIEW_TYPE_CONDITIONAL_FORMAT = "bases-toolbox-conditional-format";
 
@@ -42,6 +43,7 @@ export class ConditionalFormatView extends ItemView {
 
   async onOpen(): Promise<void> {
     this.render();
+    installSidebarAction(this);
     // Reflect edits made elsewhere (settings) when this view regains focus.
     this.registerEvent(this.app.workspace.on("layout-change", () => this.render()));
   }

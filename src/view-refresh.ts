@@ -10,6 +10,51 @@ import { ItemView, TFile, WorkspaceLeaf, debounce } from "obsidian";
  * (deletes, find & replace, forks, reverts) show live without reopening the tab.
  * Debounced (leading+trailing) to coalesce a burst of file writes.
  */
+/**
+ * Adds a "Move to sidebar" tab-header action — the inverse of "Open in a main
+ * tab". Moves the view's leaf into the right sidebar (carrying its state), or
+ * just reveals it if it's already docked in the left/right sidebar.
+ */
+export function installSidebarAction(view: ItemView): void {
+  view.addAction("sidebar-right", "Move to sidebar", () => void moveViewToSidebar(view));
+}
+
+async function moveViewToSidebar(view: ItemView): Promise<void> {
+  const ws = view.app.workspace;
+  const root = view.leaf.getRoot();
+  if (root === ws.leftSplit || root === ws.rightSplit) {
+    await ws.revealLeaf(view.leaf); // already in a sidebar
+    return;
+  }
+  const right = ws.getRightLeaf(false);
+  if (!right) return;
+  const state = view.leaf.getViewState();
+  await right.setViewState({ type: view.getViewType(), active: true, state: state.state });
+  await ws.revealLeaf(right);
+  view.leaf.detach();
+}
+
+/**
+ * Adds an "Open in a main tab" tab-header action for views that don't already
+ * have one, so a view moved into the sidebar can be brought back to a main tab.
+ */
+export function installMainTabAction(view: ItemView): void {
+  view.addAction("picture-in-picture-2", "Open in a main tab", () => void moveViewToMainTab(view));
+}
+
+async function moveViewToMainTab(view: ItemView): Promise<void> {
+  const ws = view.app.workspace;
+  if (view.leaf.getRoot() === ws.rootSplit) {
+    await ws.revealLeaf(view.leaf); // already a main tab
+    return;
+  }
+  const leaf = ws.getLeaf("tab");
+  const state = view.leaf.getViewState();
+  await leaf.setViewState({ type: view.getViewType(), active: true, state: state.state });
+  await ws.revealLeaf(leaf);
+  view.leaf.detach();
+}
+
 export function installMetadataRefresh(view: ItemView, render: () => void, debounceMs = 600): void {
   const deb = debounce(render, debounceMs, true);
   view.registerEvent(view.app.metadataCache.on("resolved", () => deb()));

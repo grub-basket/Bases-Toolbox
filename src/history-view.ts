@@ -3,7 +3,7 @@ import type BasesToolboxPlugin from "./main";
 import { changeInEffect, describeEntry, reportNotice, revertEntry } from "./history";
 import { valueToDisplay } from "./scan";
 import { HistoryEntry } from "./types";
-import { installMetadataRefresh, installRefocusRefresh, openFileFromView } from "./view-refresh";
+import { installMainTabAction, installMetadataRefresh, installRefocusRefresh, installSidebarAction, openFileFromView } from "./view-refresh";
 
 export const VIEW_TYPE_HISTORY = "bases-toolbox-history";
 
@@ -34,6 +34,8 @@ export class HistoryView extends ItemView {
 
   async onOpen(): Promise<void> {
     this.render();
+    installMainTabAction(this);
+    installSidebarAction(this);
     // Realtime refresh: a delete / find & replace / revert elsewhere writes
     // files → metadata "resolved" → the history list (and drift badges) update
     // without a close/reopen. Preserves expand/checkbox state (instance fields).

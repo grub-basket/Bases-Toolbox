@@ -4,7 +4,7 @@ import { PinValuesModal, pinViolations } from "./allowed-values";
 import { openFindReplaceView } from "./find-replace-view";
 import { parseReplacement, replaceIn } from "./find-replace";
 import { ForkTargetDeleteModal, forksTargeting } from "./property-fork";
-import { anchorViewWindow, installRefocusRefresh, openFileFromView } from "./view-refresh";
+import { anchorViewWindow, installRefocusRefresh, installSidebarAction, openFileFromView } from "./view-refresh";
 import { siftMatch } from "./sift";
 import { PropertyUsage, findKey } from "./scan";
 import { ChangeRecord } from "./types";
@@ -74,6 +74,7 @@ export class PropertyIndexView extends ItemView {
     root.addClass("bases-toolbox-index");
 
     this.addAction("picture-in-picture-2", "Open in a main tab", () => void this.openInMainTab());
+    installSidebarAction(this);
     const toolbar = root.createDiv({ cls: "bases-toolbox-index-toolbar" });
     const searchEl = toolbar.createEl("input", {
       type: "search",
