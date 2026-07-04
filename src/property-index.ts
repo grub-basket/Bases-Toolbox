@@ -3,6 +3,17 @@ import type BasesToolboxPlugin from "./main";
 import { PinValuesModal } from "./allowed-values";
 import { openFindReplaceView } from "./find-replace-view";
 import { PropertyUsage } from "./scan";
+import {
+  ConfirmModal,
+  DeleteResult,
+  PromptModal,
+  deletePropertyFromFiles,
+  notifyDeletion,
+  renamePropertyEverywhere,
+} from "./property-delete";
+
+/** Above this many, opening every file in a tab gets a confirm first. */
+const MANY_TABS = 12;
 
 export const VIEW_TYPE_PROPERTY_INDEX = "bases-toolbox-property-index";
 
@@ -120,6 +131,21 @@ export class PropertyIndexView extends ItemView {
         new PinValuesModal(this.plugin, usage).open();
       });
 
+      // Less-common actions (open-all / rename / delete) live in a ⋯ menu so
+      // the header doesn't overflow the narrow panel.
+      const moreBtn = header.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
+      setIcon(moreBtn, "more-horizontal");
+      moreBtn.setAttribute("aria-label", "More actions (open all, rename, delete)");
+      moreBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.propertyMenu(e, usage);
+      });
+
+      header.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        this.propertyMenu(e, usage);
+      });
+
       header.addEventListener("click", () => {
         if (this.expanded.has(key)) this.expanded.delete(key);
         else this.expanded.add(key);
@@ -201,7 +227,7 @@ export class PropertyIndexView extends ItemView {
         if (files.length === 1) void this.openFile(files[0], e);
         else if (files.length > 1) {
           if (!this.expandedValues.has(vkey)) toggle();
-          else this.valueContextMenu(e, files);
+          else this.valueContextMenu(e, files, usage, display);
         }
       });
 
@@ -213,9 +239,25 @@ export class PropertyIndexView extends ItemView {
         void openFindReplaceView(this.plugin, usage.name, display);
       });
 
+      const copyValBtn = valueRow.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
+      setIcon(copyValBtn, "clipboard-copy");
+      copyValBtn.setAttribute("aria-label", "Copy this value");
+      copyValBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        void navigator.clipboard.writeText(display);
+      });
+
+      const delValBtn = valueRow.createSpan({ cls: "bases-toolbox-index-btn bases-toolbox-index-del clickable-icon" });
+      setIcon(delValBtn, "trash-2");
+      delValBtn.setAttribute("aria-label", `Delete “${usage.name}” from the ${files.length} file${files.length === 1 ? "" : "s"} with this value`);
+      delValBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.confirmDelete(usage.name, files, "value", display, usage.type);
+      });
+
       valueRow.addEventListener("contextmenu", (e) => {
         e.preventDefault();
-        this.valueContextMenu(e, files);
+        this.valueContextMenu(e, files, usage, display);
       });
 
       if (this.expandedValues.has(vkey)) {
@@ -228,9 +270,16 @@ export class PropertyIndexView extends ItemView {
           openIcon.addEventListener("click", (e) => void this.openFile(f, e));
           const link = fileRow.createSpan({ cls: "bases-toolbox-index-file-link", text: f.path });
           link.addEventListener("click", (e) => void this.openFile(f, e));
+          const delFileBtn = fileRow.createSpan({ cls: "bases-toolbox-index-btn bases-toolbox-index-del clickable-icon" });
+          setIcon(delFileBtn, "trash-2");
+          delFileBtn.setAttribute("aria-label", `Delete “${usage.name}” from this file`);
+          delFileBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.confirmDelete(usage.name, [f], "file", undefined, usage.type);
+          });
           fileRow.addEventListener("contextmenu", (e) => {
             e.preventDefault();
-            this.fileContextMenu(e, f);
+            this.fileContextMenu(e, f, usage);
           });
         }
         if (files.length > MAX_FILES_SHOWN) {
@@ -249,19 +298,119 @@ export class PropertyIndexView extends ItemView {
     }
   }
 
-  /** Opens a file; cmd/ctrl/middle-click opens it in a new tab. */
+  /**
+   * Opens a file in a new tab by default (the index is a browsing surface, so
+   * clicking shouldn't replace whatever you're reading). Alt/option-click
+   * reuses the current tab for the occasional in-place open.
+   */
   private async openFile(file: TFile, e?: MouseEvent): Promise<void> {
-    const newTab = !!e && (e.ctrlKey || e.metaKey || e.button === 1);
-    await this.app.workspace.getLeaf(newTab ? "tab" : false).openFile(file);
+    const sameTab = !!e && e.altKey;
+    await this.app.workspace.getLeaf(sameTab ? false : "tab").openFile(file);
   }
 
-  private fileContextMenu(e: MouseEvent, file: TFile): void {
+  /** ⋯ menu for a property: open-all, rename, delete. */
+  private propertyMenu(e: MouseEvent, usage: PropertyUsage): void {
     const menu = new Menu();
     menu.addItem((i) =>
-      i.setTitle("Open").setIcon("file").onClick(() => void this.app.workspace.getLeaf(false).openFile(file))
+      i
+        .setTitle(`Open all ${usage.count} file${usage.count === 1 ? "" : "s"} in new tabs`)
+        .setIcon("external-link")
+        .onClick(() => void this.openAllInTabs(usage.files))
     );
     menu.addItem((i) =>
-      i.setTitle("Open in new tab").setIcon("plus").onClick(() => void this.app.workspace.getLeaf("tab").openFile(file))
+      i
+        .setTitle("Rename property…")
+        .setIcon("pencil")
+        .onClick(() => this.promptRename(usage))
+    );
+    menu.addSeparator();
+    menu.addItem((i) =>
+      i
+        .setTitle(`Delete from all ${usage.count} file${usage.count === 1 ? "" : "s"}`)
+        .setIcon("trash-2")
+        .onClick(() => this.confirmDelete(usage.name, usage.files, "property", undefined, usage.type))
+    );
+    menu.showAtMouseEvent(e);
+  }
+
+  private promptRename(usage: PropertyUsage): void {
+    new PromptModal(this.plugin, {
+      title: `Rename “${usage.name}”`,
+      body: `Renames the property across all ${usage.count} file${usage.count === 1 ? "" : "s"}. If a file already has the new name, the old value is folded away (kept value wins). Undoable from history.`,
+      initial: usage.name,
+      confirmText: "Rename",
+      onSubmit: (newName) =>
+        void (async () => {
+          if (newName.toLowerCase() === usage.name.toLowerCase()) return;
+          const { renamed, merged } = await renamePropertyEverywhere(this.plugin, usage, newName);
+          this.plugin.propertyCache.markDirty();
+          this.renderList();
+          new Notice(
+            `Renamed “${usage.name}” → “${newName}” in ${renamed} file${renamed === 1 ? "" : "s"}` +
+              (merged ? `, folded into an existing property in ${merged}.` : ".")
+          );
+        })(),
+    }).open();
+  }
+
+  /** Confirms, deletes at the given scope, then notifies with the export link. */
+  private confirmDelete(
+    name: string,
+    files: TFile[],
+    scope: "property" | "value" | "file",
+    value: string | undefined,
+    type: string | null
+  ): void {
+    const n = new Set(files).size;
+    const where =
+      scope === "file"
+        ? "this file"
+        : scope === "value"
+          ? `the ${n} file${n === 1 ? "" : "s"} with value “${value}”`
+          : `all ${n} file${n === 1 ? "" : "s"}`;
+    new ConfirmModal(this.plugin, {
+      title: `Delete “${name}”?`,
+      body: `Removes “${name}” from ${where}. Undoable from find & replace history; every removal is logged to deletions/${name}.jsonl.`,
+      confirmText: "Delete property",
+      danger: true,
+      onConfirm: () =>
+        void (async () => {
+          const result: DeleteResult = await deletePropertyFromFiles(this.plugin, name, files, { scope, value, type });
+          this.plugin.propertyCache.markDirty();
+          this.renderList();
+          if (result.count)
+            notifyDeletion(this.plugin, result, `“${name}” from ${result.count} file${result.count === 1 ? "" : "s"}`);
+          else new Notice("Nothing to delete — no files still had that property.");
+        })(),
+    }).open();
+  }
+
+  /** Opens every given file in its own new tab (confirming past a threshold). */
+  private async openAllInTabs(files: TFile[]): Promise<void> {
+    const unique = [...new Set(files)];
+    if (!unique.length) return;
+    const run = async () => {
+      for (const f of unique) await this.app.workspace.getLeaf("tab").openFile(f);
+    };
+    if (unique.length > MANY_TABS) {
+      new ConfirmModal(this.plugin, {
+        title: "Open many tabs",
+        body: `This opens ${unique.length} files, each in a new tab. Continue?`,
+        confirmText: `Open ${unique.length} tabs`,
+        onConfirm: () => void run(),
+      }).open();
+      return;
+    }
+    await run();
+  }
+
+  private fileContextMenu(e: MouseEvent, file: TFile, usage?: PropertyUsage): void {
+    const menu = new Menu();
+    menu.addItem((i) =>
+      i.setTitle("Open in new tab").setIcon("file").onClick(() => void this.app.workspace.getLeaf("tab").openFile(file))
+    );
+    menu.addItem((i) =>
+      i.setTitle("Open in current tab").setIcon("file").onClick(() => void this.app.workspace.getLeaf(false).openFile(file))
     );
     menu.addItem((i) =>
       i.setTitle("Open to the right").setIcon("separator-vertical").onClick(() => void this.app.workspace.getLeaf("split").openFile(file))
@@ -272,18 +421,50 @@ export class PropertyIndexView extends ItemView {
         .setIcon("separator-horizontal")
         .onClick(() => void this.app.workspace.getLeaf("split", "horizontal").openFile(file))
     );
+    if (usage) {
+      menu.addSeparator();
+      menu.addItem((i) =>
+        i
+          .setTitle(`Delete “${usage.name}” from this file`)
+          .setIcon("trash-2")
+          .onClick(() => this.confirmDelete(usage.name, [file], "file", undefined, usage.type))
+      );
+    }
     menu.showAtMouseEvent(e);
   }
 
-  private valueContextMenu(e: MouseEvent, files: TFile[]): void {
+  private valueContextMenu(e: MouseEvent, files: TFile[], usage?: PropertyUsage, value?: string): void {
     if (!files.length) return;
     const menu = new Menu();
+    if (files.length > 1) {
+      menu.addItem((i) =>
+        i
+          .setTitle(`Open all ${files.length} in new tabs`)
+          .setIcon("external-link")
+          .onClick(() => void this.openAllInTabs(files))
+      );
+    }
+    if (value !== undefined) {
+      menu.addItem((i) =>
+        i.setTitle("Copy value").setIcon("clipboard-copy").onClick(() => void navigator.clipboard.writeText(value))
+      );
+    }
+    menu.addSeparator();
     for (const f of files.slice(0, 20)) {
       menu.addItem((i) =>
-        i.setTitle(f.basename).setIcon("file").onClick(() => void this.app.workspace.getLeaf(false).openFile(f))
+        i.setTitle(f.basename).setIcon("file").onClick(() => void this.app.workspace.getLeaf("tab").openFile(f))
       );
     }
     if (files.length > 20) menu.addItem((i) => i.setTitle(`…and ${files.length - 20} more`).setDisabled(true));
+    if (usage) {
+      menu.addSeparator();
+      menu.addItem((i) =>
+        i
+          .setTitle(`Delete “${usage.name}” from ${files.length} file${files.length === 1 ? "" : "s"}`)
+          .setIcon("trash-2")
+          .onClick(() => this.confirmDelete(usage.name, files, "value", value, usage.type))
+      );
+    }
     menu.showAtMouseEvent(e);
   }
 
