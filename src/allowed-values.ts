@@ -93,6 +93,7 @@ export class PinValuesModal extends Modal {
           }
           this.plugin.settings.allowedValues[this.usage.name.toLowerCase()] = values;
           await this.plugin.savePluginData();
+          this.plugin.refreshPinViolationNotice();
           new Notice(`Pinned ${values.length} allowed value${values.length === 1 ? "" : "s"} for ${this.usage.name}.`);
           this.close();
         })
@@ -102,6 +103,7 @@ export class PinValuesModal extends Modal {
         b.setButtonText("Clear pin").onClick(async () => {
           delete this.plugin.settings.allowedValues[this.usage.name.toLowerCase()];
           await this.plugin.savePluginData();
+          this.plugin.refreshPinViolationNotice();
           new Notice(`Cleared the pin for ${this.usage.name}.`);
           this.close();
         })
@@ -308,6 +310,7 @@ export class AllowedValuesAuditModal extends Modal {
                   if (!list.includes(value)) list.push(value);
                   this.plugin.settings.allowedValues[key] = list;
                   await this.plugin.savePluginData();
+                  this.plugin.refreshPinViolationNotice();
                   new Notice(`Added “${value}” to ${usage.name}'s allowed list.`);
                   this.render();
                 })()

@@ -257,9 +257,11 @@ export default class BasesToolboxPlugin extends Plugin {
    * Keeps a single persistent toast in sync with pinned-value violations: shows
    * it (with an "Open audit" button) when any pinned property holds a value
    * outside its allowed list, and hides it once everything is back within the
-   * lists. Only one toast at a time, so it never nags.
+   * lists. Only one toast at a time, so it never nags. Public so pin edits
+   * (audit "Add to allowed", pin save/clear) can re-check immediately — those
+   * change settings, not metadata, so the event-driven re-check wouldn't fire.
    */
-  private refreshPinViolationNotice(): void {
+  refreshPinViolationNotice(): void {
     const violated = anyPinViolations(this);
     if (violated && !this.pinNotice) {
       const frag = createFragment((f) => {
