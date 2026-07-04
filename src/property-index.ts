@@ -135,6 +135,11 @@ export class PropertyIndexView extends ItemView {
       const row = listEl.createDiv({ cls: "bases-toolbox-index-prop" });
 
       const header = row.createDiv({ cls: "bases-toolbox-index-prop-header" });
+      // Leading twisty makes it obvious the header expands into its value list.
+      // No own click handler — it bubbles to the header's toggle below.
+      const twisty = header.createSpan({ cls: "bases-toolbox-index-twisty" });
+      setIcon(twisty, this.expanded.has(key) ? "chevron-down" : "chevron-right");
+      twisty.setAttribute("aria-label", this.expanded.has(key) ? "Collapse values" : "Expand values");
       const typeIcon = header.createSpan({ cls: "bases-toolbox-index-type-icon" });
       setIcon(typeIcon, usage.type ? TYPE_ICONS[usage.type] ?? UNTYPED_ICON : UNTYPED_ICON);
       typeIcon.setAttribute("aria-label", usage.type ?? "no assigned type");

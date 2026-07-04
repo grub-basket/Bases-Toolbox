@@ -390,6 +390,16 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
 .bases-toolbox-hidden {
   display: none !important;
 }
+.bases-toolbox-index-twisty {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  flex: 0 0 auto;
+}
+.bases-toolbox-index-twisty svg {
+  width: var(--icon-s, 16px);
+  height: var(--icon-s, 16px);
+}
 
 .bases-toolbox-cf-sheets {
   font-size: var(--font-ui-smaller);
