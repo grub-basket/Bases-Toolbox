@@ -34,6 +34,11 @@ export function installRefocusRefresh(view: ItemView, render: () => void): void 
  * Call this immediately before opening tabs from a view.
  */
 export function anchorViewWindow(view: ItemView): void {
+  // Only re-anchor for POPOUT windows. In the main window, getLeaf("tab")
+  // already opens in the main editor area — even when the view is docked in a
+  // sidebar — whereas setActiveLeaf on a sidebar leaf would make getLeaf open
+  // the note INSIDE the sidebar. A popout view has its own document.
+  if (view.containerEl.ownerDocument === document) return;
   view.app.workspace.setActiveLeaf(view.leaf, { focus: false });
 }
 
