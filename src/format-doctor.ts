@@ -325,7 +325,29 @@ export class FormatDoctorView extends ItemView {
         (invalid ? ` — ${invalid} input${invalid === 1 ? "" : "s"} still not in the expected format (marked red, files untouched)` : "") +
         (changes.length ? ". Revertible from history." : ".")
     );
-    if (!invalid) this.render();
+    if (invalid) return; // keep the red-marked inputs so the user can correct them
+    // Re-render only AFTER the metadata cache finishes reparsing the files we
+    // just wrote — otherwise scanFormatIssues() reads half-updated frontmatter
+    // and the list collapses to whatever happened to be parsed (the "shrinks to
+    // two random properties" bug). A one-shot "resolved" listener, with a
+    // timeout fallback in case the cache had already settled.
+    if (changes.length) this.renderAfterSettle();
+    else this.render();
+  }
+
+  /** Re-renders once the metadata cache has settled after our writes. */
+  private renderAfterSettle(): void {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      this.app.metadataCache.offref(ref);
+      this.plugin.propertyCache.markDirty();
+      this.render();
+    };
+    const ref = this.app.metadataCache.on("resolved", finish);
+    this.registerEvent(ref);
+    window.setTimeout(finish, 1000);
   }
 }
 
