@@ -56,11 +56,12 @@ export class HistoryView extends ItemView {
       cls: "bases-toolbox-fr-info",
       text: `${this.plugin.history.length} operation${this.plugin.history.length === 1 ? "" : "s"} logged. Reverts skip files edited since — unless forced.`,
     });
-    const forceLabel = bar.createEl("label", { cls: "bases-toolbox-fr-info" });
+    // Own line so it doesn't crowd the summary; propercased.
+    const forceLabel = root.createEl("label", { cls: "bases-toolbox-fr-info bases-toolbox-frv-force" });
     const forceCb = forceLabel.createEl("input", { type: "checkbox" });
     forceCb.checked = this.force;
     forceCb.addEventListener("change", () => (this.force = forceCb.checked));
-    forceLabel.createSpan({ text: " force-revert drifted files" });
+    forceLabel.createSpan({ text: " Force-revert drifted files" });
 
     for (const entry of [...this.plugin.history].reverse()) {
       this.renderEntry(root, entry);
