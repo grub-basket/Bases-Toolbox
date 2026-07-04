@@ -5,6 +5,7 @@ import { openFindReplaceView } from "./find-replace-view";
 import { parseReplacement, replaceIn } from "./find-replace";
 import { ForkTargetDeleteModal, forksTargeting } from "./property-fork";
 import { anchorViewWindow, installRefocusRefresh, openFileFromView } from "./view-refresh";
+import { siftMatch } from "./sift";
 import { PropertyUsage, findKey } from "./scan";
 import { ChangeRecord } from "./types";
 import {
@@ -84,7 +85,7 @@ export class PropertyIndexView extends ItemView {
     popoutBtn.setAttribute("aria-label", "Open the property index in a main tab");
     popoutBtn.addEventListener("click", () => void this.openInMainTab());
     searchEl.addEventListener("input", () => {
-      this.search = searchEl.value.toLowerCase();
+      this.search = searchEl.value;
       this.renderList();
     });
 
@@ -101,13 +102,12 @@ export class PropertyIndexView extends ItemView {
     listEl.empty();
 
     // The filter matches a property by NAME or by any of its VALUES, so you can
-    // search "in progress" and find the properties that hold it.
+    // search "in progress" and find the properties that hold it. Sift is lenient:
+    // whitespace-tokenized (all tokens must hit), and -/_/space are equivalent,
+    // so "fruit basket" matches a "fruit-basket" property.
     const q = this.search;
-    const props = this.plugin.propertyCache.get().filter(
-      (p) =>
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        [...p.values.keys()].some((v) => v.toLowerCase().includes(q))
+    const props = this.plugin.propertyCache.get().filter((p) =>
+      siftMatch(q, p.name, ...p.values.keys())
     );
     if (!props.length) {
       listEl.createDiv({ cls: "bases-toolbox-index-empty", text: "No properties found." });
@@ -178,8 +178,8 @@ export class PropertyIndexView extends ItemView {
 
       // When the search matched only a VALUE (not the name), auto-expand and
       // show just the matching values so it's clear why the property surfaced.
-      const nameHit = !q || usage.name.toLowerCase().includes(q);
-      const valueOnly = !!q && !nameHit;
+      const nameHit = siftMatch(q, usage.name);
+      const valueOnly = !!q.trim() && !nameHit;
       if (valueOnly || this.expanded.has(key)) {
         this.renderValues(row, usage, valueOnly ? q : undefined);
       }
@@ -223,7 +223,7 @@ export class PropertyIndexView extends ItemView {
   private renderValues(row: HTMLElement, usage: PropertyUsage, filter?: string): void {
     const valuesEl = row.createDiv({ cls: "bases-toolbox-index-values" });
     let sorted = [...usage.values.entries()].sort((a, b) => b[1] - a[1]);
-    if (filter) sorted = sorted.filter(([display]) => display.toLowerCase().includes(filter));
+    if (filter) sorted = sorted.filter(([display]) => siftMatch(filter, display));
     for (const [display, count] of sorted.slice(0, MAX_VALUES_SHOWN)) {
       const vkey = `${usage.name}\u0000${display}`;
       const files = usage.valueFiles.get(display) ?? [];
