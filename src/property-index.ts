@@ -3,6 +3,10 @@ import type BasesToolboxPlugin from "./main";
 import { PinValuesModal } from "./allowed-values";
 import { openFindReplaceView } from "./find-replace-view";
 import { PropertyUsage } from "./scan";
+import { ConfirmModal, deletePropertyEverywhere, notifyDeletion } from "./property-delete";
+
+/** Above this many, opening every file in a tab gets a confirm first. */
+const MANY_TABS = 12;
 
 export const VIEW_TYPE_PROPERTY_INDEX = "bases-toolbox-property-index";
 
@@ -118,6 +122,22 @@ export class PropertyIndexView extends ItemView {
       pinBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         new PinValuesModal(this.plugin, usage).open();
+      });
+
+      const openAllBtn = header.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
+      setIcon(openAllBtn, "external-link");
+      openAllBtn.setAttribute("aria-label", `Open all ${usage.count} file${usage.count === 1 ? "" : "s"} in new tabs`);
+      openAllBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        void this.openAllInTabs(usage.files);
+      });
+
+      const delBtn = header.createSpan({ cls: "bases-toolbox-index-btn bases-toolbox-index-del clickable-icon" });
+      setIcon(delBtn, "trash-2");
+      delBtn.setAttribute("aria-label", "Delete this property from every file");
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.confirmDeleteProperty(usage);
       });
 
       header.addEventListener("click", () => {
@@ -255,6 +275,46 @@ export class PropertyIndexView extends ItemView {
     await this.app.workspace.getLeaf(newTab ? "tab" : false).openFile(file);
   }
 
+  /** Opens every given file in its own new tab (confirming past a threshold). */
+  private async openAllInTabs(files: TFile[]): Promise<void> {
+    const unique = [...new Set(files)];
+    if (!unique.length) return;
+    const run = async () => {
+      for (const f of unique) await this.app.workspace.getLeaf("tab").openFile(f);
+    };
+    if (unique.length > MANY_TABS) {
+      new ConfirmModal(this.plugin, {
+        title: "Open many tabs",
+        body: `This opens ${unique.length} files, each in a new tab. Continue?`,
+        confirmText: `Open ${unique.length} tabs`,
+        onConfirm: () => void run(),
+      }).open();
+      return;
+    }
+    await run();
+  }
+
+  /** Confirms, then deletes a property from every file + writes the audit. */
+  private confirmDeleteProperty(usage: PropertyUsage): void {
+    new ConfirmModal(this.plugin, {
+      title: `Delete “${usage.name}”?`,
+      body:
+        `This removes the “${usage.name}” property from ${usage.count} file` +
+        `${usage.count === 1 ? "" : "s"}. It's undoable from the find & replace history, ` +
+        `and every removal is logged to deleted-properties.jsonl.`,
+      confirmText: "Delete property",
+      danger: true,
+      onConfirm: () =>
+        void (async () => {
+          const { count, records, absPath } = await deletePropertyEverywhere(this.plugin, usage);
+          this.plugin.propertyCache.markDirty();
+          this.renderList();
+          if (count) notifyDeletion(this.plugin, usage.name, count, absPath, records);
+          else new Notice("Nothing to delete — no files still had that property.");
+        })(),
+    }).open();
+  }
+
   private fileContextMenu(e: MouseEvent, file: TFile): void {
     const menu = new Menu();
     menu.addItem((i) =>
@@ -278,6 +338,15 @@ export class PropertyIndexView extends ItemView {
   private valueContextMenu(e: MouseEvent, files: TFile[]): void {
     if (!files.length) return;
     const menu = new Menu();
+    if (files.length > 1) {
+      menu.addItem((i) =>
+        i
+          .setTitle(`Open all ${files.length} in new tabs`)
+          .setIcon("external-link")
+          .onClick(() => void this.openAllInTabs(files))
+      );
+      menu.addSeparator();
+    }
     for (const f of files.slice(0, 20)) {
       menu.addItem((i) =>
         i.setTitle(f.basename).setIcon("file").onClick(() => void this.app.workspace.getLeaf(false).openFile(f))
