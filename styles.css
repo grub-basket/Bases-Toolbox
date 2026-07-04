@@ -431,6 +431,16 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
 .bases-toolbox-hidden {
   display: none !important;
 }
+/* Pinned-values violation toast: message on top, action button below-left. */
+.bases-toolbox-pin-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--size-4-2);
+}
+.bases-toolbox-pin-notice button {
+  margin: 0;
+}
 .bases-toolbox-index-twisty {
   display: inline-flex;
   align-items: center;

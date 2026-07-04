@@ -263,11 +263,11 @@ export default class BasesToolboxPlugin extends Plugin {
     const violated = anyPinViolations(this);
     if (violated && !this.pinNotice) {
       const frag = createFragment((f) => {
-        f.createSpan({
-          text: "Bases Toolbox: some pinned properties have values outside their allowed list. ",
+        const wrap = f.createDiv({ cls: "bases-toolbox-pin-notice" });
+        wrap.createDiv({
+          text: "Bases Toolbox: some pinned properties have values outside their allowed list.",
         });
-        const b = f.createEl("button", { text: "Open audit", cls: "mod-cta" });
-        b.style.marginLeft = "8px";
+        const b = wrap.createEl("button", { text: "Open audit", cls: "mod-cta" });
         b.addEventListener("click", () => {
           new AllowedValuesAuditModal(this).open();
           this.pinNotice?.hide();
