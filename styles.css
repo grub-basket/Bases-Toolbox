@@ -144,6 +144,41 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   box-shadow: 0 0 0 1px var(--text-error);
 }
 
+.bases-toolbox-doctor-row {
+  padding: var(--size-4-2) 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.bases-toolbox-doctor-rowhead {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  margin-bottom: var(--size-2-2);
+}
+.bases-toolbox-doctor-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--size-2-1) var(--size-4-2);
+  align-items: center;
+}
+.bases-toolbox-doctor-lbl {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.bases-toolbox-doctor-val,
+.bases-toolbox-doctor-out {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 6em;
+  overflow-y: auto;
+}
+.bases-toolbox-doctor-out-bad {
+  color: var(--text-error);
+}
+
 /* Find & replace tab view */
 .bases-toolbox-frv-bar {
   display: flex;

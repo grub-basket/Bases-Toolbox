@@ -279,24 +279,50 @@ export class FormatDoctorView extends ItemView {
       });
 
       for (const issue of group) {
-        const row = box.createDiv({ cls: "bases-toolbox-frv-row" });
-        const cb = row.createEl("input", { type: "checkbox" });
+        const row = box.createDiv({ cls: "bases-toolbox-doctor-row" });
+        const head = row.createDiv({ cls: "bases-toolbox-doctor-rowhead" });
+        const cb = head.createEl("input", { type: "checkbox" });
         cb.checked = issue.suggestion !== null;
-        const link = row.createSpan({ cls: "bases-toolbox-frv-path", text: issue.file.path });
+        const link = head.createSpan({ cls: "bases-toolbox-frv-path", text: issue.file.path });
         link.addEventListener("click", () => void openFileFromView(this, issue.file));
-        row.createSpan({
-          cls: "bases-toolbox-frv-diff",
-          text: `now: ${valueToDisplay(issue.current)}`,
-        });
-        const input = row.createEl("input", {
+
+        // Stacked current → fix → result, so long values wrap/scroll instead of
+        // fighting for one line.
+        const grid = row.createDiv({ cls: "bases-toolbox-doctor-grid" });
+        grid.createSpan({ cls: "bases-toolbox-doctor-lbl", text: "current" });
+        grid.createSpan({ cls: "bases-toolbox-doctor-val", text: valueToDisplay(issue.current) });
+        grid.createSpan({ cls: "bases-toolbox-doctor-lbl", text: "fix" });
+        const input = grid.createEl("input", {
           type: "text",
           cls: "bases-toolbox-doctor-input",
           attr: { placeholder: issue.suggestion === null ? `needs a human — e.g. ${spec.example}` : "" },
         });
         if (issue.suggestion !== null) input.value = issue.suggestion;
+        grid.createSpan({ cls: "bases-toolbox-doctor-lbl", text: "result" });
+        const outEl = grid.createSpan({ cls: "bases-toolbox-doctor-out" });
+
+        // Live preview of what the value BECOMES after parsing the fix input.
+        const previewOutput = () => {
+          const t = input.value.trim();
+          if (t === "") {
+            outEl.setText("(skipped)");
+            outEl.removeClass("bases-toolbox-doctor-out-bad");
+            return;
+          }
+          const parsed = spec.parse(t);
+          if (parsed === null || !spec.valid(parsed)) {
+            outEl.setText("(invalid)");
+            outEl.addClass("bases-toolbox-doctor-out-bad");
+            return;
+          }
+          outEl.setText(valueToDisplay(parsed));
+          outEl.removeClass("bases-toolbox-doctor-out-bad");
+        };
+        previewOutput();
         input.addEventListener("input", () => {
           cb.checked = input.value.trim() !== "";
           input.removeClass("bases-toolbox-doctor-invalid");
+          previewOutput();
         });
         this.inputs.set(issue, { cb, input });
       }
