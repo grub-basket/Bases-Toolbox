@@ -331,6 +331,17 @@ export class FormatDoctorView extends ItemView {
     const footer = root.createDiv({ cls: "bases-toolbox-frv-bar" });
     const apply = footer.createEl("button", { text: "Apply checked fixes", cls: "mod-cta" });
     apply.addEventListener("click", () => void this.apply());
+    // Select-all only checks rows that actually have a value to apply — so a
+    // needs-a-human row (empty suggestion, still blank) is skipped rather than
+    // checked-with-nothing-to-do. Deselect-all clears everything.
+    const selectAll = footer.createEl("button", { text: "Select all" });
+    selectAll.addEventListener("click", () => {
+      for (const { cb, input } of this.inputs.values()) cb.checked = input.value.trim() !== "";
+    });
+    const deselectAll = footer.createEl("button", { text: "Deselect all" });
+    deselectAll.addEventListener("click", () => {
+      for (const { cb } of this.inputs.values()) cb.checked = false;
+    });
     const rescan = footer.createEl("button", { text: "Rescan" });
     rescan.addEventListener("click", () => this.render());
   }
