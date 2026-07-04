@@ -162,10 +162,20 @@ export class PropertyIndexView extends ItemView {
         return b;
       };
 
+      // Canonical action order shared with value rows: open · replace · rename ·
+      // copy · delete (property rows add search + pin before delete).
       const pinned = !!this.plugin.settings.allowedValues[usage.name.toLowerCase()];
+      const nFiles = usage.count;
+      mkIcon(
+        "external-link",
+        `Open ${nFiles} file${nFiles === 1 ? "" : "s"} in new tabs with this property name`,
+        "bt-extra",
+        () => void this.openAllInTabs(usage.files)
+      );
       mkIcon("replace", "Find & replace values", "bt-core", () =>
         void openFindReplaceView(this.plugin, usage.name)
       );
+      mkIcon("pencil", "Rename property", "bt-extra", () => this.promptRename(usage));
       mkIcon("copy", "Copy property name", "bt-core", () => void navigator.clipboard.writeText(usage.name));
       mkIcon("search", "Show in All properties view", "bt-extra", () =>
         void this.openInAllProperties(usage.name)
@@ -177,10 +187,6 @@ export class PropertyIndexView extends ItemView {
         () => new PinValuesModal(this.plugin, usage).open()
       );
       if (pinned) pinBtn.addClass("bases-toolbox-pin-active");
-      mkIcon("external-link", `Open all ${usage.count} file${usage.count === 1 ? "" : "s"} in new tabs`, "bt-extra", () =>
-        void this.openAllInTabs(usage.files)
-      );
-      mkIcon("pencil", "Rename property", "bt-extra", () => this.promptRename(usage));
       mkIcon("trash-2", "Delete from every file", "bt-extra bases-toolbox-index-del", () =>
         this.confirmDelete(usage.name, usage.files, "property", undefined, usage.type)
       );
@@ -268,19 +274,16 @@ export class PropertyIndexView extends ItemView {
         .createSpan({ cls: "bases-toolbox-index-prop-count", text: String(count) })
         .setAttribute("aria-label", `${count} file${count === 1 ? "" : "s"} have this value`);
 
+      // Same icon set + order as property rows: open · replace · rename · copy · delete.
       const openBtn = valueRow.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
-      setIcon(openBtn, "file");
+      setIcon(openBtn, "external-link");
       openBtn.setAttribute(
         "aria-label",
-        files.length === 1 ? "Open the file with this value" : `Open a file with this value (${files.length})`
+        `Open ${files.length} file${files.length === 1 ? "" : "s"} in new tabs with this value name`
       );
       openBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (files.length === 1) void this.openFile(files[0], e);
-        else if (files.length > 1) {
-          if (!this.expandedValues.has(vkey)) toggle();
-          else this.valueContextMenu(e, files, usage, display);
-        }
+        void this.openAllInTabs(files);
       });
 
       const replBtn = valueRow.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
@@ -300,7 +303,7 @@ export class PropertyIndexView extends ItemView {
       });
 
       const copyValBtn = valueRow.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
-      setIcon(copyValBtn, "clipboard-copy");
+      setIcon(copyValBtn, "copy");
       copyValBtn.setAttribute("aria-label", "Copy this value");
       copyValBtn.addEventListener("click", (e) => {
         e.stopPropagation();
