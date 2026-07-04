@@ -1,4 +1,4 @@
-import { ItemView, TFile, debounce } from "obsidian";
+import { ItemView, TFile, WorkspaceLeaf, debounce } from "obsidian";
 
 /**
  * Shared refresh/focus helpers for the plugin's main-area + sidebar views.
@@ -13,6 +13,18 @@ import { ItemView, TFile, debounce } from "obsidian";
 export function installMetadataRefresh(view: ItemView, render: () => void, debounceMs = 600): void {
   const deb = debounce(render, debounceMs, true);
   view.registerEvent(view.app.metadataCache.on("resolved", () => deb()));
+}
+
+/**
+ * Re-render when this view's leaf regains active focus. Fixes stale/blank
+ * content on a deferred leaf that Obsidian parked while it was backgrounded.
+ */
+export function installRefocusRefresh(view: ItemView, render: () => void): void {
+  view.registerEvent(
+    view.app.workspace.on("active-leaf-change", (leaf) => {
+      if (leaf === view.leaf) render();
+    })
+  );
 }
 
 /**
@@ -33,5 +45,31 @@ export async function openFileFromView(view: ItemView, file: TFile, e?: MouseEve
   const ws = view.app.workspace;
   anchorViewWindow(view);
   const sameTab = !!e && e.altKey;
-  await ws.getLeaf(sameTab ? false : "tab").openFile(file);
+  const target = ws.getLeaf(sameTab ? false : "tab");
+  await target.openFile(file);
+  // Auto-return-focus: when the user closes the note we just opened in a new
+  // tab, bring the view back to the front. (Reusing the current tab has no
+  // separate leaf to watch, so only arm for new tabs.)
+  if (!sameTab) armReturnFocus(view, target);
+}
+
+/**
+ * Re-reveals `view` once `openedLeaf` is gone from the workspace (the user closed
+ * the note the view opened). One-shot: unregisters itself on fire. Does nothing
+ * if the view itself was closed in the meantime.
+ */
+function armReturnFocus(view: ItemView, openedLeaf: WorkspaceLeaf): void {
+  const ws = view.app.workspace;
+  const ref = ws.on("layout-change", () => {
+    let noteOpen = false;
+    let viewOpen = false;
+    ws.iterateAllLeaves((l) => {
+      if (l === openedLeaf) noteOpen = true;
+      if (l === view.leaf) viewOpen = true;
+    });
+    if (noteOpen) return; // note still open — keep waiting
+    ws.offref(ref);
+    if (viewOpen) void ws.revealLeaf(view.leaf);
+  });
+  view.registerEvent(ref);
 }

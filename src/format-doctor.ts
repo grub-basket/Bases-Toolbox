@@ -3,7 +3,7 @@ import type BasesToolboxPlugin from "./main";
 import { normalizeDate } from "./csv-core";
 import { findKey, getPropertyType, valueToDisplay } from "./scan";
 import { ChangeRecord } from "./types";
-import { openFileFromView } from "./view-refresh";
+import { installRefocusRefresh, openFileFromView } from "./view-refresh";
 
 export const VIEW_TYPE_FORMAT_DOCTOR = "bases-toolbox-format-doctor";
 
@@ -231,6 +231,9 @@ export class FormatDoctorView extends ItemView {
     this.render();
     // Keep the list correct as the cache finishes loading / as the vault changes.
     this.registerEvent(this.app.metadataCache.on("resolved", () => this.scheduleRefresh()));
+    installRefocusRefresh(this, () => {
+      if (!this.isEditing()) this.render();
+    });
   }
 
   render(): void {

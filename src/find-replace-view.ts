@@ -3,7 +3,7 @@ import type BasesToolboxPlugin from "./main";
 import { parseReplacement, replaceIn } from "./find-replace";
 import { PropertyUsage, findKey, valueToDisplay } from "./scan";
 import { ChangeRecord } from "./types";
-import { openFileFromView } from "./view-refresh";
+import { installRefocusRefresh, openFileFromView } from "./view-refresh";
 
 export const VIEW_TYPE_FIND_REPLACE = "bases-toolbox-find-replace";
 
@@ -62,6 +62,10 @@ export class FindReplaceView extends ItemView {
     root.empty();
     root.addClass("bases-toolbox-frv");
     this.renderControls();
+    // Re-render when the tab regains focus (fixes stale/blank deferred leaves).
+    // this.replace and the current property/find selections are instance fields,
+    // so an in-progress replacement value survives the re-render.
+    installRefocusRefresh(this, () => this.renderControls());
   }
 
   private usage(): PropertyUsage | undefined {

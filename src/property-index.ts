@@ -4,7 +4,7 @@ import { PinValuesModal } from "./allowed-values";
 import { openFindReplaceView } from "./find-replace-view";
 import { parseReplacement, replaceIn } from "./find-replace";
 import { ForkTargetDeleteModal, forksTargeting } from "./property-fork";
-import { anchorViewWindow, openFileFromView } from "./view-refresh";
+import { anchorViewWindow, installRefocusRefresh, openFileFromView } from "./view-refresh";
 import { PropertyUsage, findKey } from "./scan";
 import { ChangeRecord } from "./types";
 import {
@@ -92,6 +92,7 @@ export class PropertyIndexView extends ItemView {
     this.renderList();
 
     this.registerEvent(this.app.metadataCache.on("resolved", () => this.refresh()));
+    installRefocusRefresh(this, () => this.renderList());
   }
 
   private renderList(): void {

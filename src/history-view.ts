@@ -3,7 +3,7 @@ import type BasesToolboxPlugin from "./main";
 import { changeInEffect, describeEntry, reportNotice, revertEntry } from "./history";
 import { valueToDisplay } from "./scan";
 import { HistoryEntry } from "./types";
-import { installMetadataRefresh, openFileFromView } from "./view-refresh";
+import { installMetadataRefresh, installRefocusRefresh, openFileFromView } from "./view-refresh";
 
 export const VIEW_TYPE_HISTORY = "bases-toolbox-history";
 
@@ -38,6 +38,7 @@ export class HistoryView extends ItemView {
     // files → metadata "resolved" → the history list (and drift badges) update
     // without a close/reopen. Preserves expand/checkbox state (instance fields).
     installMetadataRefresh(this, () => this.render());
+    installRefocusRefresh(this, () => this.render());
   }
 
   render(): void {
