@@ -314,7 +314,7 @@ export class AllowedValuesAuditModal extends Modal {
       if (usage) {
         const u = usage;
         row.addButton((b) =>
-          b.setButtonText("Edit pin").onClick(() => new PinValuesModal(this.plugin, u).open())
+          b.setButtonText("Edit pinned values").onClick(() => new PinValuesModal(this.plugin, u).open())
         );
       }
     }
