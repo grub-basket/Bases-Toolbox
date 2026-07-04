@@ -618,3 +618,21 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   width: var(--icon-s, 16px);
   height: var(--icon-s, 16px);
 }
+
+/* Pinned allowed-values audit — flush-left property group header */
+.bases-toolbox-audit-group {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  margin: var(--size-4-3) 0 var(--size-2-1);
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+}
+.bases-toolbox-audit-group-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+.bases-toolbox-audit-group-icon svg {
+  width: var(--icon-s, 16px);
+  height: var(--icon-s, 16px);
+}

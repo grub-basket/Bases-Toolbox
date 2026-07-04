@@ -1,4 +1,4 @@
-import { Modal, Notice, Setting, TFile, parseYaml } from "obsidian";
+import { Modal, Notice, Setting, TFile, parseYaml, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { openFindReplaceView } from "./find-replace-view";
 import { PropertyUsage, findKey, valueToDisplay } from "./scan";
@@ -285,7 +285,11 @@ export class AllowedValuesAuditModal extends Modal {
       if (!usage) continue;
       const bad = [...usage.values.entries()].filter(([v]) => !allowed.includes(v));
       if (!bad.length) continue;
-      new Setting(contentEl).setName(usage.name).setHeading();
+      // Flush-left group header with a property icon (Setting().setHeading()
+      // indents it oddly against the flush value rows).
+      const head = contentEl.createDiv({ cls: "bases-toolbox-audit-group" });
+      setIcon(head.createSpan({ cls: "bases-toolbox-audit-group-icon" }), "table-properties");
+      head.createSpan({ cls: "bases-toolbox-audit-group-name", text: usage.name });
       for (const [value, count] of bad) {
         total++;
         new Setting(contentEl)
