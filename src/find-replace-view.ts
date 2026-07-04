@@ -1,8 +1,9 @@
-import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
+import { ItemView, Notice, TFile, WorkspaceLeaf } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { parseReplacement, replaceIn } from "./find-replace";
 import { PropertyUsage, findKey, valueToDisplay } from "./scan";
 import { ChangeRecord } from "./types";
+import { openFileFromView } from "./view-refresh";
 
 export const VIEW_TYPE_FIND_REPLACE = "bases-toolbox-find-replace";
 
@@ -193,7 +194,11 @@ export class FindReplaceView extends ItemView {
         this.updateApply();
       });
       const link = rowEl.createSpan({ cls: "bases-toolbox-frv-path", text: row.path });
-      link.addEventListener("click", () => void this.app.workspace.openLinkText(row.path, "", true));
+      link.addEventListener("click", () => {
+        const f = this.app.vault.getAbstractFileByPath(row.path);
+        if (f instanceof TFile) void openFileFromView(this, f);
+        else void this.app.workspace.openLinkText(row.path, "", true);
+      });
       rowEl.createSpan({ cls: "bases-toolbox-frv-diff", text: `${row.before} → ${row.after}` });
     }
     this.updateApply();

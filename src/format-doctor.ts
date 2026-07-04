@@ -3,6 +3,7 @@ import type BasesToolboxPlugin from "./main";
 import { normalizeDate } from "./csv-core";
 import { findKey, getPropertyType, valueToDisplay } from "./scan";
 import { ChangeRecord } from "./types";
+import { openFileFromView } from "./view-refresh";
 
 export const VIEW_TYPE_FORMAT_DOCTOR = "bases-toolbox-format-doctor";
 
@@ -279,9 +280,7 @@ export class FormatDoctorView extends ItemView {
         const cb = row.createEl("input", { type: "checkbox" });
         cb.checked = issue.suggestion !== null;
         const link = row.createSpan({ cls: "bases-toolbox-frv-path", text: issue.file.path });
-        link.addEventListener("click", () =>
-          void this.app.workspace.openLinkText(issue.file.path, "", true)
-        );
+        link.addEventListener("click", () => void openFileFromView(this, issue.file));
         row.createSpan({
           cls: "bases-toolbox-frv-diff",
           text: `now: ${valueToDisplay(issue.current)}`,

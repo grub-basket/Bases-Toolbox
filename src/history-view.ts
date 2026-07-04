@@ -1,9 +1,9 @@
-import { ItemView, WorkspaceLeaf } from "obsidian";
+import { ItemView, TFile, WorkspaceLeaf } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { changeInEffect, describeEntry, reportNotice, revertEntry } from "./history";
 import { valueToDisplay } from "./scan";
 import { HistoryEntry } from "./types";
-import { installMetadataRefresh } from "./view-refresh";
+import { installMetadataRefresh, openFileFromView } from "./view-refresh";
 
 export const VIEW_TYPE_HISTORY = "bases-toolbox-history";
 
@@ -99,13 +99,14 @@ export class HistoryView extends ItemView {
         if (cb.checked) checked.add(change.path);
         else checked.delete(change.path);
       });
+      const file = this.app.vault.getAbstractFileByPath(change.path);
       const link = row.createSpan({ cls: "bases-toolbox-frv-path", text: change.path });
-      link.addEventListener("click", () =>
-        void this.app.workspace.openLinkText(change.path, "", true)
-      );
+      link.addEventListener("click", () => {
+        if (file instanceof TFile) void openFileFromView(this, file);
+        else void this.app.workspace.openLinkText(change.path, "", true);
+      });
 
       // drift badge: is the operation's change still in effect for this file?
-      const file = this.app.vault.getAbstractFileByPath(change.path);
       const fm = file
         ? ((this.app.metadataCache.getFileCache(file as never)?.frontmatter ?? {}) as Record<string, unknown>)
         : null;

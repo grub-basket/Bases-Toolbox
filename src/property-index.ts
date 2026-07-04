@@ -4,6 +4,7 @@ import { PinValuesModal } from "./allowed-values";
 import { openFindReplaceView } from "./find-replace-view";
 import { parseReplacement, replaceIn } from "./find-replace";
 import { ForkTargetDeleteModal, forksTargeting } from "./property-fork";
+import { anchorViewWindow, openFileFromView } from "./view-refresh";
 import { PropertyUsage, findKey } from "./scan";
 import { ChangeRecord } from "./types";
 import {
@@ -341,8 +342,7 @@ export class PropertyIndexView extends ItemView {
    * reuses the current tab for the occasional in-place open.
    */
   private async openFile(file: TFile, e?: MouseEvent): Promise<void> {
-    const sameTab = !!e && e.altKey;
-    await this.app.workspace.getLeaf(sameTab ? false : "tab").openFile(file);
+    await openFileFromView(this, file, e);
   }
 
   /** ⋯ menu for a property (the overflow shown when the panel is narrow). */
@@ -500,6 +500,7 @@ export class PropertyIndexView extends ItemView {
     const unique = [...new Set(files)];
     if (!unique.length) return;
     const run = async () => {
+      anchorViewWindow(this);
       for (const f of unique) await this.app.workspace.getLeaf("tab").openFile(f);
     };
     if (unique.length > MANY_TABS) {
@@ -515,6 +516,7 @@ export class PropertyIndexView extends ItemView {
   }
 
   private fileContextMenu(e: MouseEvent, file: TFile, usage?: PropertyUsage): void {
+    anchorViewWindow(this); // so "open in tab/right/below" land in this view's window
     const menu = new Menu();
     menu.addItem((i) =>
       i.setTitle("Open in new tab").setIcon("file").onClick(() => void this.app.workspace.getLeaf("tab").openFile(file))
@@ -545,6 +547,7 @@ export class PropertyIndexView extends ItemView {
 
   private valueContextMenu(e: MouseEvent, files: TFile[], usage?: PropertyUsage, value?: string): void {
     if (!files.length) return;
+    anchorViewWindow(this); // popout-safe file opens
     const menu = new Menu();
     if (files.length > 1) {
       menu.addItem((i) =>
