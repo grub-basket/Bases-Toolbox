@@ -78,7 +78,11 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   background: var(--background-modifier-hover);
 }
 
-.bases-toolbox-pin-active {
+/* Enabled (pinned) properties get the accent color so they're obvious in the
+ * index; the `.bases-toolbox-index-btn` prefix matches the violation rule's
+ * specificity so it isn't overridden by the muted default icon color. */
+.bases-toolbox-index-btn.bases-toolbox-pin-active,
+.bases-toolbox-index-btn.bases-toolbox-pin-active:hover {
   color: var(--interactive-accent);
 }
 /* Forced warning red (NOT the user accent), legible in both themes, so a pin
@@ -636,3 +640,13 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   width: var(--icon-s, 16px);
   height: var(--icon-s, 16px);
 }
+
+/* Pinned allowed-values audit — section headings (flush, like the group rows) */
+.bases-toolbox-audit-section {
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+  margin: var(--size-4-4) 0 var(--size-2-2);
+  padding-bottom: var(--size-2-1);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.bases-toolbox-audit-section:first-child { margin-top: 0; }

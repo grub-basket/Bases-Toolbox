@@ -292,12 +292,46 @@ export class AllowedValuesAuditModal extends Modal {
       return;
     }
 
+    // Overview: every property that has a pin (so you don't have to hunt the
+    // index for pin icons). Violating ones are flagged; each is editable here.
+    contentEl.createDiv({ cls: "bases-toolbox-audit-section", text: `Pinned properties (${pins.length})` });
+    for (const [property, allowed] of pins) {
+      const usage = this.plugin.propertyCache.usage(property);
+      const outside = usage
+        ? [...usage.values.keys()].filter((v) => !allowed.includes(v)).length
+        : 0;
+      const row = new Setting(contentEl)
+        .setName(usage?.name ?? property)
+        .setDesc(
+          `${allowed.length} allowed value${allowed.length === 1 ? "" : "s"}` +
+            (!usage
+              ? " · not currently in the vault"
+              : outside
+                ? ` · ${outside} outside the list`
+                : " · all values OK")
+        );
+      if (outside) row.descEl.addClass("bases-toolbox-fr-warning");
+      if (usage) {
+        const u = usage;
+        row.addButton((b) =>
+          b.setButtonText("Edit pin").onClick(() => new PinValuesModal(this.plugin, u).open())
+        );
+      }
+    }
+
     let total = 0;
     for (const [property, allowed] of pins) {
       const usage = this.plugin.propertyCache.usage(property);
       if (!usage) continue;
       const bad = [...usage.values.entries()].filter(([v]) => !allowed.includes(v));
       if (!bad.length) continue;
+      // Section heading before the first violation detail group.
+      if (total === 0) {
+        contentEl.createDiv({
+          cls: "bases-toolbox-audit-section",
+          text: "Values outside their allowed lists",
+        });
+      }
       // Flush-left group header with a property icon (Setting().setHeading()
       // indents it oddly against the flush value rows).
       const head = contentEl.createDiv({ cls: "bases-toolbox-audit-group" });
