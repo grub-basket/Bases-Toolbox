@@ -17,6 +17,22 @@ import {
 /** Above this many, opening every file in a tab gets a confirm first. */
 const MANY_TABS = 12;
 
+/** Lucide icon per Obsidian property widget type (leading icon on each row). */
+const TYPE_ICONS: Record<string, string> = {
+  text: "type",
+  multitext: "list",
+  number: "hash",
+  checkbox: "square-check",
+  date: "calendar",
+  datetime: "calendar-clock",
+  tags: "tags",
+  aliases: "arrow-right-left",
+  file: "file",
+  folder: "folder",
+  property: "link",
+};
+const UNTYPED_ICON = "circle-dashed";
+
 export const VIEW_TYPE_PROPERTY_INDEX = "bases-toolbox-property-index";
 
 const MAX_VALUES_SHOWN = 100;
@@ -81,8 +97,14 @@ export class PropertyIndexView extends ItemView {
     if (!listEl) return;
     listEl.empty();
 
+    // The filter matches a property by NAME or by any of its VALUES, so you can
+    // search "in progress" and find the properties that hold it.
+    const q = this.search;
     const props = this.plugin.propertyCache.get().filter(
-      (p) => !this.search || p.name.toLowerCase().includes(this.search)
+      (p) =>
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        [...p.values.keys()].some((v) => v.toLowerCase().includes(q))
     );
     if (!props.length) {
       listEl.createDiv({ cls: "bases-toolbox-index-empty", text: "No properties found." });
@@ -94,6 +116,9 @@ export class PropertyIndexView extends ItemView {
       const row = listEl.createDiv({ cls: "bases-toolbox-index-prop" });
 
       const header = row.createDiv({ cls: "bases-toolbox-index-prop-header" });
+      const typeIcon = header.createSpan({ cls: "bases-toolbox-index-type-icon" });
+      setIcon(typeIcon, usage.type ? TYPE_ICONS[usage.type] ?? UNTYPED_ICON : UNTYPED_ICON);
+      typeIcon.setAttribute("aria-label", usage.type ?? "no assigned type");
       header.createSpan({ cls: "bases-toolbox-index-prop-name", text: usage.name });
       if (usage.type) header.createSpan({ cls: "bases-toolbox-index-prop-type", text: usage.type });
       header
@@ -148,7 +173,13 @@ export class PropertyIndexView extends ItemView {
         this.renderList();
       });
 
-      if (this.expanded.has(key)) this.renderValues(row, usage);
+      // When the search matched only a VALUE (not the name), auto-expand and
+      // show just the matching values so it's clear why the property surfaced.
+      const nameHit = !q || usage.name.toLowerCase().includes(q);
+      const valueOnly = !!q && !nameHit;
+      if (valueOnly || this.expanded.has(key)) {
+        this.renderValues(row, usage, valueOnly ? q : undefined);
+      }
     }
   }
 
@@ -186,9 +217,10 @@ export class PropertyIndexView extends ItemView {
     }
   }
 
-  private renderValues(row: HTMLElement, usage: PropertyUsage): void {
+  private renderValues(row: HTMLElement, usage: PropertyUsage, filter?: string): void {
     const valuesEl = row.createDiv({ cls: "bases-toolbox-index-values" });
-    const sorted = [...usage.values.entries()].sort((a, b) => b[1] - a[1]);
+    let sorted = [...usage.values.entries()].sort((a, b) => b[1] - a[1]);
+    if (filter) sorted = sorted.filter(([display]) => display.toLowerCase().includes(filter));
     for (const [display, count] of sorted.slice(0, MAX_VALUES_SHOWN)) {
       const vkey = `${usage.name}\u0000${display}`;
       const files = usage.valueFiles.get(display) ?? [];
