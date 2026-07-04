@@ -112,6 +112,11 @@ export class PropertyIndexView extends ItemView {
     installRefocusRefresh(this, () => this.renderList());
   }
 
+  /** Public re-render, e.g. after a pin change updates the red violation icon. */
+  refreshNow(): void {
+    this.renderList();
+  }
+
   private renderList(): void {
     const listEl = this.listEl;
     if (!listEl) return;

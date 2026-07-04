@@ -93,7 +93,7 @@ export class PinValuesModal extends Modal {
           }
           this.plugin.settings.allowedValues[this.usage.name.toLowerCase()] = values;
           await this.plugin.savePluginData();
-          this.plugin.refreshPinViolationNotice();
+          this.plugin.refreshAfterPinChange();
           new Notice(`Pinned ${values.length} allowed value${values.length === 1 ? "" : "s"} for ${this.usage.name}.`);
           this.close();
         })
@@ -103,7 +103,7 @@ export class PinValuesModal extends Modal {
         b.setButtonText("Clear pin").onClick(async () => {
           delete this.plugin.settings.allowedValues[this.usage.name.toLowerCase()];
           await this.plugin.savePluginData();
-          this.plugin.refreshPinViolationNotice();
+          this.plugin.refreshAfterPinChange();
           new Notice(`Cleared the pin for ${this.usage.name}.`);
           this.close();
         })
@@ -266,7 +266,18 @@ export class AllowedValuesAuditModal extends Modal {
 
   onOpen(): void {
     this.titleEl.setText("Pinned allowed-values audit");
+    // Suppress the violation toast while this modal is open (and hide it now if
+    // it was up), so it can't reappear behind the modal and look "stuck".
+    this.plugin.auditOpen = true;
+    this.plugin.refreshPinViolationNotice();
     this.render();
+  }
+
+  onClose(): void {
+    // Re-enable the toast, then reflect the final state in the toast + index
+    // red-pin icon, once, now that the user is done.
+    this.plugin.auditOpen = false;
+    this.plugin.refreshAfterPinChange();
   }
 
   private render(): void {
@@ -310,7 +321,9 @@ export class AllowedValuesAuditModal extends Modal {
                   if (!list.includes(value)) list.push(value);
                   this.plugin.settings.allowedValues[key] = list;
                   await this.plugin.savePluginData();
-                  this.plugin.refreshPinViolationNotice();
+                  // Don't refresh the toast per-click: re-creating it while this
+                  // modal is open (the toast handle was cleared when it opened)
+                  // makes it look "stuck". Refresh once on close instead.
                   new Notice(`Added “${value}” to ${usage.name}'s allowed list.`);
                   this.render();
                 })()

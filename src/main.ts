@@ -62,6 +62,10 @@ export default class BasesToolboxPlugin extends Plugin {
   settingTab?: BasesToolboxSettingTab;
   /** The live "pinned values violated" toast, and whether it's currently up. */
   private pinNotice: Notice | null = null;
+  /** True while the allowed-values audit modal is open — suppresses the toast
+   * (the user is actively resolving violations; a toast reappearing behind the
+   * modal reads as "stuck"). Reconciled once on close. */
+  auditOpen = false;
 
   async onload(): Promise<void> {
     await this.loadPluginData();
@@ -262,6 +266,15 @@ export default class BasesToolboxPlugin extends Plugin {
    * change settings, not metadata, so the event-driven re-check wouldn't fire.
    */
   refreshPinViolationNotice(): void {
+    // While the audit modal is open, never show the toast — the user is already
+    // resolving violations there, and a toast popping up behind it looks stuck.
+    if (this.auditOpen) {
+      if (this.pinNotice) {
+        this.pinNotice.hide();
+        this.pinNotice = null;
+      }
+      return;
+    }
     const violated = anyPinViolations(this);
     if (violated && !this.pinNotice) {
       const frag = createFragment((f) => {
@@ -280,6 +293,18 @@ export default class BasesToolboxPlugin extends Plugin {
     } else if (!violated && this.pinNotice) {
       this.pinNotice.hide();
       this.pinNotice = null;
+    }
+  }
+
+  /**
+   * Call after a settings-only pin change (audit "Add to allowed", pin
+   * save/clear). Re-checks the violation toast AND re-renders any open property
+   * index so its red pin icon updates — neither is driven by a metadata event.
+   */
+  refreshAfterPinChange(): void {
+    this.refreshPinViolationNotice();
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_PROPERTY_INDEX)) {
+      if (leaf.view instanceof PropertyIndexView) leaf.view.refreshNow();
     }
   }
 
