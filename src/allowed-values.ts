@@ -126,6 +126,9 @@ function resolveEditor(
 ): { file: TFile; property: string } | null {
   const prop = el.closest<HTMLElement>(".metadata-property");
   if (prop) {
+    // Only offer the value picker on the VALUE side of the row — never when
+    // editing the property NAME/key (the key input is its own field).
+    if (el.closest(".metadata-property-key")) return null;
     const key = prop.getAttribute("data-property-key");
     const file = plugin.app.workspace.getActiveFile();
     return key && file ? { file, property: key } : null;
