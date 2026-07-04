@@ -4,6 +4,7 @@ import { parseReplacement, replaceIn } from "./find-replace";
 import { PropertyUsage, findKey, valueToDisplay } from "./scan";
 import { ChangeRecord } from "./types";
 import { installRefocusRefresh, openFileFromView } from "./view-refresh";
+import { attachAllowedSuggest } from "./suggest";
 
 export const VIEW_TYPE_FIND_REPLACE = "bases-toolbox-find-replace";
 
@@ -120,6 +121,9 @@ export class FindReplaceView extends ItemView {
       attr: { placeholder: "New value (empty clears)" },
     });
     this.replaceInput.value = this.replace;
+    // Suggest the target property's pinned allowed values (or its existing
+    // values) so you can pick the correct replacement from the list.
+    attachAllowedSuggest(this.plugin, this.replaceInput, () => this.property);
     this.replaceInput.addEventListener("input", () => {
       this.replace = this.replaceInput?.value ?? "";
       this.refreshResults();

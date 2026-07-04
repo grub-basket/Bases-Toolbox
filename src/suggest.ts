@@ -73,3 +73,24 @@ export function attachValueSuggest(
     return usage ? [...usage.values.keys()] : [];
   });
 }
+
+/**
+ * Attaches "allowed value" autocomplete for a find & replace target: if the
+ * property tracked by `getProperty()` has PINNED allowed values, suggest those
+ * (the canonical set to replace a wrong value with); otherwise fall back to the
+ * property's existing distinct values so the box is still useful. Reads
+ * settings.allowedValues directly to avoid an import cycle with allowed-values.
+ */
+export function attachAllowedSuggest(
+  plugin: BasesToolboxPlugin,
+  inputEl: HTMLInputElement,
+  getProperty: () => string
+): ListInputSuggest {
+  return new ListInputSuggest(plugin, inputEl, () => {
+    const property = getProperty();
+    const pinned = plugin.settings.allowedValues[property.toLowerCase()];
+    if (pinned && pinned.length) return pinned;
+    const usage = plugin.propertyCache.usage(property);
+    return usage ? [...usage.values.keys()] : [];
+  });
+}
