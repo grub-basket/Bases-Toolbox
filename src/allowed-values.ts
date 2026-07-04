@@ -260,7 +260,7 @@ export class AllowedValuesAuditModal extends Modal {
   }
 
   onOpen(): void {
-    this.titleEl.setText("Allowed-values audit");
+    this.titleEl.setText("Pinned allowed-values audit");
     const { contentEl } = this;
     const pins = Object.entries(this.plugin.settings.allowedValues);
     if (!pins.length) {

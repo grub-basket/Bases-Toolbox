@@ -123,7 +123,7 @@ export default class BasesToolboxPlugin extends Plugin {
 
     this.addCommand({
       id: "audit-allowed-values",
-      name: "Audit allowed values",
+      name: "Audit pinned allowed values",
       callback: () => new AllowedValuesAuditModal(this).open(),
     });
 
@@ -755,7 +755,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           ["Find & replace history", "Open the revert log."],
           ["Convert or fork a property's format", "Normalize dates or (un)wrap wikilinks — in place or into a second property."],
           ["Property format doctor", "Open the format-inconsistency scanner."],
-          ["Audit allowed values", "Find values outside a property's pinned allowed set."],
+          ["Audit pinned allowed values", "Find values outside a property's pinned allowed set."],
           ["Compute rollup into property", "Aggregate linked notes' values into a property."],
           ["Migrate inline fields to properties", "Convert inline “key:: value” fields into frontmatter."],
           ["Merge current note into another", "Combine two notes and their properties."],
