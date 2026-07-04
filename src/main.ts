@@ -105,7 +105,7 @@ export default class BasesToolboxPlugin extends Plugin {
 
     this.addCommand({
       id: "find-replace-history",
-      name: "Find & replace history",
+      name: "Property, value & frontmatter history",
       callback: () => void openHistoryView(this),
     });
 
@@ -741,7 +741,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         items: [
           ["Property index", "Vault-wide list of every property, its values, and the files using each — also on the left ribbon (table icon)."],
           ["Find & replace", "Panel for bulk-editing a property's values across the vault."],
-          ["Find & replace history", "Browse past operations and revert them individually or in full."],
+          ["Property & Value History", "Browse past property/value/frontmatter operations and revert them individually or in full."],
           ["Property format doctor", "Scans for inconsistent value formats and helps fix them."],
           ["Conditional formatting", "Manage coloring rules in a side panel; pop out to a tab."],
         ],
@@ -752,7 +752,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         items: [
           ["Find & replace property values", "Bulk-edit one property's values vault-wide (override, or find-and-replace)."],
           ["Undo last find & replace", "Revert the most recent operation."],
-          ["Find & replace history", "Open the revert log."],
+          ["Property, value & frontmatter history", "Open the revert log."],
           ["Convert or fork a property's format", "Normalize dates or (un)wrap wikilinks — in place or into a second property."],
           ["Property format doctor", "Open the format-inconsistency scanner."],
           ["Audit pinned allowed values", "Find values outside a property's pinned allowed set."],

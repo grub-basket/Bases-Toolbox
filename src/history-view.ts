@@ -29,7 +29,7 @@ export class HistoryView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "Find & replace history";
+    return "Property & Value History";
   }
 
   async onOpen(): Promise<void> {
