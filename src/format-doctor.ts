@@ -1,4 +1,4 @@
-import { ItemView, Notice, TFile, WorkspaceLeaf } from "obsidian";
+import { ItemView, Notice, TFile, WorkspaceLeaf, debounce } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { normalizeDate } from "./csv-core";
 import { findKey, getPropertyType, valueToDisplay } from "./scan";
@@ -191,10 +191,31 @@ export class FormatDoctorView extends ItemView {
   icon = "stethoscope";
   private plugin: BasesToolboxPlugin;
   private inputs = new Map<FormatIssue, { cb: HTMLInputElement; input: HTMLInputElement }>();
+  /**
+   * Re-scan whenever the metadata cache settles. Fixes the "shows 2 of 10" bug:
+   * an initial render / Rescan / Apply can run while Obsidian is still reparsing
+   * (frontmatter reads back empty → issues vanish). Debounced, and skipped while
+   * a suggestion input is focused so it never clobbers what you're typing.
+   */
+  private scheduleRefresh = debounce(
+    () => {
+      if (this.isEditing()) return;
+      this.plugin.propertyCache.markDirty();
+      this.render();
+    },
+    400,
+    true
+  );
 
   constructor(leaf: WorkspaceLeaf, plugin: BasesToolboxPlugin) {
     super(leaf);
     this.plugin = plugin;
+  }
+
+  /** True while the user is typing in one of the suggestion inputs. */
+  private isEditing(): boolean {
+    const ae = activeDocument.activeElement;
+    return ae instanceof HTMLInputElement && ae.classList.contains("bases-toolbox-doctor-input");
   }
 
   getViewType(): string {
@@ -207,6 +228,8 @@ export class FormatDoctorView extends ItemView {
 
   async onOpen(): Promise<void> {
     this.render();
+    // Keep the list correct as the cache finishes loading / as the vault changes.
+    this.registerEvent(this.app.metadataCache.on("resolved", () => this.scheduleRefresh()));
   }
 
   render(): void {
@@ -326,28 +349,10 @@ export class FormatDoctorView extends ItemView {
         (changes.length ? ". Revertible from history." : ".")
     );
     if (invalid) return; // keep the red-marked inputs so the user can correct them
-    // Re-render only AFTER the metadata cache finishes reparsing the files we
-    // just wrote — otherwise scanFormatIssues() reads half-updated frontmatter
-    // and the list collapses to whatever happened to be parsed (the "shrinks to
-    // two random properties" bug). A one-shot "resolved" listener, with a
-    // timeout fallback in case the cache had already settled.
-    if (changes.length) this.renderAfterSettle();
-    else this.render();
-  }
-
-  /** Re-renders once the metadata cache has settled after our writes. */
-  private renderAfterSettle(): void {
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      this.app.metadataCache.offref(ref);
-      this.plugin.propertyCache.markDirty();
-      this.render();
-    };
-    const ref = this.app.metadataCache.on("resolved", finish);
-    this.registerEvent(ref);
-    window.setTimeout(finish, 1000);
+    // Our writes trigger metadata "resolved" → scheduleRefresh re-renders once
+    // the cache has settled (no more half-updated frontmatter). Also schedule
+    // directly in case "resolved" had already fired for these files.
+    this.scheduleRefresh();
   }
 }
 

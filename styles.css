@@ -535,3 +535,15 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   .bases-toolbox-index-prop-header .bt-extra { display: inline-flex; }
   .bases-toolbox-index-prop-header .bt-more { display: none; }
 }
+
+/* Property Index — leading property-type icon */
+.bases-toolbox-index-type-icon {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+.bases-toolbox-index-type-icon svg {
+  width: var(--icon-s, 16px);
+  height: var(--icon-s, 16px);
+}
