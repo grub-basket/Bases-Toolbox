@@ -1,5 +1,5 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, setIcon } from "obsidian";
-import { AllowedValuesAuditModal, installAllowedValuePicker } from "./allowed-values";
+import { App, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, debounce, setIcon } from "obsidian";
+import { AllowedValuesAuditModal, anyPinViolations, installAllowedValuePicker } from "./allowed-values";
 import { openBulkEdit } from "./bulk-edit";
 import {
   CompanionNotesModal,
@@ -60,6 +60,8 @@ export default class BasesToolboxPlugin extends Plugin {
   refreshConditionalFormatting?: () => void;
   /** The settings tab, so modals can refresh it live. Set when it mounts. */
   settingTab?: BasesToolboxSettingTab;
+  /** The live "pinned values violated" toast, and whether it's currently up. */
+  private pinNotice: Notice | null = null;
 
   async onload(): Promise<void> {
     await this.loadPluginData();
@@ -76,6 +78,12 @@ export default class BasesToolboxPlugin extends Plugin {
     this.registerEvent(this.app.metadataCache.on("changed", dirty));
     this.registerEvent(this.app.metadataCache.on("deleted", dirty));
     this.registerEvent(this.app.vault.on("rename", dirty));
+
+    // Warn (once, persistently) when a pinned property has out-of-list values,
+    // with a one-click path to the audit. Re-checked as the vault changes.
+    const checkPins = debounce(() => this.refreshPinViolationNotice(), 1500, false);
+    this.app.workspace.onLayoutReady(() => this.refreshPinViolationNotice());
+    this.registerEvent(this.app.metadataCache.on("resolved", () => checkPins()));
 
     this.registerView(VIEW_TYPE_PROPERTY_INDEX, (leaf) => new PropertyIndexView(leaf, this));
     this.registerView(VIEW_TYPE_FIND_REPLACE, (leaf) => new FindReplaceView(leaf, this));
@@ -241,6 +249,36 @@ export default class BasesToolboxPlugin extends Plugin {
 
   onunload(): void {
     activeDocument.body.removeClass("bases-toolbox-multiline-lists");
+    this.pinNotice?.hide();
+    this.pinNotice = null;
+  }
+
+  /**
+   * Keeps a single persistent toast in sync with pinned-value violations: shows
+   * it (with an "Open audit" button) when any pinned property holds a value
+   * outside its allowed list, and hides it once everything is back within the
+   * lists. Only one toast at a time, so it never nags.
+   */
+  private refreshPinViolationNotice(): void {
+    const violated = anyPinViolations(this);
+    if (violated && !this.pinNotice) {
+      const frag = createFragment((f) => {
+        f.createSpan({
+          text: "Bases Toolbox: some pinned properties have values outside their allowed list. ",
+        });
+        const b = f.createEl("button", { text: "Open audit", cls: "mod-cta" });
+        b.style.marginLeft = "8px";
+        b.addEventListener("click", () => {
+          new AllowedValuesAuditModal(this).open();
+          this.pinNotice?.hide();
+          this.pinNotice = null;
+        });
+      });
+      this.pinNotice = new Notice(frag, 0);
+    } else if (!violated && this.pinNotice) {
+      this.pinNotice.hide();
+      this.pinNotice = null;
+    }
   }
 
   applyMultilineListCells(): void {
