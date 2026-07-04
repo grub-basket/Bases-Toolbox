@@ -1,5 +1,6 @@
 import { Notice, TFile } from "obsidian";
 import type BasesToolboxPlugin from "./main";
+import { pruneDeletionAudit } from "./property-delete";
 import { findKey } from "./scan";
 import { ChangeRecord, HistoryEntry } from "./types";
 
@@ -43,6 +44,9 @@ export async function revertEntry(
   opts: RevertOptions = {}
 ): Promise<RevertReport> {
   const report: RevertReport = { restored: 0, propertyMissing: 0, valueChanged: 0, fileMissing: 0 };
+  // Paths whose deleted-property change we actually restored — used to prune the
+  // deletion audit so a restored deletion doesn't linger in the JSONL.
+  const restoredDeletions: string[] = [];
   for (const change of entry.changes) {
     if (opts.paths && !opts.paths.has(change.path)) continue;
     const file = plugin.app.vault.getAbstractFileByPath(change.path);
@@ -61,6 +65,7 @@ export async function revertEntry(
         if (key !== null) delete fm[key];
       } else if (change.deleted) {
         fm[key ?? change.property] = change.oldValue;
+        restoredDeletions.push(change.path);
       } else {
         if (key === null) {
           // force-restoring onto a renamed/removed property re-adds it
@@ -75,6 +80,10 @@ export async function revertEntry(
   // drifted files). Missing files can't be retried and don't block marking.
   if (!opts.paths && report.valueChanged + report.propertyMissing === 0) {
     entry.revertedAt = Date.now();
+  }
+  // Restoring a property-index deletion prunes its rows from the audit JSONL.
+  if (entry.source === "property index delete" && restoredDeletions.length) {
+    await pruneDeletionAudit(plugin, entry.property, entry.timestamp, new Set(restoredDeletions));
   }
   await plugin.savePluginData();
   return report;
