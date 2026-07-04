@@ -333,12 +333,15 @@ export class PropertyIndexView extends ItemView {
           openIcon.addEventListener("click", (e) => void this.openFile(f, e));
           const link = fileRow.createSpan({ cls: "bases-toolbox-index-file-link", text: f.path });
           link.addEventListener("click", (e) => void this.openFile(f, e));
-          const delFileBtn = fileRow.createSpan({ cls: "bases-toolbox-index-btn bases-toolbox-index-del clickable-icon" });
-          setIcon(delFileBtn, "trash-2");
-          delFileBtn.setAttribute("aria-label", `Delete “${usage.name}” from this file`);
-          delFileBtn.addEventListener("click", (e) => {
+          // The value already carries the trash; per file, offer the file's
+          // context menu instead (open in tab/right/below — and delete-from-file
+          // lives inside that menu) rather than a second redundant trash button.
+          const menuBtn = fileRow.createSpan({ cls: "bases-toolbox-index-btn clickable-icon" });
+          setIcon(menuBtn, "more-horizontal");
+          menuBtn.setAttribute("aria-label", "File actions (open in tab / right / below)");
+          menuBtn.addEventListener("click", (e) => {
             e.stopPropagation();
-            this.confirmDelete(usage.name, [f], "file", undefined, usage.type);
+            this.fileContextMenu(e, f, usage);
           });
           fileRow.addEventListener("contextmenu", (e) => {
             e.preventDefault();
@@ -573,13 +576,19 @@ export class PropertyIndexView extends ItemView {
   private valueContextMenu(e: MouseEvent, files: TFile[], usage?: PropertyUsage, value?: string): void {
     if (!files.length) return;
     anchorViewWindow(this); // popout-safe file opens
+    const n = files.length;
     const menu = new Menu();
-    if (files.length > 1) {
+    // Order: Open-all · Copy · Rename · Delete (Delete last). No inline file list
+    // — it could be hundreds of items; expand the value's twisty to see files.
+    menu.addItem((i) =>
+      i
+        .setTitle(`Open ${n} file${n === 1 ? "" : "s"} in new tabs with this value name`)
+        .setIcon("external-link")
+        .onClick(() => void this.openAllInTabs(files))
+    );
+    if (value !== undefined) {
       menu.addItem((i) =>
-        i
-          .setTitle(`Open all ${files.length} in new tabs`)
-          .setIcon("external-link")
-          .onClick(() => void this.openAllInTabs(files))
+        i.setTitle("Copy value").setIcon("copy").onClick(() => void navigator.clipboard.writeText(value))
       );
     }
     if (value !== undefined && usage) {
@@ -587,23 +596,10 @@ export class PropertyIndexView extends ItemView {
         i.setTitle("Rename value…").setIcon("pencil").onClick(() => this.promptRenameValue(usage, value, files))
       );
     }
-    if (value !== undefined) {
-      menu.addItem((i) =>
-        i.setTitle("Copy value").setIcon("clipboard-copy").onClick(() => void navigator.clipboard.writeText(value))
-      );
-    }
-    menu.addSeparator();
-    for (const f of files.slice(0, 20)) {
-      menu.addItem((i) =>
-        i.setTitle(f.basename).setIcon("file").onClick(() => void this.app.workspace.getLeaf("tab").openFile(f))
-      );
-    }
-    if (files.length > 20) menu.addItem((i) => i.setTitle(`…and ${files.length - 20} more`).setDisabled(true));
     if (usage) {
-      menu.addSeparator();
       menu.addItem((i) =>
         i
-          .setTitle(`Delete “${usage.name}” from ${files.length} file${files.length === 1 ? "" : "s"}`)
+          .setTitle(`Delete “${usage.name}” from ${n} file${n === 1 ? "" : "s"}`)
           .setIcon("trash-2")
           .onClick(() => this.confirmDelete(usage.name, files, "value", value, usage.type))
       );
