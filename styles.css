@@ -521,3 +521,17 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   font-size: var(--font-ui-smaller);
   white-space: pre;
 }
+
+/* Property Index — responsive header icons.
+   The list is a size-query container; low-priority icons (bt-extra) collapse
+   into the ⋯ overflow (bt-more) when the panel is narrow, and all show in the
+   wide main-tab popout. The name truncates so icons never get pushed off. */
+.bases-toolbox-index-list { container-type: inline-size; }
+.bases-toolbox-index-prop-name { min-width: 0; }
+.bases-toolbox-index-prop-header .bases-toolbox-index-btn { flex: 0 0 auto; }
+.bases-toolbox-index-prop-header .bt-extra { display: none; }
+.bases-toolbox-index-prop-header .bt-more { display: inline-flex; }
+@container (min-width: 460px) {
+  .bases-toolbox-index-prop-header .bt-extra { display: inline-flex; }
+  .bases-toolbox-index-prop-header .bt-more { display: none; }
+}
