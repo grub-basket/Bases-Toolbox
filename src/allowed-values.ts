@@ -17,6 +17,26 @@ export function allowedFor(plugin: BasesToolboxPlugin, property: string): string
   return plugin.settings.allowedValues[property.toLowerCase()] ?? null;
 }
 
+/**
+ * Values of a pinned property that fall outside its allowed list (the same test
+ * the audit uses, so the pin's red flag and the audit always agree). Empty if
+ * the property isn't pinned.
+ */
+export function pinViolations(plugin: BasesToolboxPlugin, usage: PropertyUsage): [string, number][] {
+  const allowed = allowedFor(plugin, usage.name);
+  if (!allowed) return [];
+  return [...usage.values.entries()].filter(([v]) => !allowed.includes(v));
+}
+
+/** Does any pinned property currently have a value outside its allowed list? */
+export function anyPinViolations(plugin: BasesToolboxPlugin): boolean {
+  for (const property of Object.keys(plugin.settings.allowedValues)) {
+    const usage = plugin.propertyCache.usage(property);
+    if (usage && pinViolations(plugin, usage).length) return true;
+  }
+  return false;
+}
+
 /* ---------- pin configuration ---------- */
 
 export class PinValuesModal extends Modal {

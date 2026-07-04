@@ -81,6 +81,12 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
 .bases-toolbox-pin-active {
   color: var(--interactive-accent);
 }
+/* Forced warning red (NOT the user accent), legible in both themes, so a pin
+ * with out-of-list values reads as a problem regardless of the theme accent. */
+.bases-toolbox-index-btn.bases-toolbox-pin-violation,
+.bases-toolbox-index-btn.bases-toolbox-pin-violation:hover {
+  color: var(--color-red, #e5484d) !important;
+}
 
 .bases-toolbox-pin-list {
   max-height: 240px;

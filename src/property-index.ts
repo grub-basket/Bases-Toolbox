@@ -1,6 +1,6 @@
 import { ItemView, Menu, Notice, TFile, WorkspaceLeaf, debounce, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { PinValuesModal } from "./allowed-values";
+import { PinValuesModal, pinViolations } from "./allowed-values";
 import { openFindReplaceView } from "./find-replace-view";
 import { parseReplacement, replaceIn } from "./find-replace";
 import { ForkTargetDeleteModal, forksTargeting } from "./property-fork";
@@ -180,13 +180,19 @@ export class PropertyIndexView extends ItemView {
       mkIcon("search", "Show in All properties view", "bt-extra", () =>
         void this.openInAllProperties(usage.name)
       );
+      const violations = pinned ? pinViolations(this.plugin, usage).length : 0;
       const pinBtn = mkIcon(
         "pin",
-        pinned ? "Allowed values pinned — edit" : "Pin allowed values",
+        violations
+          ? `${violations} value${violations === 1 ? "" : "s"} outside the allowed list — edit pin`
+          : pinned
+            ? "Allowed values pinned — edit"
+            : "Pin allowed values",
         "bt-extra",
         () => new PinValuesModal(this.plugin, usage).open()
       );
       if (pinned) pinBtn.addClass("bases-toolbox-pin-active");
+      if (violations) pinBtn.addClass("bases-toolbox-pin-violation");
       mkIcon("trash-2", "Delete from every file", "bt-extra bases-toolbox-index-del", () =>
         this.confirmDelete(usage.name, usage.files, "property", undefined, usage.type)
       );
