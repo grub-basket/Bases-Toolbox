@@ -480,8 +480,9 @@ export class DuplicateFinderView extends ItemView {
   async onOpen(): Promise<void> {
     const root = this.contentEl;
     root.empty();
-    root.addClass("bases-toolbox-csv-modal");
-    new DuplicateFinderPanel(this.plugin, (file) => void openFileFromView(this, file)).render(root);
+    root.addClass("bases-toolbox-csv-modal", "bases-toolbox-dup-view");
+    const inner = root.createDiv({ cls: "bases-toolbox-dup-view-inner" });
+    new DuplicateFinderPanel(this.plugin, (file) => void openFileFromView(this, file)).render(inner);
     installMainTabAction(this);
     installSidebarAction(this);
   }

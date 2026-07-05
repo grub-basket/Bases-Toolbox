@@ -119,6 +119,16 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   padding: var(--size-2-1) 0;
 }
 
+.bases-toolbox-dup-view {
+  overflow-y: auto;
+}
+
+.bases-toolbox-dup-view-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--size-4-4) var(--size-4-3);
+}
+
 .bases-toolbox-dup-link {
   flex: 1 1 auto;
   min-width: 0;
