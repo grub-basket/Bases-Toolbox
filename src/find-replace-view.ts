@@ -1,4 +1,4 @@
-import { ItemView, Notice, TFile, WorkspaceLeaf } from "obsidian";
+import { ItemView, Notice, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { parseReplacement, replaceIn } from "./find-replace";
 import { PropertyUsage, findKey, valueToDisplay } from "./scan";
@@ -79,15 +79,18 @@ export class FindReplaceView extends ItemView {
     const root = this.contentEl;
     root.empty();
 
-    const bar = root.createDiv({ cls: "bases-toolbox-frv-bar" });
-
-    bar.createSpan({ text: "Property" });
-    this.propertySel = bar.createEl("select");
     const props = this.plugin.propertyCache.get();
     if (!props.length) {
       root.createDiv({ cls: "bases-toolbox-fr-info", text: "No properties in this vault yet." });
       return;
     }
+
+    // Each part on its own row: [Property ▾], [Find ▾], "Replace with", [textbox].
+    const ctl = root.createDiv({ cls: "bases-toolbox-fr-controls" });
+
+    const propRow = ctl.createDiv({ cls: "bases-toolbox-fr-ctl-row" });
+    propRow.createSpan({ cls: "bases-toolbox-fr-ctl-label", text: "Property" });
+    this.propertySel = propRow.createEl("select", { cls: "dropdown" });
     if (!this.property) this.property = props[0].name;
     for (const p of props) {
       this.propertySel.createEl("option", { value: p.name, text: `${p.name} (${p.count})` });
@@ -99,8 +102,9 @@ export class FindReplaceView extends ItemView {
       this.renderControls();
     });
 
-    bar.createSpan({ text: "Find" });
-    this.findSel = bar.createEl("select");
+    const findRow = ctl.createDiv({ cls: "bases-toolbox-fr-ctl-row" });
+    findRow.createSpan({ cls: "bases-toolbox-fr-ctl-label", text: "Find" });
+    this.findSel = findRow.createEl("select", { cls: "dropdown" });
     const usage = this.usage();
     this.findSel.createEl("option", { value: ALL, text: `All values (${usage?.count ?? 0} files)` });
     for (const [display, count] of [...(usage?.values.entries() ?? [])].sort((a, b) => b[1] - a[1])) {
@@ -117,8 +121,9 @@ export class FindReplaceView extends ItemView {
       this.refreshResults();
     });
 
-    bar.createSpan({ text: "Replace with" });
-    this.replaceInput = bar.createEl("input", {
+    ctl.createDiv({ cls: "bases-toolbox-fr-ctl-label bases-toolbox-fr-ctl-labelrow", text: "Replace with" });
+    const replRow = ctl.createDiv({ cls: "bases-toolbox-fr-ctl-row" });
+    this.replaceInput = replRow.createEl("input", {
       type: "text",
       attr: { placeholder: "New value (empty clears)" },
     });
@@ -147,17 +152,24 @@ export class FindReplaceView extends ItemView {
     if (!usage || !results) return;
     results.empty();
 
-    // validation line (same semantics as the old modal)
+    // Validation line. Empty replacement is destructive (clears the value), so
+    // it reads as a red warning with an icon; a filled-in value tempers it back
+    // to a plain informational note.
     if (this.validateEl) {
-      if (this.replace.trim() === "") this.validateEl.setText("Empty replacement clears the value.");
-      else {
+      this.validateEl.empty();
+      const empty = this.replace.trim() === "";
+      this.validateEl.toggleClass("bases-toolbox-fr-clearwarn", empty);
+      if (empty) {
+        setIcon(this.validateEl.createSpan({ cls: "bases-toolbox-fr-warn-icon" }), "alert-triangle");
+        this.validateEl.createSpan({ text: "Empty replacement clears the value." });
+      } else {
         const display = valueToDisplay(parseReplacement(this.replace, usage.type));
         const count = usage.values.get(display) ?? 0;
-        this.validateEl.setText(
-          count
+        this.validateEl.createSpan({
+          text: count
             ? `“${display}” is an existing value of ${usage.name} (${count} file${count === 1 ? "" : "s"}) — matches will merge into it.`
-            : `“${display}” is a new value for ${usage.name}.`
-        );
+            : `“${display}” is a new value for ${usage.name}.`,
+        });
       }
     }
 
@@ -179,7 +191,7 @@ export class FindReplaceView extends ItemView {
       });
     }
 
-    const header = results.createDiv({ cls: "bases-toolbox-frv-bar" });
+    const header = results.createDiv({ cls: "bases-toolbox-frv-bar bases-toolbox-fr-summary-bar" });
     const selectAll = header.createEl("input", { type: "checkbox" });
     selectAll.checked = true;
     selectAll.addEventListener("change", () => {
@@ -190,7 +202,7 @@ export class FindReplaceView extends ItemView {
       this.updateApply();
     });
     header.createSpan({
-      cls: "bases-toolbox-fr-info",
+      cls: "bases-toolbox-fr-summary",
       text: `${this.rows.length} file${this.rows.length === 1 ? "" : "s"} will change`,
     });
 

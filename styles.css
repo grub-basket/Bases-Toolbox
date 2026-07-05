@@ -688,3 +688,45 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   color: var(--text-normal);
   border-bottom-color: var(--interactive-accent);
 }
+
+/* Find & replace — one control per row */
+.bases-toolbox-fr-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-3);
+  margin-bottom: var(--size-4-2);
+}
+.bases-toolbox-fr-ctl-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-3);
+}
+.bases-toolbox-fr-ctl-row select,
+.bases-toolbox-fr-ctl-row input[type="text"] { flex: 1; }
+.bases-toolbox-fr-ctl-label {
+  min-width: 84px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+.bases-toolbox-fr-ctl-labelrow {
+  margin-top: var(--size-2-1);
+  color: var(--text-normal);
+  font-weight: var(--font-medium);
+}
+
+/* Empty-replacement destructive warning (red + icon); tempered when filled */
+.bases-toolbox-fr-clearwarn {
+  color: var(--text-error);
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-1);
+}
+.bases-toolbox-fr-warn-icon { display: inline-flex; }
+.bases-toolbox-fr-warn-icon svg { width: var(--icon-s, 16px); height: var(--icon-s, 16px); }
+
+/* "N files will change" summary — bigger, tucked close to the list divider */
+.bases-toolbox-frv-bar.bases-toolbox-fr-summary-bar { margin-bottom: var(--size-2-1); }
+.bases-toolbox-fr-summary {
+  font-size: var(--font-ui-large);
+  font-weight: var(--font-semibold);
+}

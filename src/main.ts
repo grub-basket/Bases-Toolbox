@@ -97,13 +97,13 @@ export default class BasesToolboxPlugin extends Plugin {
 
     this.addCommand({
       id: "find-replace-property-values",
-      name: "Find & replace property values",
+      name: "Find and replace property values",
       callback: () => new PropertySuggestModal(this).open(),
     });
 
     this.addCommand({
       id: "undo-last-find-replace",
-      name: "Undo last find & replace",
+      name: "Undo last find and replace",
       callback: () => void undoLatest(this),
     });
 
