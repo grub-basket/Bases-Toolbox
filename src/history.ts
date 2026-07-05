@@ -4,7 +4,9 @@ import { pruneDeletionAudit } from "./property-delete";
 import { findKey } from "./scan";
 import { ChangeRecord, HistoryEntry } from "./types";
 
-interface RevertReport {
+export type SkipReason = "edited since" | "property missing" | "file missing" | "path reused";
+
+export interface RevertReport {
   restored: number;
   /** Property gone from the file (deleted or renamed) — left alone. */
   propertyMissing: number;
@@ -12,6 +14,8 @@ interface RevertReport {
   valueChanged: number;
   /** File deleted or moved. */
   fileMissing: number;
+  /** Every file that was NOT reverted, with why — for the UI to surface. */
+  skipped: { path: string; property: string; reason: SkipReason }[];
 }
 
 const sameValue = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
@@ -48,12 +52,13 @@ async function revertSnapshots(
   plugin: BasesToolboxPlugin,
   entry: HistoryEntry
 ): Promise<RevertReport> {
-  const report: RevertReport = { restored: 0, propertyMissing: 0, valueChanged: 0, fileMissing: 0 };
+  const report: RevertReport = { restored: 0, propertyMissing: 0, valueChanged: 0, fileMissing: 0, skipped: [] };
   for (const snap of entry.fileSnapshots ?? []) {
     const existing = plugin.app.vault.getAbstractFileByPath(snap.path);
     if (snap.kind === "removed") {
       if (existing) {
         report.fileMissing++; // path reused since the merge — don't clobber
+        report.skipped.push({ path: snap.path, property: "(note)", reason: "path reused" });
         continue;
       }
       await plugin.app.vault.create(snap.path, snap.content);
@@ -79,7 +84,7 @@ export async function revertEntry(
   opts: RevertOptions = {}
 ): Promise<RevertReport> {
   if (entry.fileSnapshots?.length) return revertSnapshots(plugin, entry);
-  const report: RevertReport = { restored: 0, propertyMissing: 0, valueChanged: 0, fileMissing: 0 };
+  const report: RevertReport = { restored: 0, propertyMissing: 0, valueChanged: 0, fileMissing: 0, skipped: [] };
   // Paths whose deleted-property change we actually restored — used to prune the
   // deletion audit so a restored deletion doesn't linger in the JSONL.
   const restoredDeletions: string[] = [];
@@ -88,13 +93,19 @@ export async function revertEntry(
     const file = plugin.app.vault.getAbstractFileByPath(change.path);
     if (!(file instanceof TFile)) {
       report.fileMissing++;
+      report.skipped.push({ path: change.path, property: change.property, reason: "file missing" });
       continue;
     }
     await plugin.app.fileManager.processFrontMatter(file, (fm) => {
       const key = findKey(fm, change.property);
       if (!opts.force && !changeInEffect(fm, change)) {
-        if (key === null && !change.deleted) report.propertyMissing++;
-        else report.valueChanged++;
+        if (key === null && !change.deleted) {
+          report.propertyMissing++;
+          report.skipped.push({ path: change.path, property: change.property, reason: "property missing" });
+        } else {
+          report.valueChanged++;
+          report.skipped.push({ path: change.path, property: change.property, reason: "edited since" });
+        }
         return;
       }
       if (change.created) {

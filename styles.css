@@ -143,6 +143,14 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   color: var(--text-faint);
 }
 
+.bases-toolbox-history-skipped {
+  margin-top: var(--size-4-2);
+  padding: var(--size-2-3);
+  border-left: 3px solid var(--color-orange);
+  background: var(--background-secondary);
+  border-radius: var(--radius-s);
+}
+
 .bases-toolbox-dup-row {
   display: flex;
   align-items: center;

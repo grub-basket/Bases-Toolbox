@@ -1,6 +1,7 @@
 import { ItemView, TFile, WorkspaceLeaf } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { changeInEffect, describeEntry, reportNotice, revertEntry } from "./history";
+import type { RevertReport, SkipReason } from "./history";
 import { valueToDisplay } from "./scan";
 import { HistoryEntry } from "./types";
 import { installMainTabAction, installMetadataRefresh, installRefocusRefresh, installSidebarAction, openFileFromView } from "./view-refresh";
@@ -18,6 +19,8 @@ export class HistoryView extends ItemView {
   private expanded = new Set<HistoryEntry>();
   private checked = new Map<HistoryEntry, Set<string>>();
   private force = false;
+  /** Result of the last revert, per entry — so skipped files stay on screen. */
+  private lastReport = new Map<HistoryEntry, RevertReport>();
 
   constructor(leaf: WorkspaceLeaf, plugin: BasesToolboxPlugin) {
     super(leaf);
@@ -147,15 +150,52 @@ export class HistoryView extends ItemView {
         btn.disabled = true;
         const paths = this.checked.get(entry) ?? new Set<string>();
         const all = paths.size === entry.changes.length;
-        reportNotice(
-          entry,
-          await revertEntry(this.plugin, entry, {
-            paths: all ? undefined : paths,
-            force: this.force,
-          })
-        );
+        const report = await revertEntry(this.plugin, entry, {
+          paths: all ? undefined : paths,
+          force: this.force,
+        });
+        this.lastReport.set(entry, report);
+        reportNotice(entry, report);
         this.render();
       })());
+    }
+
+    this.renderSkipped(box, entry);
+  }
+
+  /** After a revert, list the files that were NOT reverted (and why) so the
+   * user can open them and decide what to do — no hunting through a toast. */
+  private renderSkipped(box: HTMLElement, entry: HistoryEntry): void {
+    const report = this.lastReport.get(entry);
+    if (!report?.skipped.length) return;
+
+    const reasonText: Record<SkipReason, string> = {
+      "edited since": "edited since — left untouched",
+      "property missing": "property renamed or removed — left untouched",
+      "file missing": "file moved or deleted — nothing to revert",
+      "path reused": "a note now occupies this path — not recreated",
+    };
+
+    const panel = box.createDiv({ cls: "bases-toolbox-history-skipped" });
+    panel.createDiv({
+      cls: "bases-toolbox-fr-info",
+      text: `${report.skipped.length} file${report.skipped.length === 1 ? "" : "s"} not reverted:`,
+    });
+    for (const s of report.skipped) {
+      const row = panel.createDiv({ cls: "bases-toolbox-frv-row" });
+      const link = row.createSpan({ cls: "bases-toolbox-frv-path", text: s.path });
+      link.addEventListener("click", () => {
+        const f = this.app.vault.getAbstractFileByPath(s.path);
+        if (f instanceof TFile) void openFileFromView(this, f);
+        else void this.app.workspace.openLinkText(s.path, "", true);
+      });
+      row.createSpan({ cls: "bases-toolbox-frv-diff", text: reasonText[s.reason] });
+    }
+    if (report.skipped.some((s) => s.reason === "edited since")) {
+      panel.createDiv({
+        cls: "bases-toolbox-fr-info bases-toolbox-frv-force-help",
+        text: "“Edited since” means the property was changed again after this operation, so it was left alone to protect that newer edit. Open a file to review it — or tick “Also revert notes I've edited since the change” above and revert again to overwrite them.",
+      });
     }
   }
 
@@ -177,7 +217,10 @@ export class HistoryView extends ItemView {
       });
     }
 
-    if (entry.revertedAt) return;
+    if (entry.revertedAt) {
+      this.renderSkipped(box, entry);
+      return;
+    }
     box.createDiv({
       cls: "bases-toolbox-fr-info",
       text: "Reverting restores every note above to its pre-merge state and recreates the trashed sources. Any edits made since the merge are overwritten.",
@@ -192,9 +235,12 @@ export class HistoryView extends ItemView {
         return;
       }
       btn.disabled = true;
-      reportNotice(entry, await revertEntry(this.plugin, entry));
+      const report = await revertEntry(this.plugin, entry);
+      this.lastReport.set(entry, report);
+      reportNotice(entry, report);
       this.render();
     })());
+    this.renderSkipped(box, entry);
   }
 }
 
