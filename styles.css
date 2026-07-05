@@ -143,6 +143,17 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   color: var(--text-faint);
 }
 
+.bases-toolbox-builtin-id {
+  font-family: var(--font-monospace);
+  color: var(--text-accent);
+  cursor: pointer;
+  margin-right: var(--size-2-2);
+}
+
+.bases-toolbox-builtin-id:hover {
+  text-decoration: underline;
+}
+
 .bases-toolbox-history-risk {
   display: flex;
   align-items: baseline;

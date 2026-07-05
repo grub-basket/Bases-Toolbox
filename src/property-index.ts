@@ -36,6 +36,7 @@ export class PropertyIndexView extends ItemView {
   private search = "";
   private expanded = new Set<string>();
   private expandedValues = new Set<string>();
+  private showBuiltins = false;
   private listEl: HTMLElement | null = null;
   private refresh = debounce(() => this.renderList(), 1500, true);
 
@@ -102,10 +103,64 @@ export class PropertyIndexView extends ItemView {
     this.renderList();
   }
 
+  /** A copy-paste list of Obsidian's built-in file.* properties — the ones the
+   * Bases property menu sometimes "forgets". They're identifiers, not formulas;
+   * paste one into a base's column picker or the .base file's `order:` list. */
+  private renderBuiltins(listEl: HTMLElement): void {
+    const BUILTINS: [string, string][] = [
+      ["file.name", "note name (no extension)"],
+      ["file.ext", "file extension"],
+      ["file.path", "full path"],
+      ["file.folder", "containing folder"],
+      ["file.size", "size in bytes"],
+      ["file.ctime", "created time"],
+      ["file.mtime", "modified time"],
+      ["file.tags", "all tags (frontmatter + body)"],
+      ["file.links", "outgoing links"],
+      ["file.backlinks", "backlinks"],
+      ["file.embeds", "embeds"],
+      ["file.properties", "all frontmatter properties"],
+    ];
+
+    const box = listEl.createDiv({ cls: "bases-toolbox-index-prop bases-toolbox-builtins" });
+    const header = box.createDiv({ cls: "bases-toolbox-index-prop-header" });
+    const twisty = header.createSpan({ cls: "bases-toolbox-index-twisty" });
+    setIcon(twisty, this.showBuiltins ? "chevron-down" : "chevron-right");
+    setIcon(header.createSpan({ cls: "bases-toolbox-index-type-icon" }), "wrench");
+    header.createSpan({ cls: "bases-toolbox-index-prop-name", text: "Bases built-in properties" });
+    header.createSpan({ cls: "bases-toolbox-index-prop-count", text: String(BUILTINS.length) });
+    header.addEventListener("click", () => {
+      this.showBuiltins = !this.showBuiltins;
+      this.renderList();
+    });
+    if (!this.showBuiltins) return;
+
+    box.createDiv({
+      cls: "bases-toolbox-fr-info",
+      text: "Add these to a base when its property menu “forgets” them — they're identifiers, not formulas. Copy one, then paste it into the column picker or the .base file's order list. For a formatted/computed version, wrap it in a formula instead.",
+    });
+    const values = box.createDiv({ cls: "bases-toolbox-index-values" });
+    for (const [id, desc] of BUILTINS) {
+      const vr = values.createDiv({ cls: "bases-toolbox-index-value" });
+      const copy = vr.createSpan({ cls: "bases-toolbox-index-btn", attr: { "aria-label": `Copy “${id}”` } });
+      setIcon(copy, "copy");
+      const doCopy = () => {
+        void navigator.clipboard.writeText(id);
+        new Notice(`Copied “${id}”.`);
+      };
+      copy.addEventListener("click", doCopy);
+      const idEl = vr.createSpan({ cls: "bases-toolbox-builtin-id", text: id });
+      idEl.addEventListener("click", doCopy);
+      vr.createSpan({ cls: "bases-toolbox-index-empty", text: desc });
+    }
+  }
+
   private renderList(): void {
     const listEl = this.listEl;
     if (!listEl) return;
     listEl.empty();
+
+    this.renderBuiltins(listEl);
 
     // The filter matches a property by NAME or by any of its VALUES, so you can
     // search "in progress" and find the properties that hold it. Sift is lenient:
