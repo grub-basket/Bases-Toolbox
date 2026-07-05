@@ -1,4 +1,4 @@
-import { ItemView, TFile, WorkspaceLeaf } from "obsidian";
+import { ItemView, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { changeInEffect, describeEntry, reportNotice, revertEntry } from "./history";
 import type { RevertReport, SkipReason } from "./history";
@@ -67,6 +67,7 @@ export class HistoryView extends ItemView {
     forceCb.checked = this.force;
     forceCb.addEventListener("change", () => {
       this.force = forceCb.checked;
+      this.render(); // re-render so the per-entry risk warnings appear/disappear
     });
     forceLabel.createSpan({ text: " Also revert notes I've edited since the change" });
     root.createDiv({
@@ -79,10 +80,29 @@ export class HistoryView extends ItemView {
     }
   }
 
+  /** A data-loss warning to show in the header, or null when reverting is safe.
+   * Merges always overwrite post-merge edits; other operations only do so when
+   * "force" is on (otherwise drifted notes are skipped, not clobbered). */
+  private riskWarning(entry: HistoryEntry): string | null {
+    if (entry.revertedAt) return null; // nothing left to revert
+    if (entry.fileSnapshots?.length) return "reverting overwrites edits made after the merge";
+    if (this.force) return "force is on — reverting overwrites notes you edited since";
+    return null;
+  }
+
   private renderEntry(root: HTMLElement, entry: HistoryEntry): void {
     const box = root.createDiv({ cls: "bases-toolbox-dup-group" });
     const header = box.createDiv({ cls: "bases-toolbox-index-prop-header" });
     header.createSpan({ cls: "bases-toolbox-index-prop-name", text: describeEntry(entry) });
+    // Red risk flag right after the name: reverting THIS entry could lose data.
+    // Merges always can (whole-note restore); other ops only when force is on
+    // (otherwise notes you've edited since are safely skipped).
+    const risk = this.riskWarning(entry);
+    if (risk) {
+      const w = header.createSpan({ cls: "bases-toolbox-history-risk" });
+      setIcon(w.createSpan({ cls: "bases-toolbox-history-risk-icon" }), "alert-triangle");
+      w.createSpan({ text: risk });
+    }
     if (entry.source)
       header.createSpan({ cls: "bases-toolbox-index-prop-type", text: entry.source });
     const fileCount = entry.fileSnapshots?.length ?? entry.changes.length;

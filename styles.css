@@ -143,6 +143,25 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   color: var(--text-faint);
 }
 
+.bases-toolbox-history-risk {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2-1);
+  margin-left: var(--size-2-2);
+  color: var(--text-error);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-medium);
+}
+
+.bases-toolbox-history-risk-icon {
+  display: inline-flex;
+}
+
+.bases-toolbox-history-risk-icon .svg-icon {
+  width: var(--icon-s);
+  height: var(--icon-s);
+}
+
 .bases-toolbox-history-skipped {
   margin-top: var(--size-4-2);
   padding: var(--size-2-3);
