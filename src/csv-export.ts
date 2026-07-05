@@ -8,15 +8,22 @@ import { findKey } from "./scan";
  * unwrapped, lists joined with "; ", proper quoting — copied to the clipboard
  * and written next to the .base file. Columns follow the view's order.
  */
+type BaseView = { getViewType?: () => string; file?: TFile; controller?: { results?: unknown } };
+const isBaseView = (v: unknown): v is BaseView =>
+  !!v && (v as BaseView).getViewType?.() === "bases" && !!(v as BaseView).file;
+
 export async function exportBaseCsv(plugin: BasesToolboxPlugin): Promise<void> {
   const app = plugin.app;
-  const view = app.workspace.getActiveViewOfType(ItemView) as unknown as {
-    getViewType?: () => string;
-    file?: TFile;
-    controller?: { results?: unknown };
-  } | null;
-  if (view?.getViewType?.() !== "bases" || !view.file) {
-    new Notice("Open a base first — export works on the active base view.");
+  // Prefer the focused base, but fall back to any open base — so export works
+  // when triggered from the CSV tab / launcher / a sidebar (which leaves a
+  // non-base view focused). The success notice names the file it wrote.
+  let view: unknown = app.workspace.getActiveViewOfType(ItemView);
+  const fromActive = isBaseView(view);
+  if (!fromActive) {
+    view = app.workspace.getLeavesOfType("bases").map((l) => l.view).find(isBaseView) ?? null;
+  }
+  if (!isBaseView(view) || !view.file) {
+    new Notice("Open a base first — export works on an open base view.");
     return;
   }
   const results = view.controller?.results;
@@ -33,7 +40,9 @@ export async function exportBaseCsv(plugin: BasesToolboxPlugin): Promise<void> {
     /* fall through to default columns */
   }
   const views = Array.isArray(doc.views) ? (doc.views as Record<string, unknown>[]) : [];
-  const viewLabel = view.file
+  // The active-view toolbar tells us which named view (column order) is showing.
+  // Only meaningful when the base itself is focused; otherwise use its first view.
+  const viewLabel = fromActive
     ? activeDocument
         .querySelector(".workspace-leaf.mod-active .bases-toolbar-views-menu")
         ?.textContent?.trim()

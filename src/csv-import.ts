@@ -20,8 +20,13 @@ interface ColumnConfig {
 
 type CollisionPolicy = "suffix" | "skip" | "overwrite";
 
-export class CsvImportModal extends Modal {
+/**
+ * The CSV-import UI, rendered into any container (a modal or a workspace tab).
+ * `onDone` fires after a successful import — the modal closes; the tab stays.
+ */
+class CsvImportPanel {
   private plugin: BasesToolboxPlugin;
+  private onDone?: () => void;
   private headers: string[] = [];
   private rows: string[][] = [];
   private columns: ColumnConfig[] = [];
@@ -42,16 +47,16 @@ export class CsvImportModal extends Modal {
   private importBtn: ButtonComponent | null = null;
   private running = false;
 
-  constructor(plugin: BasesToolboxPlugin) {
-    super(plugin.app);
+  constructor(plugin: BasesToolboxPlugin, onDone?: () => void) {
     this.plugin = plugin;
+    this.onDone = onDone;
   }
 
-  onOpen(): void {
-    this.titleEl.setText("Import CSV as notes");
-    this.modalEl.addClass("bases-toolbox-csv-modal");
-    const { contentEl } = this;
+  private get app() {
+    return this.plugin.app;
+  }
 
+  render(contentEl: HTMLElement): void {
     const ta = contentEl.createEl("textarea", {
       cls: "bases-toolbox-csv-input",
       attr: { placeholder: "Paste CSV/TSV here, or pick a file below…" },
@@ -389,11 +394,33 @@ export class CsvImportModal extends Modal {
           (skipped ? `, skipped ${skipped}` : "") +
           "."
       );
-      this.close();
+      this.onDone?.();
     } catch (e) {
       new Notice(`Import failed: ${e instanceof Error ? e.message : e}`);
     } finally {
       this.running = false;
     }
+  }
+}
+
+export { CsvImportPanel };
+
+/** CSV import as a dialog — thin wrapper over the shared panel. */
+export class CsvImportModal extends Modal {
+  private plugin: BasesToolboxPlugin;
+
+  constructor(plugin: BasesToolboxPlugin) {
+    super(plugin.app);
+    this.plugin = plugin;
+  }
+
+  onOpen(): void {
+    this.titleEl.setText("Import CSV as notes");
+    this.modalEl.addClass("bases-toolbox-csv-modal");
+    new CsvImportPanel(this.plugin, () => this.close()).render(this.contentEl);
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
   }
 }

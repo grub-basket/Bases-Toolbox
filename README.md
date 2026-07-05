@@ -60,15 +60,21 @@ open bases in real time. Managed in the plugin settings or a dedicated sidebar p
 
 ### CSV import & export
 
+Open the **CSV import / export** panel from the launcher (or the "Open CSV
+import / export" command) — it hosts both, and like every panel it can live in
+the sidebar, its own tab, or a separate window. Both also have their own
+commands and the import has a standalone dialog.
+
 **Import CSV as notes**: paste or pick a CSV/TSV → per-column property name,
 type (text/number/date/boolean/list/link), include toggle, filename column →
 one note per row in a target folder, with an optional auto-created .base.
 Dates are normalized (US, European, month names, Excel serials); quoted
 fields may contain newlines.
 
-**Export base results as CSV**: the open base's current results → clean CSV
+**Export a base to CSV**: the open base's current results → clean CSV
 (wikilinks unwrapped, lists joined with ";"), copied to the clipboard and
-written next to the .base file.
+written next to the .base file. Works on the focused base, or the first open
+base when you trigger it from the panel.
 
 ### Merge notes & duplicate finder
 

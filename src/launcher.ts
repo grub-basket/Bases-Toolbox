@@ -6,6 +6,7 @@ import { VIEW_TYPE_HISTORY } from "./history-view";
 import { VIEW_TYPE_FORMAT_DOCTOR } from "./format-doctor";
 import { VIEW_TYPE_CONDITIONAL_FORMAT } from "./conditional-format-view";
 import { VIEW_TYPE_DUPLICATE_FINDER } from "./merge";
+import { VIEW_TYPE_CSV } from "./csv-view";
 
 export const VIEW_TYPE_LAUNCHER = "bases-toolbox-launcher";
 
@@ -37,6 +38,7 @@ const VIEWS: ViewFeature[] = [
   { name: "Format doctor", desc: "Fix values that don't match their type", icon: "stethoscope", type: VIEW_TYPE_FORMAT_DOCTOR },
   { name: "Conditional formatting", desc: "Color Bases rows/cells by value", icon: "paintbrush", type: VIEW_TYPE_CONDITIONAL_FORMAT },
   { name: "Find duplicate notes", desc: "Detect near-duplicate notes", icon: "copy", type: VIEW_TYPE_DUPLICATE_FINDER },
+  { name: "CSV import / export", desc: "Import a CSV as notes, or export a base", icon: "arrow-right-left", type: VIEW_TYPE_CSV },
 ];
 
 const TOOLS: ToolFeature[] = [
@@ -47,8 +49,6 @@ const TOOLS: ToolFeature[] = [
   { name: "Merge note into another", desc: "Combine two notes + their properties", icon: "merge", command: "merge-note" },
   { name: "Create companion notes", desc: "Make non-Markdown files queryable", icon: "file-plus-2", command: "companion-notes" },
   { name: "Stamp file metadata", desc: "Write created/modified into frontmatter", icon: "stamp", command: "metadata-stamp" },
-  { name: "Import CSV as notes", desc: "Turn a CSV into notes", icon: "file-down", command: "import-csv" },
-  { name: "Export base as CSV", desc: "Export the current base's results", icon: "file-up", command: "export-base-csv" },
   { name: "Bulk edit base results", desc: "Edit properties across a base's rows", icon: "square-pen", command: "bulk-edit-base-results" },
   { name: "Zoom into cell", desc: "Big editor for the focused Bases cell", icon: "maximize-2", command: "zoom-into-cell" },
   { name: "Toggle base filters", desc: "Quickly enable/disable a base's filters", icon: "filter", command: "toggle-base-filters" },

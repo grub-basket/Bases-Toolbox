@@ -181,6 +181,36 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   overflow-y: auto;
 }
 
+.bases-toolbox-csv-view {
+  overflow-y: auto;
+}
+
+.bases-toolbox-csv-view-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--size-4-4) var(--size-4-3);
+}
+
+.bases-toolbox-csv-section {
+  margin-bottom: var(--size-4-6);
+}
+
+.bases-toolbox-csv-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  font-size: var(--font-ui-medium);
+  font-weight: var(--font-medium);
+  margin-bottom: var(--size-2-3);
+  padding-bottom: var(--size-2-2);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.bases-toolbox-csv-heading-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
 .bases-toolbox-dup-view-inner {
   max-width: 720px;
   margin: 0 auto;

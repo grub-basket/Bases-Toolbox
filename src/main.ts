@@ -29,6 +29,7 @@ import {
 import { attachPropertySuggest, attachValueSuggest } from "./suggest";
 import { exportBaseCsv } from "./csv-export";
 import { CsvImportModal } from "./csv-import";
+import { CsvView, VIEW_TYPE_CSV, openCsvView } from "./csv-view";
 import { installEmbedOptions } from "./embed-options";
 import { openFilterToggle } from "./filter-toggle";
 import { ConditionalFormatView, VIEW_TYPE_CONDITIONAL_FORMAT, openConditionalFormatView } from "./conditional-format-view";
@@ -98,6 +99,7 @@ export default class BasesToolboxPlugin extends Plugin {
     this.registerView(VIEW_TYPE_CONDITIONAL_FORMAT, (leaf) => new ConditionalFormatView(leaf, this));
     this.registerView(VIEW_TYPE_LAUNCHER, (leaf) => new LauncherView(leaf, this));
     this.registerView(VIEW_TYPE_DUPLICATE_FINDER, (leaf) => new DuplicateFinderView(leaf, this));
+    this.registerView(VIEW_TYPE_CSV, (leaf) => new CsvView(leaf, this));
 
     this.addCommand({
       id: "find-replace-property-values",
@@ -187,6 +189,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "export-base-csv",
       name: "Export base results as CSV",
       callback: () => void exportBaseCsv(this),
+    });
+
+    this.addCommand({
+      id: "open-csv",
+      name: "Open CSV import / export",
+      callback: () => void openCsvView(this),
     });
 
     this.addCommand({
