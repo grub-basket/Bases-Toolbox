@@ -1,6 +1,6 @@
 import { ItemView, Notice, TFile, parseYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { toCsvCell } from "./csv-core";
+import { toCsvCell, toTsvCell } from "./csv-core";
 import { findKey } from "./scan";
 
 /**
@@ -12,20 +12,19 @@ type BaseView = { getViewType?: () => string; file?: TFile; controller?: { resul
 const isBaseView = (v: unknown): v is BaseView =>
   !!v && (v as BaseView).getViewType?.() === "bases" && !!(v as BaseView).file;
 
+/**
+ * Exports the ACTIVE base view (command path): uses the base's live results and
+ * its current column order. Errors when the focused view isn't a base — the
+ * folder-scan export (modal/tab) is the base-independent path.
+ */
 export async function exportBaseCsv(plugin: BasesToolboxPlugin): Promise<void> {
   const app = plugin.app;
-  // Prefer the focused base, but fall back to any open base — so export works
-  // when triggered from the CSV tab / launcher / a sidebar (which leaves a
-  // non-base view focused). The success notice names the file it wrote.
-  let view: unknown = app.workspace.getActiveViewOfType(ItemView);
-  const fromActive = isBaseView(view);
-  if (!fromActive) {
-    view = app.workspace.getLeavesOfType("bases").map((l) => l.view).find(isBaseView) ?? null;
-  }
+  const view = app.workspace.getActiveViewOfType(ItemView) as unknown;
   if (!isBaseView(view) || !view.file) {
-    new Notice("Open a base first — export works on an open base view.");
+    new Notice("Focus a base first — this command exports the active base view.");
     return;
   }
+  const fromActive = true;
   const results = view.controller?.results;
   if (!(results instanceof Map)) {
     new Notice("Couldn't read the base's results (Obsidian internals may have changed).");
@@ -81,4 +80,67 @@ export async function exportBaseCsv(plugin: BasesToolboxPlugin): Promise<void> {
   new Notice(
     `Exported ${files.length} rows → "${outPath}"${onClipboard ? " (also on the clipboard)" : ""}.`
   );
+}
+
+/* ---------- folder-scan export (no open base needed) ---------- */
+
+export interface FolderCsvData {
+  columns: string[];
+  rows: { name: string; fm: Record<string, unknown> }[];
+}
+
+/**
+ * Scans a folder's markdown for frontmatter and unions every key found — the
+ * approach from the standalone web exporter, but reading Obsidian's already-
+ * parsed metadata cache. Needs no base open, so it can drive a picker.
+ */
+export function scanFolderCsv(
+  plugin: BasesToolboxPlugin,
+  folderPath: string,
+  recursive: boolean
+): FolderCsvData {
+  const app = plugin.app;
+  const norm = folderPath.replace(/^\/+|\/+$/g, "");
+  const inFolder = (f: TFile): boolean => {
+    const parent = f.parent?.path === "/" ? "" : (f.parent?.path ?? "");
+    if (norm === "") return recursive ? true : parent === "";
+    return recursive ? f.path.startsWith(`${norm}/`) : parent === norm;
+  };
+  const columns: string[] = [];
+  const seen = new Set<string>();
+  const rows: { name: string; fm: Record<string, unknown> }[] = [];
+  for (const f of app.vault.getMarkdownFiles()) {
+    if (!inFolder(f)) continue;
+    const fm = (app.metadataCache.getFileCache(f)?.frontmatter ?? {}) as Record<string, unknown>;
+    for (const k of Object.keys(fm)) {
+      if (k === "position" || seen.has(k)) continue;
+      seen.add(k);
+      columns.push(k);
+    }
+    rows.push({ name: f.basename, fm });
+  }
+  return { columns, rows };
+}
+
+/** Renders scanned rows as CSV (comma) or, for "Copy for Excel", TSV (tab). */
+export function folderCsvToText(data: FolderCsvData, delim: "," | "\t"): string {
+  const cell = delim === "," ? toCsvCell : toTsvCell;
+  const lines = [["file name", ...data.columns].map(cell).join(delim)];
+  for (const row of data.rows) {
+    lines.push([cell(row.name), ...data.columns.map((k) => cell(row.fm[k] ?? ""))].join(delim));
+  }
+  return lines.join("\n");
+}
+
+/** All folder paths that contain markdown (for the export picker), root first. */
+export function folderPaths(plugin: BasesToolboxPlugin): string[] {
+  const set = new Set<string>();
+  for (const f of plugin.app.vault.getMarkdownFiles()) {
+    let p = f.parent;
+    while (p && p.path && p.path !== "/") {
+      set.add(p.path);
+      p = p.parent;
+    }
+  }
+  return ["/", ...[...set].sort((a, b) => a.localeCompare(b))];
 }

@@ -144,13 +144,14 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
 }
 
 .bases-toolbox-history-risk {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  align-items: baseline;
   gap: var(--size-2-1);
-  margin-left: var(--size-2-2);
+  margin: var(--size-2-1) 0 var(--size-2-2);
   color: var(--text-error);
   font-size: var(--font-ui-smaller);
   font-weight: var(--font-medium);
+  overflow-wrap: anywhere;
 }
 
 .bases-toolbox-history-risk-icon {
@@ -189,6 +190,58 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   max-width: 900px;
   margin: 0 auto;
   padding: var(--size-4-4) var(--size-4-3);
+  container-type: inline-size;
+}
+
+/* In a narrow pane (sidebar), stack each Setting so the label isn't crushed to
+   one character per line — the control drops below and fills the width. */
+@container (max-width: 420px) {
+  .bases-toolbox-csv-view-inner .setting-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--size-2-2);
+  }
+  .bases-toolbox-csv-view-inner .setting-item-info {
+    margin-right: 0;
+  }
+  .bases-toolbox-csv-view-inner .setting-item-control {
+    justify-content: flex-start;
+  }
+  .bases-toolbox-csv-view-inner .setting-item-control input[type="text"],
+  .bases-toolbox-csv-view-inner .setting-item-control textarea {
+    width: 100%;
+  }
+}
+
+.bases-toolbox-export-table-wrap {
+  overflow: auto;
+  max-height: 340px;
+  margin: var(--size-2-3) 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+}
+
+.bases-toolbox-export-table {
+  border-collapse: collapse;
+  font-size: var(--font-ui-smaller);
+}
+
+.bases-toolbox-export-table th,
+.bases-toolbox-export-table td {
+  padding: var(--size-2-1) var(--size-2-3);
+  border-bottom: 1px solid var(--background-modifier-border);
+  text-align: left;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bases-toolbox-export-table th {
+  position: sticky;
+  top: 0;
+  background: var(--background-secondary);
+  color: var(--text-muted);
 }
 
 .bases-toolbox-csv-section {
@@ -413,24 +466,31 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
 
 .bases-toolbox-frv-row {
   display: flex;
-  align-items: center;
-  gap: var(--size-2-3);
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--size-2-3);
+  row-gap: var(--size-2-1);
   padding: var(--size-2-2) 0;
   border-bottom: 1px solid var(--background-modifier-border);
   font-size: var(--font-ui-small);
 }
 
+/* Long paths/changes wrap instead of colliding with the text on the right. */
 .bases-toolbox-frv-path {
+  flex: 1 1 55%;
+  min-width: 0;
   color: var(--text-accent);
   cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .bases-toolbox-frv-diff {
-  color: var(--text-muted);
+  flex: 1 1 auto;
   margin-left: auto;
+  min-width: 0;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 

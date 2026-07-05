@@ -193,7 +193,7 @@ export function countAmbiguousDates(values: string[]): number {
 }
 
 /** Serializes one CSV cell for export: quote when needed, strip wikilinks. */
-export function toCsvCell(value: unknown): string {
+function toDelimitedCell(value: unknown, delim: "," | "\t"): string {
   let s: string;
   if (value === null || value === undefined) s = "";
   else if (Array.isArray(value)) s = value.map((v) => cleanValue(String(v))).join("; ");
@@ -204,7 +204,17 @@ export function toCsvCell(value: unknown): string {
   if (/^[=+@\t\r]/.test(s) || (s.startsWith("-") && !/^-\d*\.?\d+$/.test(s))) {
     s = "'" + s;
   }
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const needsQuote = delim === "," ? /[",\n]/ : /["\t\n]/;
+  return needsQuote.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+export function toCsvCell(value: unknown): string {
+  return toDelimitedCell(value, ",");
+}
+
+/** Same cleaning/quoting as toCsvCell but tab-delimited — for "Copy for Excel". */
+export function toTsvCell(value: unknown): string {
+  return toDelimitedCell(value, "\t");
 }
 
 /** Unwraps [[wikilinks]] (keeping aliases) to plain text. */

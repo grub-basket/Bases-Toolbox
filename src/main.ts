@@ -29,7 +29,8 @@ import {
 import { attachPropertySuggest, attachValueSuggest } from "./suggest";
 import { exportBaseCsv } from "./csv-export";
 import { CsvImportModal } from "./csv-import";
-import { CsvView, VIEW_TYPE_CSV, openCsvView } from "./csv-view";
+import { CsvImportView, VIEW_TYPE_CSV_IMPORT, openCsvImportView } from "./csv-import-view";
+import { CsvExportModal, CsvExportView, VIEW_TYPE_CSV_EXPORT, openCsvExportView } from "./csv-export-view";
 import { installEmbedOptions } from "./embed-options";
 import { openFilterToggle } from "./filter-toggle";
 import { ConditionalFormatView, VIEW_TYPE_CONDITIONAL_FORMAT, openConditionalFormatView } from "./conditional-format-view";
@@ -99,7 +100,8 @@ export default class BasesToolboxPlugin extends Plugin {
     this.registerView(VIEW_TYPE_CONDITIONAL_FORMAT, (leaf) => new ConditionalFormatView(leaf, this));
     this.registerView(VIEW_TYPE_LAUNCHER, (leaf) => new LauncherView(leaf, this));
     this.registerView(VIEW_TYPE_DUPLICATE_FINDER, (leaf) => new DuplicateFinderView(leaf, this));
-    this.registerView(VIEW_TYPE_CSV, (leaf) => new CsvView(leaf, this));
+    this.registerView(VIEW_TYPE_CSV_IMPORT, (leaf) => new CsvImportView(leaf, this));
+    this.registerView(VIEW_TYPE_CSV_EXPORT, (leaf) => new CsvExportView(leaf, this));
 
     this.addCommand({
       id: "find-replace-property-values",
@@ -181,20 +183,32 @@ export default class BasesToolboxPlugin extends Plugin {
 
     this.addCommand({
       id: "import-csv",
-      name: "Import CSV as notes",
+      name: "Import CSV as notes (dialog)",
       callback: () => new CsvImportModal(this).open(),
     });
 
     this.addCommand({
+      id: "open-csv-import",
+      name: "Import CSV as notes (tab)",
+      callback: () => void openCsvImportView(this),
+    });
+
+    this.addCommand({
       id: "export-base-csv",
-      name: "Export base results as CSV",
+      name: "Export active base results as CSV",
       callback: () => void exportBaseCsv(this),
     });
 
     this.addCommand({
-      id: "open-csv",
-      name: "Open CSV import / export",
-      callback: () => void openCsvView(this),
+      id: "export-folder-csv",
+      name: "Export a folder to CSV (dialog)",
+      callback: () => new CsvExportModal(this).open(),
+    });
+
+    this.addCommand({
+      id: "open-csv-export",
+      name: "Export a folder to CSV (tab)",
+      callback: () => void openCsvExportView(this),
     });
 
     this.addCommand({

@@ -6,7 +6,8 @@ import { VIEW_TYPE_HISTORY } from "./history-view";
 import { VIEW_TYPE_FORMAT_DOCTOR } from "./format-doctor";
 import { VIEW_TYPE_CONDITIONAL_FORMAT } from "./conditional-format-view";
 import { VIEW_TYPE_DUPLICATE_FINDER } from "./merge";
-import { VIEW_TYPE_CSV } from "./csv-view";
+import { VIEW_TYPE_CSV_IMPORT } from "./csv-import-view";
+import { VIEW_TYPE_CSV_EXPORT } from "./csv-export-view";
 
 export const VIEW_TYPE_LAUNCHER = "bases-toolbox-launcher";
 
@@ -38,7 +39,8 @@ const VIEWS: ViewFeature[] = [
   { name: "Format doctor", desc: "Fix values that don't match their type", icon: "stethoscope", type: VIEW_TYPE_FORMAT_DOCTOR },
   { name: "Conditional formatting", desc: "Color Bases rows/cells by value", icon: "paintbrush", type: VIEW_TYPE_CONDITIONAL_FORMAT },
   { name: "Find duplicate notes", desc: "Detect near-duplicate notes", icon: "copy", type: VIEW_TYPE_DUPLICATE_FINDER },
-  { name: "CSV import / export", desc: "Import a CSV as notes, or export a base", icon: "arrow-right-left", type: VIEW_TYPE_CSV },
+  { name: "Import CSV as notes", desc: "Turn a CSV/TSV into notes", icon: "file-down", type: VIEW_TYPE_CSV_IMPORT },
+  { name: "Export to CSV", desc: "Scan a folder's notes into a CSV", icon: "file-up", type: VIEW_TYPE_CSV_EXPORT },
 ];
 
 const TOOLS: ToolFeature[] = [

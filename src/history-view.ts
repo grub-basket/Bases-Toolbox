@@ -94,15 +94,6 @@ export class HistoryView extends ItemView {
     const box = root.createDiv({ cls: "bases-toolbox-dup-group" });
     const header = box.createDiv({ cls: "bases-toolbox-index-prop-header" });
     header.createSpan({ cls: "bases-toolbox-index-prop-name", text: describeEntry(entry) });
-    // Red risk flag right after the name: reverting THIS entry could lose data.
-    // Merges always can (whole-note restore); other ops only when force is on
-    // (otherwise notes you've edited since are safely skipped).
-    const risk = this.riskWarning(entry);
-    if (risk) {
-      const w = header.createSpan({ cls: "bases-toolbox-history-risk" });
-      setIcon(w.createSpan({ cls: "bases-toolbox-history-risk-icon" }), "alert-triangle");
-      w.createSpan({ text: risk });
-    }
     if (entry.source)
       header.createSpan({ cls: "bases-toolbox-index-prop-type", text: entry.source });
     const fileCount = entry.fileSnapshots?.length ?? entry.changes.length;
@@ -118,6 +109,17 @@ export class HistoryView extends ItemView {
       else this.expanded.add(entry);
       this.render();
     });
+
+    // Risk flag on its OWN line under the header (long change text on the rows
+    // could otherwise collide with it). Shown whether collapsed or expanded.
+    // Reverting THIS entry could lose data: merges always (whole-note restore),
+    // other ops only when force is on (otherwise drifted notes are skipped).
+    const risk = this.riskWarning(entry);
+    if (risk) {
+      const line = box.createDiv({ cls: "bases-toolbox-history-risk" });
+      setIcon(line.createSpan({ cls: "bases-toolbox-history-risk-icon" }), "alert-triangle");
+      line.createSpan({ text: risk });
+    }
 
     if (!this.expanded.has(entry)) return;
 
