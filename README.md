@@ -257,6 +257,24 @@ better, use it. What each is capable of:
   - paste/drop CSV or TSV, map columns to typed properties, live preview
   - downloads a ZIP of ready-to-drop .md files — no install, works offline
 
+## Permissions & data
+
+Bases Toolbox runs entirely on your machine. It has **no network access** — it
+never sends anything anywhere, and there is no telemetry or analytics.
+
+- **Reading the list of files in your vault** — the property index, vault-wide
+  find & replace, companion-notes scan, base discovery, and merge all need to
+  enumerate file paths (`vault.getFiles` / `getMarkdownFiles`). This stays
+  local; it's what lets the plugin offer "a searchable index of every property"
+  and replace a value everywhere it appears.
+- **Clipboard** — used **write-only**. When you click a Copy button (copy
+  property name, copy value, copy file path, or copy a CSV export) the plugin
+  writes to the clipboard. It **never reads** the clipboard, so nothing you've
+  copied from elsewhere is ever accessed.
+- **Reading and writing note files** — property edits, find & replace, and the
+  format doctor modify frontmatter through the standard Obsidian file API, only
+  when you ask them to.
+
 ## Development
 
 ```
