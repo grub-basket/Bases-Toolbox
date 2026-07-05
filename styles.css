@@ -667,3 +667,24 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
 .bases-toolbox-doctor-row-ignored {
   opacity: 0.55;
 }
+
+/* Format doctor — top tabs (To fix / Ignored) */
+.bases-toolbox-doctor-tabs {
+  display: flex;
+  gap: var(--size-2-3);
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: var(--size-4-2);
+}
+.bases-toolbox-doctor-tab {
+  padding: var(--size-2-2) var(--size-4-1);
+  cursor: pointer;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-medium);
+}
+.bases-toolbox-doctor-tab:hover { color: var(--text-normal); }
+.bases-toolbox-doctor-tab.is-active {
+  color: var(--text-normal);
+  border-bottom-color: var(--interactive-accent);
+}
