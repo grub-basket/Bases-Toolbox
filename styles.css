@@ -330,6 +330,12 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   color: var(--text-muted);
 }
 
+.bases-toolbox-export-limits {
+  padding-left: var(--size-2-3);
+  border-left: 3px solid var(--background-modifier-border);
+  font-size: var(--font-ui-smaller);
+}
+
 .bases-toolbox-csv-section {
   margin-bottom: var(--size-4-6);
 }

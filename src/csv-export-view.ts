@@ -104,6 +104,10 @@ class CsvExportPanel {
       cls: "bases-toolbox-fr-info",
       text: "Pick a base — load it to choose a view and see what it covers. (For a base's exact live filtered results with formula columns, open it and run “Export active base results as CSV”.)",
     });
+    root.createDiv({
+      cls: "bases-toolbox-fr-info bases-toolbox-export-limits",
+      text: "Won't be exported: formula column values (blank — use the summary .md), grouping, and sorting. Filters beyond folder scope (status, comparisons, etc.) aren't evaluated, so rows are a superset. The summary .md lists them so you can rebuild them in a spreadsheet.",
+    });
     new Setting(root)
       .setName("Base")
       .setDesc("Type to filter. Any .base file in the vault.")
@@ -201,6 +205,10 @@ class CsvExportPanel {
     root.createDiv({
       cls: "bases-toolbox-fr-info",
       text: "Pick a folder — every note's frontmatter becomes a row, with a column per key found. Load it to ignore subfolders or companion non-markdown files first.",
+    });
+    root.createDiv({
+      cls: "bases-toolbox-fr-info bases-toolbox-export-limits",
+      text: "Won't be exported: non-markdown files (companion them below to include them) and note body text — only frontmatter properties become columns.",
     });
     new Setting(root)
       .setName("Folder")
@@ -372,7 +380,7 @@ class CsvExportPanel {
     // sort/grouping the CSV can't — so the user can rebuild those in a spreadsheet.
     if (this.mode === "base" && this.basePath) {
       bar
-        .createEl("button", { text: "Write readable summary (.txt)" })
+        .createEl("button", { text: "Write readable summary (.md)" })
         .addEventListener("click", () => void this.writeSummary());
     }
   }
@@ -383,7 +391,9 @@ class CsvExportPanel {
       new Notice("Couldn't read the base.");
       return;
     }
-    const outPath = `${this.outDir}${this.outStem} summary.txt`;
+    // Markdown so it renders in Obsidian (tables, headings) and still opens as
+    // plain text anywhere.
+    const outPath = `${this.outDir}${this.outStem} summary.md`;
     const existing = this.app.vault.getAbstractFileByPath(outPath);
     if (existing instanceof TFile) await this.app.vault.modify(existing, text);
     else await this.app.vault.create(outPath, text);

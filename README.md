@@ -79,16 +79,20 @@ fields may contain newlines.
   (name, path, folder, ext, size, ctime, mtime, tags) plus your frontmatter
   properties. Formula columns and link-lists (which need Bases' live engine) come
   out blank, and a view with filters beyond folder scope is flagged as a
-  best-effort superset.
+  best-effort superset. A **"Write readable summary (.md)"** button emits a
+  plain-language note of the base's filters, formulas, sort, and grouping — the
+  things a flat CSV can't hold — so you can rebuild them in your spreadsheet.
+  The exporter lists these limitations inline.
 - **From a folder**: pick any folder and **load** it — check off any subfolders
   to **ignore**, and see the **non-markdown files** a CSV export skips (images,
   PDFs…). One button **companions** them (creates queryable notes) regardless of
   your companion settings, so they're included on the next load. Then every
   note's frontmatter becomes a CSV row, with a column per key found.
 
-Both preview first, then "Copy for Excel" (TSV to clipboard) or write a `.csv`
+Both preview first, with a **column checklist** (all on by default) so you pick
+what to include, then "Copy for Excel" (TSV to clipboard) or write a `.csv`
 (next to the base, or in the folder). Wikilinks are unwrapped and lists joined
-with ";".
+with ";". Output is multiple files (CSV + optional summary), not a zip.
 
 For a base's **exact live filtered results** with formula columns evaluated, open
 the base and run the **"Export active base results as CSV"** command — it uses
