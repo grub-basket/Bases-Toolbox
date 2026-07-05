@@ -32,6 +32,7 @@ import { CsvImportModal } from "./csv-import";
 import { CsvImportView, VIEW_TYPE_CSV_IMPORT, openCsvImportView } from "./csv-import-view";
 import { CsvExportModal, CsvExportView, VIEW_TYPE_CSV_EXPORT, openCsvExportView } from "./csv-export-view";
 import { installEmbedOptions } from "./embed-options";
+import { generateEmbedReference } from "./embed-reference";
 import { openFilterToggle } from "./filter-toggle";
 import { ConditionalFormatView, VIEW_TYPE_CONDITIONAL_FORMAT, openConditionalFormatView } from "./conditional-format-view";
 import { LauncherView, VIEW_TYPE_LAUNCHER, openLauncher } from "./launcher";
@@ -502,6 +503,15 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           this.plugin.applyMultilineListCells();
           await this.plugin.savePluginData();
         })
+      );
+
+    new Setting(containerEl)
+      .setName("Base embeds reference")
+      .setDesc(
+        "Generate a note in your vault documenting the base-embed display flags (bases-no-toolbar, bases-no-header, bt-height-<px>) with copy-paste examples. Packaged with the plugin — no internet needed."
+      )
+      .addButton((b) =>
+        b.setButtonText("Generate reference note").onClick(() => void generateEmbedReference(this.plugin))
       );
 
     this.renderFormatRules(containerEl);

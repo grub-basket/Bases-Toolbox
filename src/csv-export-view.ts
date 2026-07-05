@@ -41,7 +41,7 @@ class CsvExportPanel {
   private baseDetailsEl: HTMLElement | null = null;
 
   // folder mode
-  private folder = "/";
+  private folder = "";
   private recursive = true;
   private ignored = new Set<string>();
   private nonMd: TFile[] = [];
@@ -49,6 +49,7 @@ class CsvExportPanel {
 
   // shared
   private data: FolderCsvData = { columns: [], rows: [] };
+  private selected = new Set<string>();
   private scanned = false;
   private note = "";
   private outDir = "";
@@ -178,6 +179,7 @@ class CsvExportPanel {
   private async exportBaseView(): Promise<void> {
     const { data, folders, approximate } = await scanBaseView(this.plugin, this.basePath, this.viewIndex);
     this.data = data;
+    this.selected = new Set(data.columns);
     this.note = approximate
       ? "This view has filters beyond folder scope — the export is a best-effort superset of the notes in its folders."
       : folders.length
@@ -201,11 +203,11 @@ class CsvExportPanel {
     });
     new Setting(root)
       .setName("Folder")
-      .setDesc('Type to filter. "/" is the whole vault.')
+      .setDesc('Type to filter. Leave blank (or "/") for the whole vault.')
       .addText((t) => {
-        t.setValue(this.folder);
+        t.setValue(this.folder).setPlaceholder('e.g. Projects — blank = whole vault');
         new ListInputSuggest(this.plugin, t.inputEl, () => folderPaths(this.plugin));
-        t.onChange((v) => (this.folder = v.trim() || "/"));
+        t.onChange((v) => (this.folder = v.trim()));
       });
     new Setting(root)
       .setName("Include subfolders")
@@ -271,9 +273,11 @@ class CsvExportPanel {
         .setCta()
         .onClick(() => {
           this.data = scanFolderCsv(this.plugin, this.folder, this.recursive, [...this.ignored]);
+          this.selected = new Set(this.data.columns);
           this.note = this.ignored.size ? `Ignoring: ${[...this.ignored].join(", ")}.` : "";
-          this.outDir = this.folder === "/" ? "" : `${this.folder.replace(/\/+$/, "")}/`;
-          this.outStem = this.folder === "/" ? "vault" : (this.folder.split("/").pop() ?? "folder");
+          const wholeVault = this.folder === "/" || this.folder === "";
+          this.outDir = wholeVault ? "" : `${this.folder.replace(/\/+$/, "")}/`;
+          this.outStem = wholeVault ? "vault" : (this.folder.split("/").pop() ?? "folder");
           this.scanned = true;
           this.renderResults();
         })
@@ -308,19 +312,43 @@ class CsvExportPanel {
     }
 
     if (this.note) root.createDiv({ cls: "bases-toolbox-fr-info", text: this.note });
+
+    // Column selector — all on by default; "file name" is always included.
+    if (this.data.columns.length) {
+      root.createDiv({ cls: "bases-toolbox-fr-info", text: "Columns to export:" });
+      const picker = root.createDiv({ cls: "bases-toolbox-export-cols" });
+      const chip = (label: string, always: boolean, checked: boolean, onToggle?: (on: boolean) => void) => {
+        const l = picker.createEl("label", { cls: "bases-toolbox-export-col" });
+        const cb = l.createEl("input", { type: "checkbox" });
+        cb.checked = checked;
+        cb.disabled = always;
+        if (onToggle) cb.addEventListener("change", () => onToggle(cb.checked));
+        l.createSpan({ text: label });
+      };
+      chip("file name", true, true);
+      for (const c of this.data.columns) {
+        chip(c, false, this.selected.has(c), (on) => {
+          if (on) this.selected.add(c);
+          else this.selected.delete(c);
+          this.renderResults();
+        });
+      }
+    }
+
+    const out = this.outputData();
     root.createDiv({
       cls: "bases-toolbox-fr-info",
-      text: `${this.data.rows.length.toLocaleString()} rows × ${this.data.columns.length + 1} columns.`,
+      text: `${out.rows.length.toLocaleString()} rows × ${out.columns.length + 1} columns.`,
     });
 
     const wrap = root.createDiv({ cls: "bases-toolbox-export-table-wrap" });
     const table = wrap.createEl("table", { cls: "bases-toolbox-export-table" });
     const head = table.createEl("tr");
-    for (const h of ["file name", ...this.data.columns]) head.createEl("th", { text: h, attr: { title: h } });
-    for (const row of this.data.rows.slice(0, PREVIEW_ROWS)) {
+    for (const h of ["file name", ...out.columns]) head.createEl("th", { text: h, attr: { title: h } });
+    for (const row of out.rows.slice(0, PREVIEW_ROWS)) {
       const tr = table.createEl("tr");
       tr.createEl("td", { text: row.name, attr: { title: row.name } });
-      for (const k of this.data.columns) {
+      for (const k of out.columns) {
         const v = row.fm[k] === undefined ? "" : String(row.fm[k]);
         tr.createEl("td", { text: v, attr: { title: v } });
       }
@@ -341,9 +369,14 @@ class CsvExportPanel {
     );
   }
 
+  /** The data limited to the checked columns (file name is always included). */
+  private outputData(): FolderCsvData {
+    return { columns: this.data.columns.filter((c) => this.selected.has(c)), rows: this.data.rows };
+  }
+
   private async copyTsv(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(folderCsvToText(this.data, "\t"));
+      await navigator.clipboard.writeText(folderCsvToText(this.outputData(), "\t"));
       new Notice("Copied — paste into Excel or Sheets.");
     } catch {
       new Notice("Couldn't reach the clipboard — try “Write .csv to vault” instead.");
@@ -351,7 +384,7 @@ class CsvExportPanel {
   }
 
   private async writeCsv(): Promise<void> {
-    const csv = folderCsvToText(this.data, ",");
+    const csv = folderCsvToText(this.outputData(), ",");
     const outPath = `${this.outDir}${this.outStem} export.csv`;
     const existing = this.app.vault.getAbstractFileByPath(outPath);
     if (existing instanceof TFile) await this.app.vault.modify(existing, csv);
