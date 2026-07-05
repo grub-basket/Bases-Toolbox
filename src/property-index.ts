@@ -137,20 +137,20 @@ export class PropertyIndexView extends ItemView {
 
     box.createDiv({
       cls: "bases-toolbox-fr-info",
-      text: "Add these to a base when its property menu “forgets” them — they're identifiers, not formulas. Copy one, then paste it into the column picker or the .base file's order list. For a formatted/computed version, wrap it in a formula instead.",
+      text: "Add these to a base when its property menu “forgets” them — they're identifiers, not formulas. Click one to copy it, then paste it into the column picker or the .base file's order list. For a formatted/computed version, wrap it in a formula instead.",
     });
     const values = box.createDiv({ cls: "bases-toolbox-index-values" });
     for (const [id, desc] of BUILTINS) {
       const vr = values.createDiv({ cls: "bases-toolbox-index-value" });
-      const copy = vr.createSpan({ cls: "bases-toolbox-index-btn", attr: { "aria-label": `Copy “${id}”` } });
-      setIcon(copy, "copy");
-      const doCopy = () => {
+      const idEl = vr.createSpan({
+        cls: "bases-toolbox-builtin-id",
+        text: id,
+        attr: { "aria-label": `Click to copy “${id}”` },
+      });
+      idEl.addEventListener("click", () => {
         void navigator.clipboard.writeText(id);
         new Notice(`Copied “${id}”.`);
-      };
-      copy.addEventListener("click", doCopy);
-      const idEl = vr.createSpan({ cls: "bases-toolbox-builtin-id", text: id });
-      idEl.addEventListener("click", doCopy);
+      });
       vr.createSpan({ cls: "bases-toolbox-index-empty", text: desc });
     }
   }
