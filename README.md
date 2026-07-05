@@ -72,14 +72,19 @@ fields may contain newlines.
 
 **Export to CSV** — the panel / dialog has two tabs:
 
-- **From a base**: pick any `.base` file (no need to open it) — it reads the
-  folders the base references and its column order, resolves the built-in
-  `file.*` columns (name, path, folder, ext, size, ctime, mtime, tags) plus your
-  frontmatter properties, and exports the notes it covers. Formula columns and
-  link-lists (which need Bases' live engine) come out blank, and if the base has
-  filters beyond folder scope the result is flagged as a best-effort superset.
-- **From a folder**: pick any folder — every note's frontmatter becomes a CSV
-  row, with a column for each key found across the folder.
+- **From a base**: pick any `.base` file (no need to open it) and **load** it —
+  you see its base-level filters, choose **which view** to export (bases can have
+  several, each with its own filters and columns), and see that view's filters
+  and column order before exporting. It resolves the built-in `file.*` columns
+  (name, path, folder, ext, size, ctime, mtime, tags) plus your frontmatter
+  properties. Formula columns and link-lists (which need Bases' live engine) come
+  out blank, and a view with filters beyond folder scope is flagged as a
+  best-effort superset.
+- **From a folder**: pick any folder and **load** it — check off any subfolders
+  to **ignore**, and see the **non-markdown files** a CSV export skips (images,
+  PDFs…). One button **companions** them (creates queryable notes) regardless of
+  your companion settings, so they're included on the next load. Then every
+  note's frontmatter becomes a CSV row, with a column per key found.
 
 Both preview first, then "Copy for Excel" (TSV to clipboard) or write a `.csv`
 (next to the base, or in the folder). Wikilinks are unwrapped and lists joined
