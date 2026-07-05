@@ -1,6 +1,13 @@
 import { ItemView, Modal, Notice, Setting, TFile, WorkspaceLeaf } from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { FolderCsvData, folderCsvToText, folderPaths, scanFolderCsv } from "./csv-export";
+import {
+  FolderCsvData,
+  basePaths,
+  folderCsvToText,
+  folderPaths,
+  scanBaseCsv,
+  scanFolderCsv,
+} from "./csv-export";
 import { ListInputSuggest } from "./suggest";
 import { installMainTabAction, installSidebarAction } from "./view-refresh";
 
@@ -8,17 +15,30 @@ export const VIEW_TYPE_CSV_EXPORT = "bases-toolbox-csv-export";
 
 const PREVIEW_ROWS = 50;
 
+type ExportMode = "base" | "folder";
+
 /**
- * Folder-scan CSV export — pick any folder (no base needed), union every
- * frontmatter key found, preview, then copy for Excel or write a .csv.
- * Rendered into a dialog or a workspace leaf.
+ * CSV export with two sources, chosen by a tab:
+ *  - From a base: pick a .base file (no need to open it); exports the notes in
+ *    the folders it references, using the base's columns.
+ *  - From a folder: pick any folder; unions every frontmatter key found.
+ * Both preview, then Copy-for-Excel or write a .csv. Rendered into a dialog or
+ * a workspace leaf.
  */
 class CsvExportPanel {
   private plugin: BasesToolboxPlugin;
+  private mode: ExportMode = "base";
+  private basePath = "";
   private folder = "/";
   private recursive = true;
+
   private data: FolderCsvData = { columns: [], rows: [] };
   private scanned = false;
+  private note = "";
+  private outDir = "";
+  private outStem = "export";
+
+  private controlsEl: HTMLElement | null = null;
   private resultsEl: HTMLElement | null = null;
 
   constructor(plugin: BasesToolboxPlugin) {
@@ -30,36 +50,95 @@ class CsvExportPanel {
   }
 
   render(root: HTMLElement): void {
-    root.createDiv({
-      cls: "bases-toolbox-fr-info",
-      text: "Pick a folder — every note's frontmatter becomes a CSV row, with a column for each key found across the folder. No base needs to be open.",
-    });
-
-    new Setting(root)
-      .setName("Folder")
-      .setDesc('Type to filter. "/" exports the whole vault.')
-      .addText((t) => {
-        t.setValue(this.folder);
-        new ListInputSuggest(this.plugin, t.inputEl, () => folderPaths(this.plugin));
-        t.onChange((v) => (this.folder = v.trim() || "/"));
+    const tabs = root.createDiv({ cls: "bases-toolbox-doctor-tabs" });
+    const mkTab = (label: string, mode: ExportMode) => {
+      const t = tabs.createDiv({ cls: "bases-toolbox-doctor-tab", text: label });
+      if (this.mode === mode) t.addClass("is-active");
+      t.addEventListener("click", () => {
+        if (this.mode === mode) return;
+        this.mode = mode;
+        this.scanned = false;
+        this.renderControls();
+        this.resultsEl?.empty();
+        tabs.findAll(".bases-toolbox-doctor-tab").forEach((el) => el.removeClass("is-active"));
+        t.addClass("is-active");
       });
+    };
+    mkTab("From a base", "base");
+    mkTab("From a folder", "folder");
 
-    new Setting(root)
-      .setName("Include subfolders")
-      .addToggle((t) => t.setValue(this.recursive).onChange((v) => (this.recursive = v)));
+    this.controlsEl = root.createDiv();
+    this.resultsEl = root.createDiv();
+    this.renderControls();
+  }
 
-    new Setting(root).addButton((b) =>
-      b
-        .setButtonText("Scan folder")
-        .setCta()
-        .onClick(() => {
+  private renderControls(): void {
+    const root = this.controlsEl;
+    if (!root) return;
+    root.empty();
+
+    if (this.mode === "base") {
+      root.createDiv({
+        cls: "bases-toolbox-fr-info",
+        text: "Pick a base — this exports the notes in the folders it references, using the base's columns. (For a base's exact live filtered results with formula columns, open it and run “Export active base results as CSV”.)",
+      });
+      new Setting(root)
+        .setName("Base")
+        .setDesc("Type to filter. Any .base file in the vault.")
+        .addText((t) => {
+          t.setValue(this.basePath).setPlaceholder("Folder/My Base.base");
+          new ListInputSuggest(this.plugin, t.inputEl, () => basePaths(this.plugin));
+          t.onChange((v) => (this.basePath = v.trim()));
+        });
+      new Setting(root).addButton((b) =>
+        b.setButtonText("Scan base").setCta().onClick(() => void this.scanBase())
+      );
+    } else {
+      root.createDiv({
+        cls: "bases-toolbox-fr-info",
+        text: "Pick a folder — every note's frontmatter becomes a row, with a column for each key found across the folder. No base needed.",
+      });
+      new Setting(root)
+        .setName("Folder")
+        .setDesc('Type to filter. "/" exports the whole vault.')
+        .addText((t) => {
+          t.setValue(this.folder);
+          new ListInputSuggest(this.plugin, t.inputEl, () => folderPaths(this.plugin));
+          t.onChange((v) => (this.folder = v.trim() || "/"));
+        });
+      new Setting(root)
+        .setName("Include subfolders")
+        .addToggle((t) => t.setValue(this.recursive).onChange((v) => (this.recursive = v)));
+      new Setting(root).addButton((b) =>
+        b.setButtonText("Scan folder").setCta().onClick(() => {
           this.data = scanFolderCsv(this.plugin, this.folder, this.recursive);
+          this.note = "";
+          this.outDir = this.folder === "/" ? "" : `${this.folder.replace(/\/+$/, "")}/`;
+          this.outStem = this.folder === "/" ? "vault" : (this.folder.split("/").pop() ?? "folder");
           this.scanned = true;
           this.renderResults();
         })
-    );
+      );
+    }
+  }
 
-    this.resultsEl = root.createDiv();
+  private async scanBase(): Promise<void> {
+    if (!this.basePath || !(this.app.vault.getAbstractFileByPath(this.basePath) instanceof TFile)) {
+      new Notice("Pick a .base file first.");
+      return;
+    }
+    const { data, folders, approximate } = await scanBaseCsv(this.plugin, this.basePath);
+    this.data = data;
+    this.note = approximate
+      ? "This base has filters beyond folder scope — the export is a best-effort superset of the notes in its folders."
+      : folders.length
+        ? `Scoped to: ${folders.join(", ")}.`
+        : "Whole-vault base.";
+    const slash = this.basePath.lastIndexOf("/");
+    this.outDir = slash === -1 ? "" : this.basePath.slice(0, slash + 1);
+    this.outStem = this.basePath.slice(slash + 1).replace(/\.base$/, "");
+    this.scanned = true;
+    this.renderResults();
   }
 
   private renderResults(): void {
@@ -68,10 +147,11 @@ class CsvExportPanel {
     root.empty();
     if (!this.scanned) return;
     if (!this.data.rows.length) {
-      root.createDiv({ cls: "bases-toolbox-fr-info", text: "No markdown files found in that folder." });
+      root.createDiv({ cls: "bases-toolbox-fr-info", text: "No notes found to export." });
       return;
     }
 
+    if (this.note) root.createDiv({ cls: "bases-toolbox-fr-info", text: this.note });
     root.createDiv({
       cls: "bases-toolbox-fr-info",
       text: `${this.data.rows.length.toLocaleString()} rows × ${this.data.columns.length + 1} columns.`,
@@ -97,10 +177,12 @@ class CsvExportPanel {
     }
 
     const bar = root.createDiv({ cls: "bases-toolbox-frv-bar" });
-    const copyBtn = bar.createEl("button", { cls: "mod-cta", text: "Copy for Excel" });
-    copyBtn.addEventListener("click", () => void this.copyTsv());
-    const csvBtn = bar.createEl("button", { text: "Write .csv to vault" });
-    csvBtn.addEventListener("click", () => void this.writeCsv());
+    bar.createEl("button", { cls: "mod-cta", text: "Copy for Excel" }).addEventListener("click", () =>
+      void this.copyTsv()
+    );
+    bar.createEl("button", { text: "Write .csv to vault" }).addEventListener("click", () =>
+      void this.writeCsv()
+    );
   }
 
   private async copyTsv(): Promise<void> {
@@ -114,9 +196,7 @@ class CsvExportPanel {
 
   private async writeCsv(): Promise<void> {
     const csv = folderCsvToText(this.data, ",");
-    const dir = this.folder === "/" ? "" : `${this.folder.replace(/\/+$/, "")}/`;
-    const stem = this.folder === "/" ? "vault" : (this.folder.split("/").pop() ?? "folder");
-    const outPath = `${dir}${stem} export.csv`;
+    const outPath = `${this.outDir}${this.outStem} export.csv`;
     const existing = this.app.vault.getAbstractFileByPath(outPath);
     if (existing instanceof TFile) await this.app.vault.modify(existing, csv);
     else await this.app.vault.create(outPath, csv);
@@ -142,7 +222,7 @@ export class CsvExportModal extends Modal {
   }
 
   onOpen(): void {
-    this.titleEl.setText("Export folder to CSV");
+    this.titleEl.setText("Export to CSV");
     this.modalEl.addClass("bases-toolbox-csv-modal");
     new CsvExportPanel(this.plugin).render(this.contentEl);
   }

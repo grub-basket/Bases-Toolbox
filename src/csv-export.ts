@@ -1,4 +1,4 @@
-import { ItemView, Notice, TFile, parseYaml } from "obsidian";
+import { CachedMetadata, ItemView, Notice, TFile, getAllTags, parseYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { toCsvCell, toTsvCell } from "./csv-core";
 import { findKey } from "./scan";
@@ -143,4 +143,120 @@ export function folderPaths(plugin: BasesToolboxPlugin): string[] {
     }
   }
   return ["/", ...[...set].sort((a, b) => a.localeCompare(b))];
+}
+
+/* ---------- base-scan export (pick a .base file, no need to open it) ---------- */
+
+/** All .base file paths in the vault (for the export picker). */
+export function basePaths(plugin: BasesToolboxPlugin): string[] {
+  return plugin.app.vault
+    .getFiles()
+    .filter((f) => f.extension === "base")
+    .map((f) => f.path)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function isoDateTime(ms: number): string {
+  // Local, second-precision, spreadsheet-friendly: "YYYY-MM-DD HH:mm:ss".
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/** Resolves one base "order" key to a cell value for a file. Computed columns
+ * (formulas, link lists) that need Bases' live engine come back blank. */
+function resolveBaseCell(
+  file: TFile,
+  fm: Record<string, unknown>,
+  cache: CachedMetadata | null,
+  key: string
+): unknown {
+  switch (key) {
+    case "file.name":
+      return file.basename;
+    case "file.path":
+      return file.path;
+    case "file.folder":
+      return file.parent && file.parent.path !== "/" ? file.parent.path : "";
+    case "file.ext":
+      return file.extension;
+    case "file.size":
+      return file.stat.size;
+    case "file.ctime":
+      return isoDateTime(file.stat.ctime);
+    case "file.mtime":
+      return isoDateTime(file.stat.mtime);
+    case "file.tags":
+      return (getAllTags(cache ?? ({} as CachedMetadata)) ?? []).map((t) => t.replace(/^#/, ""));
+  }
+  // Other file.* / formula.* need the live query engine — leave blank.
+  if (key.startsWith("file.") || key.startsWith("formula.")) return "";
+  const k = findKey(fm, key.replace(/^note\./, ""));
+  return k === null ? "" : fm[k];
+}
+
+/**
+ * Reads a .base file and exports the notes it covers WITHOUT opening it: folder
+ * scope comes from the base's `file.inFolder(...)` filters (best-effort — other
+ * filter logic isn't evaluated), columns from the first view's `order`. For a
+ * base's live filtered results with exact column order, use exportBaseCsv on the
+ * open base instead.
+ */
+export async function scanBaseCsv(
+  plugin: BasesToolboxPlugin,
+  basePath: string
+): Promise<{ data: FolderCsvData; folders: string[]; approximate: boolean }> {
+  const app = plugin.app;
+  const baseFile = app.vault.getAbstractFileByPath(basePath);
+  if (!(baseFile instanceof TFile)) return { data: { columns: [], rows: [] }, folders: [], approximate: false };
+
+  let doc: Record<string, unknown> = {};
+  try {
+    doc = (parseYaml(await app.vault.read(baseFile)) ?? {}) as Record<string, unknown>;
+  } catch {
+    /* empty base */
+  }
+
+  // Collect the leaf filter expressions (strings) from the parsed tree — NOT
+  // from JSON.stringify, which escapes the quotes and defeats the regex.
+  const clauses: string[] = [];
+  const collect = (node: unknown): void => {
+    if (typeof node === "string") clauses.push(node);
+    else if (Array.isArray(node)) node.forEach(collect);
+    else if (node && typeof node === "object") Object.values(node).forEach(collect);
+  };
+  collect(doc.filters);
+
+  const folders = clauses.flatMap((c) =>
+    [...c.matchAll(/inFolder\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1].replace(/^\/+|\/+$/g, ""))
+  );
+  // We evaluate inFolder scope and ignore a plain file.ext == "md". Any other
+  // clause means the result is a best-effort superset of the base's rows.
+  const handled = (c: string): boolean =>
+    /^\s*file\.inFolder\(/.test(c) ||
+    /^\s*file\.ext\s*[=!<>]=?\s*["']?\w+["']?\s*$/.test(c);
+  const approximate = clauses.some((c) => !handled(c));
+
+  const views = Array.isArray(doc.views) ? (doc.views as Record<string, unknown>[]) : [];
+  const rawOrder = (Array.isArray(views[0]?.order) ? (views[0].order as unknown[]) : []).filter(
+    (k): k is string => typeof k === "string"
+  );
+  const order = rawOrder.length ? rawOrder : ["file.name"];
+  const dataCols = order.filter((k) => k !== "file.name");
+  const headers = dataCols.map((k) => k.replace(/^note\./, ""));
+
+  const files = app.vault.getMarkdownFiles().filter((f) => {
+    if (!folders.length) return true; // whole-vault base
+    return folders.some((dir) => (dir === "" ? true : f.path.startsWith(`${dir}/`)));
+  });
+
+  const rows = files.map((f) => {
+    const cache = app.metadataCache.getFileCache(f);
+    const fm = (cache?.frontmatter ?? {}) as Record<string, unknown>;
+    const rowFm: Record<string, unknown> = {};
+    dataCols.forEach((k, i) => (rowFm[headers[i]] = resolveBaseCell(f, fm, cache, k)));
+    return { name: f.basename, fm: rowFm };
+  });
+
+  return { data: { columns: headers, rows }, folders, approximate };
 }

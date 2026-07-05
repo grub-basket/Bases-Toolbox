@@ -1,5 +1,7 @@
 import { ButtonComponent, Modal, Notice, Setting, TFile, TFolder, normalizePath, stringifyYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
+import { folderPaths } from "./csv-export";
+import { ListInputSuggest } from "./suggest";
 import {
   CSV_TYPES,
   CsvType,
@@ -69,6 +71,13 @@ class CsvImportPanel {
         input.addEventListener("change", () => {
           const file = input.files?.[0];
           if (!file) return;
+          // Binary spreadsheets aren't plain text — reading them yields garbage.
+          if (/\.(xlsx?|numbers|ods|gsheet|sheet)$/i.test(file.name)) {
+            new Notice(
+              `“${file.name}” is a spreadsheet, not a CSV. Export it to CSV or TSV (File → Export / Save As) and pick that.`
+            );
+            return;
+          }
           const reader = new FileReader();
           reader.onload = () => {
             ta.value = String(reader.result ?? "");
@@ -86,10 +95,11 @@ class CsvImportPanel {
 
     new Setting(contentEl)
       .setName("Target folder")
-      .setDesc("Created if it doesn't exist. One note per CSV row.")
+      .setDesc("Created if it doesn't exist. One note per CSV row. Type to autocomplete.")
       .addText((t) => {
         t.setValue("CSV Import");
         this.folderEl = t.inputEl;
+        new ListInputSuggest(this.plugin, t.inputEl, () => folderPaths(this.plugin));
       });
 
     new Setting(contentEl)
