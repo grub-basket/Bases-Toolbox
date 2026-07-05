@@ -94,23 +94,32 @@ export interface FolderCsvData {
  * approach from the standalone web exporter, but reading Obsidian's already-
  * parsed metadata cache. Needs no base open, so it can drive a picker.
  */
+function normFolder(folderPath: string): string {
+  return folderPath.replace(/^\/+|\/+$/g, "");
+}
+
+/** Is `file` inside `norm` (optionally recursively), and not under any ignored folder? */
+function fileInScope(file: TFile, norm: string, recursive: boolean, ignored: string[]): boolean {
+  const parent = file.parent?.path === "/" ? "" : (file.parent?.path ?? "");
+  const inF = norm === "" ? (recursive ? true : parent === "") : recursive ? file.path.startsWith(`${norm}/`) : parent === norm;
+  if (!inF) return false;
+  return !ignored.some((dir) => file.path.startsWith(`${dir}/`));
+}
+
 export function scanFolderCsv(
   plugin: BasesToolboxPlugin,
   folderPath: string,
-  recursive: boolean
+  recursive: boolean,
+  ignore: string[] = []
 ): FolderCsvData {
   const app = plugin.app;
-  const norm = folderPath.replace(/^\/+|\/+$/g, "");
-  const inFolder = (f: TFile): boolean => {
-    const parent = f.parent?.path === "/" ? "" : (f.parent?.path ?? "");
-    if (norm === "") return recursive ? true : parent === "";
-    return recursive ? f.path.startsWith(`${norm}/`) : parent === norm;
-  };
+  const norm = normFolder(folderPath);
+  const ignored = ignore.map(normFolder).filter(Boolean);
   const columns: string[] = [];
   const seen = new Set<string>();
   const rows: { name: string; fm: Record<string, unknown> }[] = [];
   for (const f of app.vault.getMarkdownFiles()) {
-    if (!inFolder(f)) continue;
+    if (!fileInScope(f, norm, recursive, ignored)) continue;
     const fm = (app.metadataCache.getFileCache(f)?.frontmatter ?? {}) as Record<string, unknown>;
     for (const k of Object.keys(fm)) {
       if (k === "position" || seen.has(k)) continue;
@@ -120,6 +129,37 @@ export function scanFolderCsv(
     rows.push({ name: f.basename, fm });
   }
   return { columns, rows };
+}
+
+/** Subfolders (recursive) under `folderPath` that hold any file — for the
+ * export's "ignore these folders" checklist. */
+export function subfoldersOf(plugin: BasesToolboxPlugin, folderPath: string): string[] {
+  const norm = normFolder(folderPath);
+  const set = new Set<string>();
+  for (const f of plugin.app.vault.getFiles()) {
+    let p = f.parent;
+    while (p && p.path && p.path !== "/") {
+      const pp = p.path;
+      if ((norm === "" || pp === norm || pp.startsWith(`${norm}/`)) && pp !== norm) set.add(pp);
+      p = p.parent;
+    }
+  }
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+/** Non-markdown files in scope (images, PDFs, …) that a CSV export skips —
+ * offered up so the user can companion them. Excludes .base files. */
+export function nonMdFilesInScope(
+  plugin: BasesToolboxPlugin,
+  folderPath: string,
+  recursive: boolean,
+  ignore: string[] = []
+): TFile[] {
+  const norm = normFolder(folderPath);
+  const ignored = ignore.map(normFolder).filter(Boolean);
+  return plugin.app.vault
+    .getFiles()
+    .filter((f) => f.extension !== "md" && f.extension !== "base" && fileInScope(f, norm, recursive, ignored));
 }
 
 /** Renders scanned rows as CSV (comma) or, for "Copy for Excel", TSV (tab). */
@@ -195,53 +235,84 @@ function resolveBaseCell(
   return k === null ? "" : fm[k];
 }
 
-/**
- * Reads a .base file and exports the notes it covers WITHOUT opening it: folder
- * scope comes from the base's `file.inFolder(...)` filters (best-effort — other
- * filter logic isn't evaluated), columns from the first view's `order`. For a
- * base's live filtered results with exact column order, use exportBaseCsv on the
- * open base instead.
- */
-export async function scanBaseCsv(
-  plugin: BasesToolboxPlugin,
-  basePath: string
-): Promise<{ data: FolderCsvData; folders: string[]; approximate: boolean }> {
-  const app = plugin.app;
-  const baseFile = app.vault.getAbstractFileByPath(basePath);
-  if (!(baseFile instanceof TFile)) return { data: { columns: [], rows: [] }, folders: [], approximate: false };
+/** Collects the leaf filter expression strings from a parsed filter tree —
+ * NOT via JSON.stringify, which escapes the quotes and defeats the regex. */
+function filterClauses(node: unknown): string[] {
+  const out: string[] = [];
+  const walk = (n: unknown): void => {
+    if (typeof n === "string") out.push(n);
+    else if (Array.isArray(n)) n.forEach(walk);
+    else if (n && typeof n === "object") Object.values(n).forEach(walk);
+  };
+  walk(node);
+  return out;
+}
 
+export interface BaseViewInfo {
+  name: string;
+  /** This view's own filter expressions (added on top of the base filters). */
+  filters: string[];
+  /** The view's column order (raw identifiers). */
+  order: string[];
+}
+
+export interface BaseInfo {
+  /** Base-level filters, applied to every view. */
+  baseFilters: string[];
+  views: BaseViewInfo[];
+}
+
+/**
+ * Reads a .base file's structure — base-level filters and each view's own
+ * filters and column order — so the export UI can show what each view covers
+ * and let the user pick one. No open base needed.
+ */
+export async function readBaseInfo(plugin: BasesToolboxPlugin, basePath: string): Promise<BaseInfo> {
+  const app = plugin.app;
+  const f = app.vault.getAbstractFileByPath(basePath);
+  if (!(f instanceof TFile)) return { baseFilters: [], views: [] };
   let doc: Record<string, unknown> = {};
   try {
-    doc = (parseYaml(await app.vault.read(baseFile)) ?? {}) as Record<string, unknown>;
+    doc = (parseYaml(await app.vault.read(f)) ?? {}) as Record<string, unknown>;
   } catch {
     /* empty base */
   }
+  const rawViews = Array.isArray(doc.views) ? (doc.views as Record<string, unknown>[]) : [];
+  const views: BaseViewInfo[] = rawViews.map((v, i) => ({
+    name: typeof v?.name === "string" ? v.name : `View ${i + 1}`,
+    filters: filterClauses(v?.filters),
+    order: (Array.isArray(v?.order) ? (v.order as unknown[]) : []).filter(
+      (k): k is string => typeof k === "string"
+    ),
+  }));
+  return { baseFilters: filterClauses(doc.filters), views };
+}
 
-  // Collect the leaf filter expressions (strings) from the parsed tree — NOT
-  // from JSON.stringify, which escapes the quotes and defeats the regex.
-  const clauses: string[] = [];
-  const collect = (node: unknown): void => {
-    if (typeof node === "string") clauses.push(node);
-    else if (Array.isArray(node)) node.forEach(collect);
-    else if (node && typeof node === "object") Object.values(node).forEach(collect);
-  };
-  collect(doc.filters);
+/**
+ * Exports one view of a base WITHOUT opening it: folder scope from the base +
+ * view `file.inFolder(...)` filters (best-effort — other filter logic isn't
+ * evaluated), columns from that view's `order`. For a base's exact live
+ * filtered results with formula columns, use exportBaseCsv on the open base.
+ */
+export async function scanBaseView(
+  plugin: BasesToolboxPlugin,
+  basePath: string,
+  viewIndex: number
+): Promise<{ data: FolderCsvData; folders: string[]; approximate: boolean }> {
+  const app = plugin.app;
+  const info = await readBaseInfo(plugin, basePath);
+  const view = info.views[viewIndex] ?? info.views[0] ?? { name: "", filters: [], order: [] };
+  const clauses = [...info.baseFilters, ...view.filters];
 
   const folders = clauses.flatMap((c) =>
     [...c.matchAll(/inFolder\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1].replace(/^\/+|\/+$/g, ""))
   );
-  // We evaluate inFolder scope and ignore a plain file.ext == "md". Any other
-  // clause means the result is a best-effort superset of the base's rows.
   const handled = (c: string): boolean =>
     /^\s*file\.inFolder\(/.test(c) ||
     /^\s*file\.ext\s*[=!<>]=?\s*["']?\w+["']?\s*$/.test(c);
   const approximate = clauses.some((c) => !handled(c));
 
-  const views = Array.isArray(doc.views) ? (doc.views as Record<string, unknown>[]) : [];
-  const rawOrder = (Array.isArray(views[0]?.order) ? (views[0].order as unknown[]) : []).filter(
-    (k): k is string => typeof k === "string"
-  );
-  const order = rawOrder.length ? rawOrder : ["file.name"];
+  const order = view.order.length ? view.order : ["file.name"];
   const dataCols = order.filter((k) => k !== "file.name");
   const headers = dataCols.map((k) => k.replace(/^note\./, ""));
 

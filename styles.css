@@ -255,6 +255,40 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   color: var(--text-muted);
 }
 
+.bases-toolbox-export-viewcard {
+  margin: var(--size-2-3) 0;
+  padding: var(--size-2-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+}
+
+.bases-toolbox-export-viewname {
+  font-weight: var(--font-medium);
+  margin-bottom: var(--size-2-2);
+}
+
+.bases-toolbox-export-ignore,
+.bases-toolbox-export-nonmd-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin: var(--size-2-2) 0;
+  padding: var(--size-2-2) var(--size-2-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+}
+
+.bases-toolbox-export-nonmd-item {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+  padding: var(--size-2-1) 0;
+}
+
+.bases-toolbox-export-nonmd-note {
+  color: var(--text-warning);
+}
+
 .bases-toolbox-csv-section {
   margin-bottom: var(--size-4-6);
 }

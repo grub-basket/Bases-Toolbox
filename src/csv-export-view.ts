@@ -1,43 +1,58 @@
 import { ItemView, Modal, Notice, Setting, TFile, WorkspaceLeaf } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import {
+  BaseInfo,
   FolderCsvData,
   basePaths,
   folderCsvToText,
   folderPaths,
-  scanBaseCsv,
+  nonMdFilesInScope,
+  readBaseInfo,
+  scanBaseView,
   scanFolderCsv,
+  subfoldersOf,
 } from "./csv-export";
+import { createOrRefreshCompanion } from "./companion-notes";
 import { ListInputSuggest } from "./suggest";
 import { installMainTabAction, installSidebarAction } from "./view-refresh";
 
 export const VIEW_TYPE_CSV_EXPORT = "bases-toolbox-csv-export";
 
 const PREVIEW_ROWS = 50;
+const MAX_FILES_LISTED = 40;
 
 type ExportMode = "base" | "folder";
 
 /**
  * CSV export with two sources, chosen by a tab:
- *  - From a base: pick a .base file (no need to open it); exports the notes in
- *    the folders it references, using the base's columns.
- *  - From a folder: pick any folder; unions every frontmatter key found.
- * Both preview, then Copy-for-Excel or write a .csv. Rendered into a dialog or
- * a workspace leaf.
+ *  - From a base: pick a .base file (no need to open it), pick which view, see
+ *    its filters/columns, and export the notes it covers.
+ *  - From a folder: pick a folder, optionally ignore subfolders, and companion
+ *    any non-markdown files so they're exportable too.
  */
 class CsvExportPanel {
   private plugin: BasesToolboxPlugin;
   private mode: ExportMode = "base";
+
+  // base mode
   private basePath = "";
+  private baseInfo: BaseInfo | null = null;
+  private viewIndex = 0;
+  private baseDetailsEl: HTMLElement | null = null;
+
+  // folder mode
   private folder = "/";
   private recursive = true;
+  private ignored = new Set<string>();
+  private nonMd: TFile[] = [];
+  private folderDetailsEl: HTMLElement | null = null;
 
+  // shared
   private data: FolderCsvData = { columns: [], rows: [] };
   private scanned = false;
   private note = "";
   private outDir = "";
   private outStem = "export";
-
   private controlsEl: HTMLElement | null = null;
   private resultsEl: HTMLElement | null = null;
 
@@ -58,10 +73,10 @@ class CsvExportPanel {
         if (this.mode === mode) return;
         this.mode = mode;
         this.scanned = false;
-        this.renderControls();
-        this.resultsEl?.empty();
         tabs.findAll(".bases-toolbox-doctor-tab").forEach((el) => el.removeClass("is-active"));
         t.addClass("is-active");
+        this.renderControls();
+        this.resultsEl?.empty();
       });
     };
     mkTab("From a base", "base");
@@ -76,70 +91,211 @@ class CsvExportPanel {
     const root = this.controlsEl;
     if (!root) return;
     root.empty();
-
-    if (this.mode === "base") {
-      root.createDiv({
-        cls: "bases-toolbox-fr-info",
-        text: "Pick a base — this exports the notes in the folders it references, using the base's columns. (For a base's exact live filtered results with formula columns, open it and run “Export active base results as CSV”.)",
-      });
-      new Setting(root)
-        .setName("Base")
-        .setDesc("Type to filter. Any .base file in the vault.")
-        .addText((t) => {
-          t.setValue(this.basePath).setPlaceholder("Folder/My Base.base");
-          new ListInputSuggest(this.plugin, t.inputEl, () => basePaths(this.plugin));
-          t.onChange((v) => (this.basePath = v.trim()));
-        });
-      new Setting(root).addButton((b) =>
-        b.setButtonText("Scan base").setCta().onClick(() => void this.scanBase())
-      );
-    } else {
-      root.createDiv({
-        cls: "bases-toolbox-fr-info",
-        text: "Pick a folder — every note's frontmatter becomes a row, with a column for each key found across the folder. No base needed.",
-      });
-      new Setting(root)
-        .setName("Folder")
-        .setDesc('Type to filter. "/" exports the whole vault.')
-        .addText((t) => {
-          t.setValue(this.folder);
-          new ListInputSuggest(this.plugin, t.inputEl, () => folderPaths(this.plugin));
-          t.onChange((v) => (this.folder = v.trim() || "/"));
-        });
-      new Setting(root)
-        .setName("Include subfolders")
-        .addToggle((t) => t.setValue(this.recursive).onChange((v) => (this.recursive = v)));
-      new Setting(root).addButton((b) =>
-        b.setButtonText("Scan folder").setCta().onClick(() => {
-          this.data = scanFolderCsv(this.plugin, this.folder, this.recursive);
-          this.note = "";
-          this.outDir = this.folder === "/" ? "" : `${this.folder.replace(/\/+$/, "")}/`;
-          this.outStem = this.folder === "/" ? "vault" : (this.folder.split("/").pop() ?? "folder");
-          this.scanned = true;
-          this.renderResults();
-        })
-      );
-    }
+    if (this.mode === "base") this.renderBaseControls(root);
+    else this.renderFolderControls(root);
   }
 
-  private async scanBase(): Promise<void> {
+  /* ---------- base mode ---------- */
+
+  private renderBaseControls(root: HTMLElement): void {
+    root.createDiv({
+      cls: "bases-toolbox-fr-info",
+      text: "Pick a base — load it to choose a view and see what it covers. (For a base's exact live filtered results with formula columns, open it and run “Export active base results as CSV”.)",
+    });
+    new Setting(root)
+      .setName("Base")
+      .setDesc("Type to filter. Any .base file in the vault.")
+      .addText((t) => {
+        t.setValue(this.basePath).setPlaceholder("Folder/My Base.base");
+        new ListInputSuggest(this.plugin, t.inputEl, () => basePaths(this.plugin));
+        t.onChange((v) => {
+          this.basePath = v.trim();
+          this.baseInfo = null;
+          this.baseDetailsEl?.empty();
+        });
+      });
+    new Setting(root).addButton((b) =>
+      b.setButtonText("Load base").setCta().onClick(() => void this.loadBase())
+    );
+    this.baseDetailsEl = root.createDiv();
+    if (this.baseInfo) this.renderBaseDetails();
+  }
+
+  private async loadBase(): Promise<void> {
     if (!this.basePath || !(this.app.vault.getAbstractFileByPath(this.basePath) instanceof TFile)) {
       new Notice("Pick a .base file first.");
       return;
     }
-    const { data, folders, approximate } = await scanBaseCsv(this.plugin, this.basePath);
+    this.baseInfo = await readBaseInfo(this.plugin, this.basePath);
+    this.viewIndex = 0;
+    this.renderBaseDetails();
+  }
+
+  private renderBaseDetails(): void {
+    const el = this.baseDetailsEl;
+    const info = this.baseInfo;
+    if (!el || !info) return;
+    el.empty();
+
+    if (info.baseFilters.length) {
+      el.createDiv({ cls: "bases-toolbox-fr-info", text: `Base filters: ${info.baseFilters.join("  ·  ")}` });
+    }
+    if (!info.views.length) {
+      el.createDiv({ cls: "bases-toolbox-fr-info", text: "This base has no views to export." });
+      return;
+    }
+
+    if (info.views.length > 1) {
+      new Setting(el)
+        .setName("View")
+        .setDesc("This base has several views — pick which one to export.")
+        .addDropdown((dd) => {
+          info.views.forEach((v, i) => dd.addOption(String(i), `${v.name} (${v.order.length || 1} cols)`));
+          dd.setValue(String(this.viewIndex));
+          dd.onChange((v) => {
+            this.viewIndex = Number(v);
+            this.renderBaseDetails();
+          });
+        });
+    }
+
+    const view = info.views[this.viewIndex] ?? info.views[0];
+    const card = el.createDiv({ cls: "bases-toolbox-export-viewcard" });
+    card.createDiv({ cls: "bases-toolbox-export-viewname", text: `View: ${view.name}` });
+    if (view.filters.length) {
+      card.createDiv({ cls: "bases-toolbox-fr-info", text: `View filters: ${view.filters.join("  ·  ")}` });
+    }
+    card.createDiv({
+      cls: "bases-toolbox-fr-info",
+      text: `Columns: ${(view.order.length ? view.order : ["file.name"]).join(", ")}`,
+    });
+
+    new Setting(el).addButton((b) =>
+      b.setButtonText("Export this view").setCta().onClick(() => void this.exportBaseView())
+    );
+  }
+
+  private async exportBaseView(): Promise<void> {
+    const { data, folders, approximate } = await scanBaseView(this.plugin, this.basePath, this.viewIndex);
     this.data = data;
     this.note = approximate
-      ? "This base has filters beyond folder scope — the export is a best-effort superset of the notes in its folders."
+      ? "This view has filters beyond folder scope — the export is a best-effort superset of the notes in its folders."
       : folders.length
         ? `Scoped to: ${folders.join(", ")}.`
         : "Whole-vault base.";
     const slash = this.basePath.lastIndexOf("/");
     this.outDir = slash === -1 ? "" : this.basePath.slice(0, slash + 1);
-    this.outStem = this.basePath.slice(slash + 1).replace(/\.base$/, "");
+    const stem = this.basePath.slice(slash + 1).replace(/\.base$/, "");
+    const view = this.baseInfo?.views[this.viewIndex];
+    this.outStem = this.baseInfo && this.baseInfo.views.length > 1 && view ? `${stem} - ${view.name}` : stem;
     this.scanned = true;
     this.renderResults();
   }
+
+  /* ---------- folder mode ---------- */
+
+  private renderFolderControls(root: HTMLElement): void {
+    root.createDiv({
+      cls: "bases-toolbox-fr-info",
+      text: "Pick a folder — every note's frontmatter becomes a row, with a column per key found. Load it to ignore subfolders or companion non-markdown files first.",
+    });
+    new Setting(root)
+      .setName("Folder")
+      .setDesc('Type to filter. "/" is the whole vault.')
+      .addText((t) => {
+        t.setValue(this.folder);
+        new ListInputSuggest(this.plugin, t.inputEl, () => folderPaths(this.plugin));
+        t.onChange((v) => (this.folder = v.trim() || "/"));
+      });
+    new Setting(root)
+      .setName("Include subfolders")
+      .addToggle((t) => t.setValue(this.recursive).onChange((v) => (this.recursive = v)));
+    new Setting(root).addButton((b) =>
+      b.setButtonText("Load folder").setCta().onClick(() => this.loadFolder())
+    );
+    this.folderDetailsEl = root.createDiv();
+  }
+
+  private loadFolder(): void {
+    this.ignored.clear();
+    this.renderFolderDetails();
+  }
+
+  private renderFolderDetails(): void {
+    const el = this.folderDetailsEl;
+    if (!el) return;
+    el.empty();
+
+    const ignore = [...this.ignored];
+    const subs = this.recursive ? subfoldersOf(this.plugin, this.folder) : [];
+    this.nonMd = nonMdFilesInScope(this.plugin, this.folder, this.recursive, ignore);
+
+    if (subs.length) {
+      el.createDiv({ cls: "bases-toolbox-fr-info", text: "Ignore these subfolders:" });
+      const box = el.createDiv({ cls: "bases-toolbox-export-ignore" });
+      for (const s of subs) {
+        const row = box.createDiv({ cls: "bases-toolbox-frv-row" });
+        const cb = row.createEl("input", { type: "checkbox" });
+        cb.checked = this.ignored.has(s);
+        cb.addEventListener("change", () => {
+          if (cb.checked) this.ignored.add(s);
+          else this.ignored.delete(s);
+          this.renderFolderDetails();
+        });
+        row.createSpan({ cls: "bases-toolbox-frv-path", text: s });
+      }
+    }
+
+    if (this.nonMd.length) {
+      el.createDiv({
+        cls: "bases-toolbox-fr-info bases-toolbox-export-nonmd-note",
+        text: `${this.nonMd.length} non-markdown file${this.nonMd.length === 1 ? "" : "s"} here won't be exported (images, PDFs, etc.). Generate companion notes to make them queryable — then re-load and they're included.`,
+      });
+      const list = el.createDiv({ cls: "bases-toolbox-export-nonmd-list" });
+      for (const f of this.nonMd.slice(0, MAX_FILES_LISTED)) {
+        list.createDiv({ cls: "bases-toolbox-export-nonmd-item", text: f.path });
+      }
+      if (this.nonMd.length > MAX_FILES_LISTED) {
+        list.createDiv({ cls: "bases-toolbox-index-empty", text: `…and ${this.nonMd.length - MAX_FILES_LISTED} more.` });
+      }
+      new Setting(el).addButton((b) =>
+        b
+          .setButtonText(`Generate companions for these (${this.nonMd.length})`)
+          .onClick(() => void this.generateCompanions())
+      );
+    }
+
+    new Setting(el).addButton((b) =>
+      b
+        .setButtonText("Scan & preview")
+        .setCta()
+        .onClick(() => {
+          this.data = scanFolderCsv(this.plugin, this.folder, this.recursive, [...this.ignored]);
+          this.note = this.ignored.size ? `Ignoring: ${[...this.ignored].join(", ")}.` : "";
+          this.outDir = this.folder === "/" ? "" : `${this.folder.replace(/\/+$/, "")}/`;
+          this.outStem = this.folder === "/" ? "vault" : (this.folder.split("/").pop() ?? "folder");
+          this.scanned = true;
+          this.renderResults();
+        })
+    );
+  }
+
+  private async generateCompanions(): Promise<void> {
+    const dest = this.plugin.settings.companionsFolder;
+    let created = 0;
+    let refreshed = 0;
+    for (const f of this.nonMd) {
+      const r = await createOrRefreshCompanion(this.plugin, f, dest);
+      if (r === "created") created++;
+      else refreshed++;
+    }
+    new Notice(
+      `Companions: created ${created}${refreshed ? `, refreshed ${refreshed}` : ""}. Re-load the folder to include them.`
+    );
+    this.renderFolderDetails();
+  }
+
+  /* ---------- shared results ---------- */
 
   private renderResults(): void {
     const root = this.resultsEl;
