@@ -381,14 +381,16 @@ class DuplicateFinderPanel {
         cls: "bases-toolbox-dup-key",
         text: key.replace(/^name:/, "similar name: ").replace(/^prop:/, "value: ").replace(/^body:/, "identical body #"),
       });
-      // Default keep: most recently modified.
-      let keep = group.reduce((a, b) => (b.stat.mtime > a.stat.mtime ? b : a));
+      // No default keep — the user must explicitly pick the note to keep.
+      let keep: TFile | null = null;
       const radioName = `bt-dup-${simpleHash(key)}`;
       for (const file of group) {
         const row = box.createDiv({ cls: "bases-toolbox-dup-row" });
         const radio = row.createEl("input", { type: "radio", attr: { name: radioName } });
-        radio.checked = file === keep;
-        radio.addEventListener("change", () => (keep = file));
+        radio.addEventListener("change", () => {
+          keep = file;
+          resetMergeBtn();
+        });
         const link = row.createEl("a", {
           cls: "bases-toolbox-dup-link",
           text: file.path,
@@ -406,7 +408,17 @@ class DuplicateFinderPanel {
       }
       const btn = box.createEl("button", { text: `Merge ${group.length - 1} into kept note` });
       let armed = false;
+      // Disabled until a note is picked; picking one (or re-picking) also
+      // disarms the confirm step so a changed choice can't merge on one click.
+      function resetMergeBtn(): void {
+        armed = false;
+        btn.disabled = keep === null;
+        btn.removeClass("mod-warning");
+        btn.setText(`Merge ${group.length - 1} into kept note`);
+      }
+      resetMergeBtn();
       btn.addEventListener("click", () => void (async () => {
+        if (!keep) return;
         if (!armed) {
           armed = true;
           btn.setText(`Really merge ${group.length - 1} note${group.length === 2 ? "" : "s"} away? Click again`);
@@ -414,8 +426,9 @@ class DuplicateFinderPanel {
           return;
         }
         btn.disabled = true;
+        const target = keep;
         for (const file of group) {
-          if (file !== keep) await mergeNotes(this.plugin, keep, file);
+          if (file !== target) await mergeNotes(this.plugin, target, file);
         }
         box.createDiv({ cls: "bases-toolbox-fr-info", text: "Merged. Sources are in the vault trash." });
       })());
