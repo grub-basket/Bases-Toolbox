@@ -16,6 +16,27 @@ export interface PropertyUsage {
 
 export const EMPTY_DISPLAY = "(empty)";
 
+/** Lucide icon per Obsidian property widget type (shared by the index + doctor). */
+export const TYPE_ICONS: Record<string, string> = {
+  text: "type",
+  multitext: "list",
+  number: "hash",
+  checkbox: "square-check",
+  date: "calendar",
+  datetime: "calendar-clock",
+  tags: "tags",
+  aliases: "arrow-right-left",
+  file: "file",
+  folder: "folder",
+  property: "link",
+};
+export const UNTYPED_ICON = "circle-dashed";
+
+/** The Lucide icon name for a property's widget type (fallback for untyped). */
+export function typeIconName(type: string | null | undefined): string {
+  return type ? TYPE_ICONS[type] ?? UNTYPED_ICON : UNTYPED_ICON;
+}
+
 export function valueToDisplay(v: unknown): string {
   if (v === null || v === undefined || v === "") return EMPTY_DISPLAY;
   if (typeof v === "object") return JSON.stringify(v);

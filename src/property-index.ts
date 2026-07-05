@@ -6,7 +6,7 @@ import { parseReplacement, replaceIn } from "./find-replace";
 import { ForkTargetDeleteModal, forksTargeting } from "./property-fork";
 import { anchorViewWindow, installRefocusRefresh, installSidebarAction, openFileFromView } from "./view-refresh";
 import { siftMatch } from "./sift";
-import { PropertyUsage, findKey } from "./scan";
+import { PropertyUsage, findKey, typeIconName } from "./scan";
 import { ChangeRecord } from "./types";
 import {
   ConfirmModal,
@@ -19,22 +19,6 @@ import {
 
 /** Above this many, opening every file in a tab gets a confirm first. */
 const MANY_TABS = 12;
-
-/** Lucide icon per Obsidian property widget type (leading icon on each row). */
-const TYPE_ICONS: Record<string, string> = {
-  text: "type",
-  multitext: "list",
-  number: "hash",
-  checkbox: "square-check",
-  date: "calendar",
-  datetime: "calendar-clock",
-  tags: "tags",
-  aliases: "arrow-right-left",
-  file: "file",
-  folder: "folder",
-  property: "link",
-};
-const UNTYPED_ICON = "circle-dashed";
 
 export const VIEW_TYPE_PROPERTY_INDEX = "bases-toolbox-property-index";
 
@@ -147,7 +131,7 @@ export class PropertyIndexView extends ItemView {
       setIcon(twisty, this.expanded.has(key) ? "chevron-down" : "chevron-right");
       twisty.setAttribute("aria-label", this.expanded.has(key) ? "Collapse values" : "Expand values");
       const typeIcon = header.createSpan({ cls: "bases-toolbox-index-type-icon" });
-      setIcon(typeIcon, usage.type ? TYPE_ICONS[usage.type] ?? UNTYPED_ICON : UNTYPED_ICON);
+      setIcon(typeIcon, typeIconName(usage.type));
       typeIcon.setAttribute("aria-label", usage.type ?? "no assigned type");
       header.createSpan({ cls: "bases-toolbox-index-prop-name", text: usage.name });
       if (usage.type) header.createSpan({ cls: "bases-toolbox-index-prop-type", text: usage.type });
