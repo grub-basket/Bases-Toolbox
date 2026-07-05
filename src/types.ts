@@ -56,6 +56,13 @@ export interface BasesToolboxSettings {
   companionFolders: string;
   /** Automatically create companions for newly added non-md files. */
   companionAuto: boolean;
+  /**
+   * Format-doctor issues the user marked "ignore" (see issueKey() in
+   * format-doctor.ts: path + property + JSON of the current value). An ignore
+   * only holds while the value is unchanged — if the value changes ("breaks"),
+   * the key no longer matches and the issue re-flags.
+   */
+  ignoredFormatIssues: string[];
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -73,6 +80,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   companionVaultWide: false,
   companionFolders: "",
   companionAuto: false,
+  ignoredFormatIssues: [],
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */

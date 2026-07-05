@@ -650,3 +650,20 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   border-bottom: 1px solid var(--background-modifier-border);
 }
 .bases-toolbox-audit-section:first-child { margin-top: 0; }
+
+/* Format doctor — persistent per-row Ignore */
+.bases-toolbox-doctor-ignore {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  background: transparent;
+  box-shadow: none;
+}
+.bases-toolbox-doctor-ignore:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+.bases-toolbox-doctor-row-ignored {
+  opacity: 0.55;
+}
