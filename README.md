@@ -136,6 +136,59 @@ expanded — every distinct value with usage counts. Built straight from the
 metadata cache, so it never forgets a property the way the Bases filter menu
 can. Each property and value has a shortcut into find & replace.
 
+### Bases built-in properties (and Obsidian's forgetful picker)
+
+Obsidian's Bases property menu sometimes drops the built-in `file.*`
+attributes, so a column you want — created time, tags, folder — isn't offered.
+They aren't formulas; you can re-add any of them by its identifier:
+
+| Identifier | What it is |
+| --- | --- |
+| `file.name` | note name (no extension) |
+| `file.ext` | file extension |
+| `file.path` / `file.folder` | full path / containing folder |
+| `file.size` | size in bytes |
+| `file.ctime` / `file.mtime` | created / modified time |
+| `file.tags` | every tag (frontmatter + body) |
+| `file.links` / `file.backlinks` / `file.embeds` | outgoing links / backlinks / embeds |
+| `file.properties` | all frontmatter properties on the file |
+
+**To add one**: in a table view open a column's property menu and pick it under
+**File** — or edit the `.base` file directly and add the identifier to a view's
+`order:` list:
+
+```yaml
+views:
+  - type: table
+    order:
+      - file.name
+      - file.ctime      # re-added built-in
+      - file.tags
+```
+
+**For a formatted or computed column** (a readable date, a derived value), use a
+**formula** instead — add a `formulas:` block and reference it as
+`formula.<name>`:
+
+```yaml
+formulas:
+  created: file.ctime
+views:
+  - type: table
+    order:
+      - file.name
+      - formula.created
+```
+
+…then rename that column's header in the view. Obsidian 1.9.5+ ships a built-in
+formula editor (autocomplete + docs), and the community plugin
+[Formula Forge](https://community.obsidian.md/plugins/formula-forge) adds global
+formulas and renders them inline — reach for either if you're writing anything
+beyond a bare `file.*` reference.
+
+This "forgetting" is Obsidian's behavior, not something this plugin can patch —
+but the property index above never forgets *your* properties.
+
 ### Property format doctor
 
 Command: **Property format doctor**. Obsidian flags type-mismatched property
@@ -211,6 +264,22 @@ cleans the migrated fields out of note bodies (off by default — that part
 isn't revertible; the frontmatter side is, via history). Scope to a folder
 or the whole vault; existing properties are skipped unless you opt into
 overwriting.
+
+## Tips & recipes
+
+**Fork any note (duplicate + rename in one go)**: Obsidian's core **Templates**
+plugin already covers new-note-from-template, so this plugin doesn't ship a
+templates feature. To quickly clone an *existing* note and rename it, install
+the community **[Commander](https://obsidian.md/plugins?id=cmdr)** plugin and
+bind a macro that runs *Create new note* and then *Rename file* back to back —
+one click forks the note you're on.
+
+**Writing formulas**: for anything past a bare `file.*` reference (see
+[Bases built-in properties](#bases-built-in-properties-and-obsidians-forgetful-picker)
+above), use Obsidian 1.9.5+'s built-in formula editor, or
+[Formula Forge](https://community.obsidian.md/plugins/formula-forge) for global
+formulas and inline rendering. A full formula *builder* is out of scope here —
+those tools do it well.
 
 ## Credits & related plugins
 
