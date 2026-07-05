@@ -39,7 +39,7 @@ import { FindReplaceView, VIEW_TYPE_FIND_REPLACE } from "./find-replace-view";
 import { undoLatest } from "./history";
 import { HistoryView, VIEW_TYPE_HISTORY, openHistoryView } from "./history-view";
 import { InlineFieldMigratorModal } from "./inline-fields";
-import { DuplicateFinderModal, startMerge } from "./merge";
+import { DuplicateFinderModal, DuplicateFinderView, VIEW_TYPE_DUPLICATE_FINDER, openDuplicateFinderView, startMerge } from "./merge";
 import { installNumberGuard } from "./number-guard";
 import { PropertyIndexView, VIEW_TYPE_PROPERTY_INDEX } from "./property-index";
 import {
@@ -97,6 +97,7 @@ export default class BasesToolboxPlugin extends Plugin {
     this.registerView(VIEW_TYPE_FORMAT_DOCTOR, (leaf) => new FormatDoctorView(leaf, this));
     this.registerView(VIEW_TYPE_CONDITIONAL_FORMAT, (leaf) => new ConditionalFormatView(leaf, this));
     this.registerView(VIEW_TYPE_LAUNCHER, (leaf) => new LauncherView(leaf, this));
+    this.registerView(VIEW_TYPE_DUPLICATE_FINDER, (leaf) => new DuplicateFinderView(leaf, this));
 
     this.addCommand({
       id: "find-replace-property-values",
@@ -156,6 +157,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "find-duplicates",
       name: "Find duplicate notes",
       callback: () => new DuplicateFinderModal(this).open(),
+    });
+
+    this.addCommand({
+      id: "find-duplicates-tab",
+      name: "Find duplicate notes (in a tab)",
+      callback: () => void openDuplicateFinderView(this),
     });
 
     this.addCommand({

@@ -119,6 +119,21 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   padding: var(--size-2-1) 0;
 }
 
+.bases-toolbox-dup-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-accent);
+  cursor: pointer;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bases-toolbox-dup-link:hover {
+  text-decoration: underline;
+}
+
 .bases-toolbox-csv-preview {
   background: var(--background-secondary);
   border-radius: var(--radius-m);

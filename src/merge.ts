@@ -1,6 +1,7 @@
-import { FuzzySuggestModal, Modal, Notice, Setting, TFile } from "obsidian";
+import { FuzzySuggestModal, ItemView, Modal, Notice, Setting, TFile, WorkspaceLeaf } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { findKey, isUnsafeKey, valueToDisplay } from "./scan";
+import { installMainTabAction, installSidebarAction, openFileFromView } from "./view-refresh";
 
 /* ---------- merge core ---------- */
 
@@ -263,23 +264,29 @@ function normalizeName(basename: string): string {
     .trim();
 }
 
-export class DuplicateFinderModal extends Modal {
+/**
+ * Shared duplicate-finder UI (scan controls + grouped results). Rendered into
+ * either a modal or a workspace tab; the only difference is `openFile`, which
+ * decides where a clicked note link lands.
+ */
+class DuplicateFinderPanel {
   private plugin: BasesToolboxPlugin;
+  private openFile: (file: TFile) => void;
   private byName = true;
   private byBody = false;
   private propEl: HTMLInputElement | null = null;
   private resultsEl: HTMLElement | null = null;
 
-  constructor(plugin: BasesToolboxPlugin) {
-    super(plugin.app);
+  constructor(plugin: BasesToolboxPlugin, openFile: (file: TFile) => void) {
     this.plugin = plugin;
+    this.openFile = openFile;
   }
 
-  onOpen(): void {
-    this.titleEl.setText("Find duplicate notes");
-    const { contentEl } = this;
-    this.modalEl.addClass("bases-toolbox-csv-modal");
+  private get app() {
+    return this.plugin.app;
+  }
 
+  render(contentEl: HTMLElement): void {
     new Setting(contentEl)
       .setName("Similar file names")
       .setDesc('Ignores case, punctuation, and trailing "copy"/number suffixes.')
@@ -382,7 +389,16 @@ export class DuplicateFinderModal extends Modal {
         const radio = row.createEl("input", { type: "radio", attr: { name: radioName } });
         radio.checked = file === keep;
         radio.addEventListener("change", () => (keep = file));
-        row.createSpan({ text: ` ${file.path} ` });
+        const link = row.createEl("a", {
+          cls: "bases-toolbox-dup-link",
+          text: file.path,
+          href: "#",
+          attr: { "aria-label": "Open in a new tab" },
+        });
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          this.openFile(file);
+        });
         row.createSpan({
           cls: "bases-toolbox-index-prop-count",
           text: new Date(file.stat.mtime).toLocaleDateString(),
@@ -405,6 +421,81 @@ export class DuplicateFinderModal extends Modal {
       })());
     }
   }
+}
+
+export const VIEW_TYPE_DUPLICATE_FINDER = "bases-toolbox-duplicate-finder";
+
+/** Duplicate finder as a dialog. Note links open behind the modal in a new tab. */
+export class DuplicateFinderModal extends Modal {
+  private plugin: BasesToolboxPlugin;
+
+  constructor(plugin: BasesToolboxPlugin) {
+    super(plugin.app);
+    this.plugin = plugin;
+  }
+
+  onOpen(): void {
+    this.titleEl.setText("Find duplicate notes");
+    this.modalEl.addClass("bases-toolbox-csv-modal");
+    // Add a shortcut to promote the dialog into a full tab, where clicked note
+    // links land beside the finder instead of behind it.
+    new Setting(this.contentEl)
+      .setName("Prefer opening notes in tabs?")
+      .setDesc("Run the duplicate finder as its own tab so opened notes sit alongside it.")
+      .addButton((b) =>
+        b.setButtonText("Open in a tab").onClick(() => {
+          this.close();
+          void openDuplicateFinderView(this.plugin);
+        })
+      );
+    new DuplicateFinderPanel(this.plugin, (file) =>
+      void this.app.workspace.getLeaf("tab").openFile(file)
+    ).render(this.contentEl);
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
+/** Duplicate finder as a workspace tab: clicked note links open in new tabs
+ * beside it, so you can browse the candidates without dismissing the finder. */
+export class DuplicateFinderView extends ItemView {
+  icon = "copy";
+  private plugin: BasesToolboxPlugin;
+
+  constructor(leaf: WorkspaceLeaf, plugin: BasesToolboxPlugin) {
+    super(leaf);
+    this.plugin = plugin;
+  }
+
+  getViewType(): string {
+    return VIEW_TYPE_DUPLICATE_FINDER;
+  }
+
+  getDisplayText(): string {
+    return "Find duplicate notes";
+  }
+
+  async onOpen(): Promise<void> {
+    const root = this.contentEl;
+    root.empty();
+    root.addClass("bases-toolbox-csv-modal");
+    new DuplicateFinderPanel(this.plugin, (file) => void openFileFromView(this, file)).render(root);
+    installMainTabAction(this);
+    installSidebarAction(this);
+  }
+}
+
+/** Opens (or reveals) the duplicate finder as a main-area tab. */
+export async function openDuplicateFinderView(plugin: BasesToolboxPlugin): Promise<void> {
+  const { workspace } = plugin.app;
+  let leaf = workspace.getLeavesOfType(VIEW_TYPE_DUPLICATE_FINDER)[0];
+  if (!leaf) {
+    leaf = workspace.getLeaf(true);
+    await leaf.setViewState({ type: VIEW_TYPE_DUPLICATE_FINDER, active: true });
+  }
+  await workspace.revealLeaf(leaf);
 }
 
 function simpleHash(s: string): string {

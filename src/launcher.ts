@@ -5,6 +5,7 @@ import { VIEW_TYPE_FIND_REPLACE } from "./find-replace-view";
 import { VIEW_TYPE_HISTORY } from "./history-view";
 import { VIEW_TYPE_FORMAT_DOCTOR } from "./format-doctor";
 import { VIEW_TYPE_CONDITIONAL_FORMAT } from "./conditional-format-view";
+import { VIEW_TYPE_DUPLICATE_FINDER } from "./merge";
 
 export const VIEW_TYPE_LAUNCHER = "bases-toolbox-launcher";
 
@@ -35,6 +36,7 @@ const VIEWS: ViewFeature[] = [
   { name: "History", desc: "Review & revert past changes", icon: "history", type: VIEW_TYPE_HISTORY },
   { name: "Format doctor", desc: "Fix values that don't match their type", icon: "stethoscope", type: VIEW_TYPE_FORMAT_DOCTOR },
   { name: "Conditional formatting", desc: "Color Bases rows/cells by value", icon: "paintbrush", type: VIEW_TYPE_CONDITIONAL_FORMAT },
+  { name: "Find duplicate notes", desc: "Detect near-duplicate notes", icon: "copy", type: VIEW_TYPE_DUPLICATE_FINDER },
 ];
 
 const TOOLS: ToolFeature[] = [
@@ -43,7 +45,6 @@ const TOOLS: ToolFeature[] = [
   { name: "Compute rollup", desc: "Aggregate linked notes into a property", icon: "sigma", command: "compute-rollup" },
   { name: "Migrate inline fields", desc: "Convert “key:: value” to frontmatter", icon: "list-plus", command: "migrate-inline-fields" },
   { name: "Merge note into another", desc: "Combine two notes + their properties", icon: "merge", command: "merge-note" },
-  { name: "Find duplicate notes", desc: "Detect near-duplicate notes", icon: "copy", command: "find-duplicates" },
   { name: "Create companion notes", desc: "Make non-Markdown files queryable", icon: "file-plus-2", command: "companion-notes" },
   { name: "Stamp file metadata", desc: "Write created/modified into frontmatter", icon: "stamp", command: "metadata-stamp" },
   { name: "Import CSV as notes", desc: "Turn a CSV into notes", icon: "file-down", command: "import-csv" },
