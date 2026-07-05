@@ -13,15 +13,24 @@ type BulkMode = "set" | "set-missing" | "append" | "remove" | "delete";
  * undocumented internals, probed defensively so a core change degrades to a
  * clear notice instead of wrong behavior.
  */
+type BaseView = { getViewType?: () => string; file?: TFile; controller?: { results?: unknown } };
+
+const isBaseView = (v: unknown): v is BaseView =>
+  !!v && (v as BaseView).getViewType?.() === "bases";
+
 export function activeBaseResults(
   plugin: BasesToolboxPlugin
 ): { files: TFile[]; name: string } | null {
-  const view = plugin.app.workspace.getActiveViewOfType(ItemView) as unknown as {
-    getViewType?: () => string;
-    file?: TFile;
-    controller?: { results?: unknown };
-  } | null;
-  if (view?.getViewType?.() !== "bases") return null;
+  // Prefer the FOCUSED base, but fall back to any open base view — so the
+  // command still works when it's triggered from the launcher / sidebar / a
+  // command-palette selection (which can leave a non-base view focused) or when
+  // the base is sitting in another tab. The modal shows the base name + file
+  // count, so the user always sees which base it will operate on.
+  let view: unknown = plugin.app.workspace.getActiveViewOfType(ItemView);
+  if (!isBaseView(view)) {
+    view = plugin.app.workspace.getLeavesOfType("bases").map((l) => l.view).find(isBaseView) ?? null;
+  }
+  if (!isBaseView(view)) return null;
   const results = view.controller?.results;
   if (!(results instanceof Map)) return null;
   const files = [...results.keys()].filter(

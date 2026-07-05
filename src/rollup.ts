@@ -24,7 +24,9 @@ const AGG_LABELS: Record<Agg, string> = {
 export function openRollup(plugin: BasesToolboxPlugin): void {
   const target = activeBaseResults(plugin);
   if (!target) {
-    new Notice("Open a base first — rollups are computed for the active base's results.");
+    new Notice(
+      "Open a base first — rollups are computed for a base's results. (If a base IS open, Obsidian's internals may have changed; tell the plugin author.)"
+    );
     return;
   }
   if (!target.files.length) {
