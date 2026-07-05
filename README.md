@@ -70,15 +70,24 @@ one note per row in a target folder, with an optional auto-created .base.
 Dates are normalized (US, European, month names, Excel serials); quoted
 fields may contain newlines.
 
-**Export to CSV** — two ways:
+**Export to CSV** — the panel / dialog has two tabs:
 
-- **Folder scan** (the panel / dialog): pick any folder — no base needed — and
-  every note's frontmatter becomes a CSV row, with a column for each key found
-  across the folder. Preview it, then "Copy for Excel" or write a `.csv`.
-  Wikilinks are unwrapped and lists joined with ";".
-- **Active base** (the "Export active base results as CSV" command): exports the
-  focused base's current results using its column order. Run it on a base; it
-  reports an error on any other view.
+- **From a base**: pick any `.base` file (no need to open it) — it reads the
+  folders the base references and its column order, resolves the built-in
+  `file.*` columns (name, path, folder, ext, size, ctime, mtime, tags) plus your
+  frontmatter properties, and exports the notes it covers. Formula columns and
+  link-lists (which need Bases' live engine) come out blank, and if the base has
+  filters beyond folder scope the result is flagged as a best-effort superset.
+- **From a folder**: pick any folder — every note's frontmatter becomes a CSV
+  row, with a column for each key found across the folder.
+
+Both preview first, then "Copy for Excel" (TSV to clipboard) or write a `.csv`
+(next to the base, or in the folder). Wikilinks are unwrapped and lists joined
+with ";".
+
+For a base's **exact live filtered results** with formula columns evaluated, open
+the base and run the **"Export active base results as CSV"** command — it uses
+Obsidian's live query engine and errors on any non-base view.
 
 ### Merge notes & duplicate finder
 
