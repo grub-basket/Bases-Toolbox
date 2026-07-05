@@ -258,7 +258,7 @@ export default class BasesToolboxPlugin extends Plugin {
       callback: () => void openLauncher(this),
     });
 
-    this.addRibbonIcon("layout-dashboard", "Bases Toolbox — launch a feature", () =>
+    this.addRibbonIcon("wrench", "Bases Toolbox — launch a feature", () =>
       void openLauncher(this)
     );
 

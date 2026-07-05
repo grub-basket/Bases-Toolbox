@@ -55,7 +55,7 @@ const TOOLS: ToolFeature[] = [
 ];
 
 export class LauncherView extends ItemView {
-  icon = "layout-dashboard";
+  icon = "wrench";
   private plugin: BasesToolboxPlugin;
 
   constructor(leaf: WorkspaceLeaf, plugin: BasesToolboxPlugin) {
@@ -90,6 +90,9 @@ export class LauncherView extends ItemView {
       );
       this.launchBtn(card, "picture-in-picture-2", "Tab", `Open ${f.name} in a tab`, () =>
         void this.openView(f.type, "tab")
+      );
+      this.launchBtn(card, "app-window", "Window", `Open ${f.name} in a new window`, () =>
+        void this.openView(f.type, "window")
       );
     }
 
@@ -133,18 +136,21 @@ export class LauncherView extends ItemView {
   }
 
   /** Reuse an existing leaf of this type in the target area, else create one. */
-  private async openView(type: string, where: "sidebar" | "tab"): Promise<void> {
+  private async openView(type: string, where: "sidebar" | "tab" | "window"): Promise<void> {
     const ws = this.app.workspace;
+    const isMain = (l: WorkspaceLeaf) => l.getRoot() === ws.rootSplit;
+    const isSidebar = (l: WorkspaceLeaf) =>
+      l.getRoot() === ws.leftSplit || l.getRoot() === ws.rightSplit;
+    // A popout window is neither the main split nor a sidebar.
     const inArea = (l: WorkspaceLeaf) =>
-      where === "sidebar"
-        ? l.getRoot() === ws.leftSplit || l.getRoot() === ws.rightSplit
-        : l.getRoot() === ws.rootSplit;
+      where === "sidebar" ? isSidebar(l) : where === "tab" ? isMain(l) : !isMain(l) && !isSidebar(l);
     const existing = ws.getLeavesOfType(type).find(inArea);
     if (existing) {
       await ws.revealLeaf(existing);
       return;
     }
-    const leaf = where === "sidebar" ? ws.getRightLeaf(false) : ws.getLeaf("tab");
+    const leaf =
+      where === "sidebar" ? ws.getRightLeaf(false) : ws.getLeaf(where === "window" ? "window" : "tab");
     if (!leaf) return;
     await leaf.setViewState({ type, active: true });
     await ws.revealLeaf(leaf);
