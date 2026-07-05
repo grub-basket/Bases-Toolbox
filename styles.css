@@ -228,6 +228,27 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   color: var(--text-error);
 }
 
+.bases-toolbox-dup-pv-kept {
+  font-weight: var(--font-medium);
+  color: var(--text-normal);
+}
+
+.bases-toolbox-dup-pv-arrow {
+  color: var(--text-faint);
+}
+
+.bases-toolbox-dup-pv-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-2-2);
+  color: var(--text-warning);
+}
+
+.bases-toolbox-dup-pv-warn .bases-toolbox-fr-warn-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+
 .bases-toolbox-csv-preview {
   background: var(--background-secondary);
   border-radius: var(--radius-m);

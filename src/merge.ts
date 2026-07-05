@@ -1,4 +1,4 @@
-import { FuzzySuggestModal, ItemView, Modal, Notice, Setting, TFile, WorkspaceLeaf } from "obsidian";
+import { FuzzySuggestModal, ItemView, Modal, Notice, Setting, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { findKey, isUnsafeKey, valueToDisplay } from "./scan";
 import { installMainTabAction, installSidebarAction, openFileFromView } from "./view-refresh";
@@ -157,6 +157,64 @@ export async function mergeNotes(
   );
 }
 
+/**
+ * Merges a whole duplicate group into `keep` at once. Unlike a loop of
+ * pairwise `mergeNotes` (which always appends each source body to the end),
+ * this rebuilds the kept note's body as the chronological concatenation of
+ * ALL member bodies — kept note included — ordered by creation time. So the
+ * user never has to order the pieces themselves. Frontmatter merges exactly
+ * as the pairwise path (kept note wins conflicts, lists union, missing keys
+ * copy); backlinks re-point; sources go to the vault trash.
+ */
+export async function mergeGroup(
+  plugin: BasesToolboxPlugin,
+  keep: TFile,
+  sources: TFile[]
+): Promise<void> {
+  const app = plugin.app;
+  const all = [keep, ...sources];
+
+  // Read every body up front (before anything is trashed).
+  const bodyByFile = new Map<TFile, string>();
+  for (const f of all) bodyByFile.set(f, stripFrontmatter(await app.vault.read(f)).trim());
+
+  // Merge frontmatter into the kept note — same rules as mergeNotes, kept wins.
+  await app.fileManager.processFrontMatter(keep, (fm) => {
+    for (const src of sources) {
+      const srcFm = (app.metadataCache.getFileCache(src)?.frontmatter ?? {}) as Record<string, unknown>;
+      const plan = planMerge(fm, srcFm);
+      for (const key of plan.copied) fm[key] = srcFm[key];
+      for (const key of plan.unioned) {
+        const tk = findKey(fm, key) ?? key;
+        fm[tk] = unionValues(fm[tk], srcFm[key]);
+      }
+      // conflicts: keep the target's value (default resolution)
+    }
+  });
+
+  // Rewrite the kept note's body as the chronological concatenation. We read
+  // the frontmatter block back from the just-merged file so we don't disturb it.
+  const ordered = bodyMergeOrder(all.filter((f) => bodyByFile.get(f)));
+  const body = ordered.map((f) => bodyByFile.get(f)).join("\n\n---\n\n");
+  await app.vault.process(keep, (content) => {
+    const fmBlock = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/)?.[0] ?? "";
+    if (!body) return fmBlock;
+    return fmBlock ? `${fmBlock.trimEnd()}\n\n${body}\n` : `${body}\n`;
+  });
+
+  let rewritten = 0;
+  for (const src of sources) {
+    rewritten += await rewriteBacklinks(plugin, src, keep);
+    await app.fileManager.trashFile(src);
+  }
+
+  new Notice(
+    `Merged ${sources.length} note${sources.length === 1 ? "" : "s"} into "${keep.basename}"` +
+      (rewritten ? `, re-pointed ${rewritten} link${rewritten === 1 ? "" : "s"}` : "") +
+      ". Bodies ordered by creation date; sources moved to vault trash."
+  );
+}
+
 /* ---------- merge preview ---------- */
 
 type PreviewOrigin = "kept" | "added" | "union" | "conflict";
@@ -172,10 +230,20 @@ interface PreviewProp {
 
 interface MergePreview {
   props: PreviewProp[];
-  /** Basenames of sources whose body gets appended below the kept note. */
-  bodiesFrom: string[];
+  /**
+   * All notes with a body (kept + sources) in the order their bodies will be
+   * concatenated: by creation time, oldest first. `kept` marks the surviving
+   * note so the UI can point out where its own body lands.
+   */
+  bodyOrder: { name: string; kept: boolean }[];
   /** Basenames of sources that move to the vault trash. */
   removed: string[];
+  /**
+   * True when ordering by *modified* time would differ from creation-time
+   * order — i.e. a note edited later than a note created later. We order by
+   * creation time, so we surface this as a caveat.
+   */
+  mtimeCaveat: boolean;
 }
 
 function asList(v: unknown): unknown[] {
@@ -208,7 +276,6 @@ async function buildMergePreview(
     note(k, "kept");
   }
 
-  const bodiesFrom: string[] = [];
   for (const src of sources) {
     const srcFm = (app.metadataCache.getFileCache(src)?.frontmatter ?? {}) as Record<string, unknown>;
     const plan = planMerge(result, srcFm);
@@ -230,9 +297,17 @@ async function buildMergePreview(
       // Default resolution keeps the target's value; the source's is dropped.
       note(tk, "conflict", `${src.basename}’s “${valueToDisplay(c.sourceValue)}” dropped`);
     }
-    const body = stripFrontmatter(await app.vault.cachedRead(src)).trim();
-    if (body) bodiesFrom.push(src.basename);
   }
+
+  // Body order: every note that has a body (kept included), oldest-created
+  // first — see bodyMergeOrder(). This is exactly what mergeGroup() writes.
+  const withBody: TFile[] = [];
+  for (const f of [keep, ...sources]) {
+    if (stripFrontmatter(await app.vault.cachedRead(f)).trim()) withBody.push(f);
+  }
+  const byCtime = bodyMergeOrder(withBody);
+  const byMtime = [...withBody].sort((a, b) => a.stat.mtime - b.stat.mtime);
+  const mtimeCaveat = byCtime.length > 1 && byCtime.some((f, i) => f !== byMtime[i]);
 
   const props: PreviewProp[] = Object.keys(result).map((key) => ({
     key,
@@ -240,7 +315,19 @@ async function buildMergePreview(
     origin: origin.get(key) ?? "kept",
     detail: (details.get(key) ?? []).join("; "),
   }));
-  return { props, bodiesFrom, removed: sources.map((s) => s.basename) };
+  return {
+    props,
+    bodyOrder: byCtime.map((f) => ({ name: f.basename, kept: f === keep })),
+    removed: sources.map((s) => s.basename),
+    mtimeCaveat,
+  };
+}
+
+/** Canonical body-concatenation order: oldest creation time first, with path
+ * as a stable tiebreaker so two notes made in the same second don't reorder
+ * unpredictably between the preview and the actual merge. */
+function bodyMergeOrder(files: TFile[]): TFile[] {
+  return [...files].sort((a, b) => a.stat.ctime - b.stat.ctime || a.path.localeCompare(b.path));
 }
 
 const PREVIEW_ORIGIN_LABEL: Record<PreviewOrigin, string> = {
@@ -599,12 +686,26 @@ class DuplicateFinderPanel {
             text: p.detail ? `${PREVIEW_ORIGIN_LABEL[p.origin]} · ${p.detail}` : PREVIEW_ORIGIN_LABEL[p.origin],
           });
         }
-        wrap.createDiv({
-          cls: "bases-toolbox-dup-pv-foot",
-          text: pv.bodiesFrom.length
-            ? `Bodies appended below the kept note: ${pv.bodiesFrom.join(", ")}.`
-            : "No source bodies to append.",
-        });
+        if (pv.bodyOrder.length) {
+          const foot = wrap.createDiv({ cls: "bases-toolbox-dup-pv-foot" });
+          foot.createSpan({ text: "Body order (by creation date): " });
+          pv.bodyOrder.forEach((b, i) => {
+            if (i) foot.createSpan({ cls: "bases-toolbox-dup-pv-arrow", text: " → " });
+            foot.createSpan({
+              cls: b.kept ? "bases-toolbox-dup-pv-kept" : undefined,
+              text: b.kept ? `${b.name} (kept)` : b.name,
+            });
+          });
+        } else {
+          wrap.createDiv({ cls: "bases-toolbox-dup-pv-foot", text: "No bodies to combine." });
+        }
+        if (pv.mtimeCaveat) {
+          const warn = wrap.createDiv({ cls: "bases-toolbox-dup-pv-foot bases-toolbox-dup-pv-warn" });
+          setIcon(warn.createSpan({ cls: "bases-toolbox-fr-warn-icon" }), "alert-triangle");
+          warn.createSpan({
+            text: "Some notes were edited after others were created, so this creation-date order may not match the order you last worked on them.",
+          });
+        }
         wrap.createDiv({
           cls: "bases-toolbox-dup-pv-foot bases-toolbox-dup-pv-trash",
           text: `Moved to vault trash (recoverable): ${pv.removed.join(", ")}.`,
@@ -632,9 +733,7 @@ class DuplicateFinderPanel {
         }
         btn.disabled = true;
         const target = keep;
-        for (const file of group) {
-          if (file !== target) await mergeNotes(this.plugin, target, file);
-        }
+        await mergeGroup(this.plugin, target, group.filter((f) => f !== target));
         box.createDiv({ cls: "bases-toolbox-fr-info", text: "Merged. Sources are in the vault trash." });
       })());
     }
@@ -698,7 +797,10 @@ export class DuplicateFinderView extends ItemView {
   async onOpen(): Promise<void> {
     const root = this.contentEl;
     root.empty();
-    root.addClass("bases-toolbox-csv-modal", "bases-toolbox-dup-view");
+    // NB: don't add `bases-toolbox-csv-modal` here — it pins width to 900px and
+    // left-aligns the whole view. The root fills the pane; the inner wrapper
+    // (max-width + margin auto) is what centers the content.
+    root.addClass("bases-toolbox-dup-view");
     const inner = root.createDiv({ cls: "bases-toolbox-dup-view-inner" });
     new DuplicateFinderPanel(this.plugin, (file) => void openFileFromView(this, file)).render(inner);
     installMainTabAction(this);
