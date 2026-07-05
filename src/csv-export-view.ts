@@ -3,6 +3,7 @@ import type BasesToolboxPlugin from "./main";
 import {
   BaseInfo,
   FolderCsvData,
+  baseSummaryText,
   basePaths,
   folderCsvToText,
   folderPaths,
@@ -367,6 +368,26 @@ class CsvExportPanel {
     bar.createEl("button", { text: "Write .csv to vault" }).addEventListener("click", () =>
       void this.writeCsv()
     );
+    // Base mode: also offer a readable .txt that captures the filters/formulas/
+    // sort/grouping the CSV can't — so the user can rebuild those in a spreadsheet.
+    if (this.mode === "base" && this.basePath) {
+      bar
+        .createEl("button", { text: "Write readable summary (.txt)" })
+        .addEventListener("click", () => void this.writeSummary());
+    }
+  }
+
+  private async writeSummary(): Promise<void> {
+    const text = await baseSummaryText(this.plugin, this.basePath);
+    if (!text) {
+      new Notice("Couldn't read the base.");
+      return;
+    }
+    const outPath = `${this.outDir}${this.outStem} summary.txt`;
+    const existing = this.app.vault.getAbstractFileByPath(outPath);
+    if (existing instanceof TFile) await this.app.vault.modify(existing, text);
+    else await this.app.vault.create(outPath, text);
+    new Notice(`Wrote base summary → "${outPath}".`);
   }
 
   /** The data limited to the checked columns (file name is always included). */

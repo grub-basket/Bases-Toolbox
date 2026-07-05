@@ -37,6 +37,7 @@ class CsvImportPanel {
   private lastHeaderKey = "";
   private previewRow = 0;
 
+  private taEl: HTMLTextAreaElement | null = null;
   private mappingEl: HTMLElement | null = null;
   private previewEl: HTMLElement | null = null;
   private statusEl: HTMLElement | null = null;
@@ -61,33 +62,38 @@ class CsvImportPanel {
   render(contentEl: HTMLElement): void {
     const ta = contentEl.createEl("textarea", {
       cls: "bases-toolbox-csv-input",
-      attr: { placeholder: "Paste CSV/TSV here, or pick a file below…" },
+      attr: { placeholder: "Paste CSV/TSV here, or drop a file below…" },
     });
+    this.taEl = ta;
     ta.addEventListener("input", () => this.parse(ta.value));
 
-    new Setting(contentEl).setName("Or pick a file").addButton((b) =>
-      b.setButtonText("Choose CSV file").onClick(() => {
-        const input = createEl("input", { type: "file", attr: { accept: ".csv,.tsv,.txt" } });
-        input.addEventListener("change", () => {
-          const file = input.files?.[0];
-          if (!file) return;
-          // Binary spreadsheets aren't plain text — reading them yields garbage.
-          if (/\.(xlsx?|numbers|ods|gsheet|sheet)$/i.test(file.name)) {
-            new Notice(
-              `“${file.name}” is a spreadsheet, not a CSV. Export it to CSV or TSV (File → Export / Save As) and pick that.`
-            );
-            return;
-          }
-          const reader = new FileReader();
-          reader.onload = () => {
-            ta.value = String(reader.result ?? "");
-            this.parse(ta.value);
-          };
-          reader.readAsText(file);
-        });
-        input.click();
-      })
-    );
+    // A single drop zone that's also click-to-choose — the usual pattern.
+    const drop = contentEl.createDiv({ cls: "bases-toolbox-csv-drop" });
+    drop.createDiv({ cls: "bases-toolbox-csv-drop-main", text: "Drop a CSV/TSV file here, or click to choose" });
+    drop.createDiv({
+      cls: "bases-toolbox-csv-drop-sub",
+      text: "Accepts .csv, .tsv, and .txt (comma- or tab-separated). Spreadsheets (.xlsx, .numbers, .ods) must be exported to CSV first.",
+    });
+    const pick = () => {
+      const input = createEl("input", { type: "file", attr: { accept: ".csv,.tsv,.txt" } });
+      input.addEventListener("change", () => {
+        const file = input.files?.[0];
+        if (file) this.loadFile(file);
+      });
+      input.click();
+    };
+    drop.addEventListener("click", pick);
+    drop.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      drop.addClass("is-dragover");
+    });
+    drop.addEventListener("dragleave", () => drop.removeClass("is-dragover"));
+    drop.addEventListener("drop", (e) => {
+      e.preventDefault();
+      drop.removeClass("is-dragover");
+      const file = e.dataTransfer?.files?.[0];
+      if (file) this.loadFile(file);
+    });
 
     this.statusEl = contentEl.createDiv({ cls: "bases-toolbox-fr-info", text: "Waiting for CSV input…" });
     this.mappingEl = contentEl.createDiv();
@@ -135,6 +141,24 @@ class CsvImportPanel {
       b.setButtonText("Import").setCta().setDisabled(true).onClick(() => void this.doImport());
       this.importBtn = b;
     });
+  }
+
+  /** Loads a dropped/picked file into the textarea, rejecting binary spreadsheets. */
+  private loadFile(file: File): void {
+    if (/\.(xlsx?|numbers|ods|gsheet|sheet)$/i.test(file.name)) {
+      new Notice(
+        `“${file.name}” is a spreadsheet, not a CSV. Export it to CSV or TSV (File → Export / Save As) and drop that.`
+      );
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const ta = this.taEl;
+      if (!ta) return;
+      ta.value = String(reader.result ?? "");
+      this.parse(ta.value);
+    };
+    reader.readAsText(file);
   }
 
   private parse(text: string): void {

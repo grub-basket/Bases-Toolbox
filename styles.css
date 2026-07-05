@@ -304,6 +304,32 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   cursor: pointer;
 }
 
+.bases-toolbox-csv-drop {
+  margin: var(--size-2-3) 0;
+  padding: var(--size-4-4) var(--size-4-3);
+  border: 1.5px dashed var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.bases-toolbox-csv-drop:hover,
+.bases-toolbox-csv-drop.is-dragover {
+  border-color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+}
+
+.bases-toolbox-csv-drop-main {
+  font-weight: var(--font-medium);
+}
+
+.bases-toolbox-csv-drop-sub {
+  margin-top: var(--size-2-2);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
 .bases-toolbox-csv-section {
   margin-bottom: var(--size-4-6);
 }

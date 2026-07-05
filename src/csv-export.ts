@@ -289,6 +289,74 @@ export async function readBaseInfo(plugin: BasesToolboxPlugin, basePath: string)
 }
 
 /**
+ * A plain-language rendering of a .base file — filters, formulas, and each
+ * view's filters/columns/sort/grouping — to sit next to the CSV and cover what
+ * CSV can't (so the user can rebuild formulas/grouping in their spreadsheet).
+ */
+export async function baseSummaryText(plugin: BasesToolboxPlugin, basePath: string): Promise<string> {
+  const app = plugin.app;
+  const f = app.vault.getAbstractFileByPath(basePath);
+  if (!(f instanceof TFile)) return "";
+  let doc: Record<string, unknown> = {};
+  try {
+    doc = (parseYaml(await app.vault.read(f)) ?? {}) as Record<string, unknown>;
+  } catch {
+    /* empty */
+  }
+
+  const stem = (basePath.split("/").pop() ?? basePath).replace(/\.base$/, "");
+  const L: string[] = [];
+  L.push(`# ${stem} — base summary`);
+  L.push("");
+  L.push(
+    "A plain-language description of this base, to fill the gaps a CSV export can't: filters, formulas, sorting, and grouping. The CSV holds the raw property/file values; recreate the rest in your spreadsheet using the definitions below."
+  );
+  L.push("");
+
+  const baseFilters = filterClauses(doc.filters);
+  L.push("## Base filters (apply to every view)");
+  L.push(baseFilters.length ? baseFilters.map((c) => `- ${c}`).join("\n") : "- (none)");
+  L.push("");
+
+  if (doc.formulas && typeof doc.formulas === "object") {
+    L.push("## Formulas (not in the CSV — rebuild as spreadsheet formulas)");
+    for (const [name, expr] of Object.entries(doc.formulas as Record<string, unknown>)) {
+      L.push(`- formula.${name} = ${String(expr)}`);
+    }
+    L.push("");
+  }
+
+  const views = Array.isArray(doc.views) ? (doc.views as Record<string, unknown>[]) : [];
+  for (const v of views) {
+    L.push(`## View: ${typeof v.name === "string" ? v.name : "(unnamed)"} — ${v.type ?? "table"}`);
+    const vf = filterClauses(v.filters);
+    if (vf.length) {
+      L.push("Filters:");
+      vf.forEach((c) => L.push(`- ${c}`));
+    }
+    const order = (Array.isArray(v.order) ? (v.order as unknown[]) : []).filter(
+      (k): k is string => typeof k === "string"
+    );
+    if (order.length) {
+      L.push("Columns (in order):");
+      order.forEach((k) => L.push(`- ${k}`));
+    }
+    const sort = v.sort ?? (v as Record<string, unknown>).sortBy;
+    if (sort) L.push(`Sort: ${JSON.stringify(sort)}`);
+    const group = (v as Record<string, unknown>).groupBy ?? (v as Record<string, unknown>).group_by;
+    if (group) L.push(`Group by: ${JSON.stringify(group)}`);
+    L.push("");
+  }
+
+  L.push("---");
+  L.push(
+    "Note: formula columns and any grouping/sorting are NOT in the CSV — the CSV is a flat table of the notes' property and file.* values. Rebuild formulas, groups, and sort order in your spreadsheet from the definitions above."
+  );
+  L.push("");
+  return L.join("\n");
+}
+
+/**
  * Exports one view of a base WITHOUT opening it: folder scope from the base +
  * view `file.inFolder(...)` filters (best-effort — other filter logic isn't
  * evaluated), columns from that view's `order`. For a base's exact live
