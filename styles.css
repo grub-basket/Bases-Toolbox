@@ -730,3 +730,54 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   font-size: var(--font-ui-large);
   font-weight: var(--font-semibold);
 }
+
+/* Bases Toolbox launcher (left-sidebar "launch anything" panel) */
+.bases-toolbox-launcher { padding: var(--size-4-2); }
+.bases-toolbox-launcher-intro {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  margin-bottom: var(--size-2-2);
+}
+.bases-toolbox-launcher-section {
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+  margin: var(--size-4-3) 0 var(--size-2-1);
+}
+.bases-toolbox-launcher-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--size-2-1) var(--size-2-3);
+  padding: var(--size-2-3) 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.bases-toolbox-launcher-icon {
+  grid-column: 1;
+  display: inline-flex;
+  color: var(--text-muted);
+}
+.bases-toolbox-launcher-text { grid-column: 2; min-width: 0; }
+.bases-toolbox-launcher-name {
+  font-weight: var(--font-medium);
+  font-size: var(--font-ui-small);
+}
+.bases-toolbox-launcher-desc {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+.bases-toolbox-launcher-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--size-2-2);
+  flex-wrap: wrap;
+  margin-top: var(--size-2-1);
+}
+.bases-toolbox-launcher-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2-1);
+  padding: 2px 10px;
+  font-size: var(--font-ui-smaller);
+}
+.bases-toolbox-launcher-btn-icon { display: inline-flex; }
+.bases-toolbox-launcher-btn-icon svg { width: 14px; height: 14px; }

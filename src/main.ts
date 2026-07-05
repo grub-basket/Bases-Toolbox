@@ -31,6 +31,7 @@ import { CsvImportModal } from "./csv-import";
 import { installEmbedOptions } from "./embed-options";
 import { openFilterToggle } from "./filter-toggle";
 import { ConditionalFormatView, VIEW_TYPE_CONDITIONAL_FORMAT, openConditionalFormatView } from "./conditional-format-view";
+import { LauncherView, VIEW_TYPE_LAUNCHER, openLauncher } from "./launcher";
 import { FormatDoctorView, VIEW_TYPE_FORMAT_DOCTOR, openFormatDoctor } from "./format-doctor";
 import { PropertySuggestModal } from "./find-replace";
 import { FindReplaceView, VIEW_TYPE_FIND_REPLACE } from "./find-replace-view";
@@ -94,6 +95,7 @@ export default class BasesToolboxPlugin extends Plugin {
     this.registerView(VIEW_TYPE_HISTORY, (leaf) => new HistoryView(leaf, this));
     this.registerView(VIEW_TYPE_FORMAT_DOCTOR, (leaf) => new FormatDoctorView(leaf, this));
     this.registerView(VIEW_TYPE_CONDITIONAL_FORMAT, (leaf) => new ConditionalFormatView(leaf, this));
+    this.registerView(VIEW_TYPE_LAUNCHER, (leaf) => new LauncherView(leaf, this));
 
     this.addCommand({
       id: "find-replace-property-values",
@@ -241,6 +243,16 @@ export default class BasesToolboxPlugin extends Plugin {
       name: "Open conditional formatting panel",
       callback: () => void openConditionalFormatView(this),
     });
+
+    this.addCommand({
+      id: "open-launcher",
+      name: "Open Bases Toolbox launcher",
+      callback: () => void openLauncher(this),
+    });
+
+    this.addRibbonIcon("layout-dashboard", "Bases Toolbox — launch a feature", () =>
+      void openLauncher(this)
+    );
 
     this.addRibbonIcon("table-properties", "Open property index", () =>
       void this.activatePropertyIndex()
