@@ -63,6 +63,14 @@ export interface BasesToolboxSettings {
    * the key no longer matches and the issue re-flags.
    */
   ignoredFormatIssues: string[];
+  /**
+   * Duplicate groups the user marked "ignore" in the duplicate finder. The key
+   * is the group's sorted member paths joined with NUL (see groupKey() in
+   * merge.ts). Like format-doctor ignores, it only holds while the group is
+   * unchanged — add or remove a near-duplicate and the key no longer matches,
+   * so the group re-flags for review.
+   */
+  ignoredDuplicateGroups: string[];
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -81,6 +89,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   companionFolders: "",
   companionAuto: false,
   ignoredFormatIssues: [],
+  ignoredDuplicateGroups: [],
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */

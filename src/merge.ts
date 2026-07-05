@@ -369,6 +369,11 @@ class DuplicateFinderPanel {
   private byBody = false;
   private propEl: HTMLInputElement | null = null;
   private resultsEl: HTMLElement | null = null;
+  /** Groups from the last scan (pre-ignore-filter), so tabs re-render cheaply. */
+  private dupGroups: [string, TFile[]][] = [];
+  private scanned = false;
+  /** Ignored tab active: show the groups the user has set aside. */
+  private showIgnored = false;
 
   constructor(plugin: BasesToolboxPlugin, openFile: (file: TFile) => void) {
     this.plugin = plugin;
@@ -377,6 +382,25 @@ class DuplicateFinderPanel {
 
   private get app() {
     return this.plugin.app;
+  }
+
+  /** Stable key for the ignore list: the group's sorted member paths. Add or
+   * remove a near-duplicate and the key changes, so the group re-flags. */
+  private groupKey(group: TFile[]): string {
+    return group
+      .map((f) => f.path)
+      .sort()
+      .join("\0");
+  }
+
+  private async toggleIgnore(group: TFile[]): Promise<void> {
+    const key = this.groupKey(group);
+    const list = this.plugin.settings.ignoredDuplicateGroups;
+    const i = list.indexOf(key);
+    if (i >= 0) list.splice(i, 1);
+    else list.push(key);
+    await this.plugin.savePluginData();
+    this.renderResults();
   }
 
   render(contentEl: HTMLElement): void {
@@ -457,23 +481,77 @@ class DuplicateFinderPanel {
       }
     }
 
+    this.dupGroups = [...groups.entries()].filter(([, g]) => g.length > 1);
+    this.scanned = true;
+    this.renderResults();
+  }
+
+  /** Render the tabs + the active (To review / Ignored) set of groups. Called
+   * after a scan and after every ignore toggle — no re-scan needed. */
+  private renderResults(): void {
+    const root = this.resultsEl;
+    if (!root) return;
     root.empty();
-    const dupGroups = [...groups.entries()].filter(([, g]) => g.length > 1);
-    if (!dupGroups.length) {
+    if (!this.scanned) return;
+
+    if (!this.dupGroups.length) {
       root.createDiv({ cls: "bases-toolbox-fr-info", text: "No duplicate groups found." });
       return;
     }
+
+    const ignoredSet = new Set(this.plugin.settings.ignoredDuplicateGroups);
+    const pending = this.dupGroups.filter(([, g]) => !ignoredSet.has(this.groupKey(g)));
+    const ignored = this.dupGroups.filter(([, g]) => ignoredSet.has(this.groupKey(g)));
+
+    // Tabs at the top: groups still to review vs. ones the user has ignored.
+    const tabbar = root.createDiv({ cls: "bases-toolbox-doctor-tabs" });
+    const mkTab = (label: string, active: boolean, ign: boolean) => {
+      const t = tabbar.createDiv({ cls: "bases-toolbox-doctor-tab", text: label });
+      if (active) t.addClass("is-active");
+      t.addEventListener("click", () => {
+        if (this.showIgnored !== ign) {
+          this.showIgnored = ign;
+          this.renderResults();
+        }
+      });
+    };
+    mkTab(`To review (${pending.length})`, !this.showIgnored, false);
+    mkTab(`Ignored (${ignored.length})`, this.showIgnored, true);
+
+    const groups = this.showIgnored ? ignored : pending;
+    if (!groups.length) {
+      root.createDiv({
+        cls: "bases-toolbox-fr-info",
+        text: this.showIgnored
+          ? "Nothing ignored."
+          : "No groups to review — everything found is on the Ignored tab.",
+      });
+      return;
+    }
+
     root.createDiv({
       cls: "bases-toolbox-fr-info",
-      text: `${dupGroups.length} group${dupGroups.length === 1 ? "" : "s"} found. Pick the note to keep; the rest merge into it (conflicts keep the kept note's values).`,
+      text: this.showIgnored
+        ? "Groups you've ignored. Each re-flags automatically if a member is added or removed. Un-ignore to move it back to “To review”."
+        : `${groups.length} group${groups.length === 1 ? "" : "s"} to review. Pick the note to keep; the rest merge into it (conflicts keep the kept note's values). “Ignore” hides a group until its membership changes.`,
     });
 
-    for (const [key, group] of dupGroups) {
+    for (const [key, group] of groups) this.renderGroup(root, key, group, this.showIgnored);
+  }
+
+  private renderGroup(root: HTMLElement, key: string, group: TFile[], isIgnored: boolean): void {
+    {
       const box = root.createDiv({ cls: "bases-toolbox-dup-group" });
-      box.createDiv({
+      const keyRow = box.createDiv({ cls: "bases-toolbox-dup-keyrow" });
+      keyRow.createDiv({
         cls: "bases-toolbox-dup-key",
         text: key.replace(/^name:/, "similar name: ").replace(/^prop:/, "value: ").replace(/^body:/, "identical body #"),
       });
+      const ignoreBtn = keyRow.createEl("button", {
+        cls: "bases-toolbox-dup-ignore-btn",
+        text: isIgnored ? "Un-ignore" : "Ignore",
+      });
+      ignoreBtn.addEventListener("click", () => void this.toggleIgnore(group));
       // No default keep — the user must explicitly pick the note to keep.
       let keep: TFile | null = null;
       const radioName = `bt-dup-${simpleHash(key)}`;

@@ -112,6 +112,23 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   margin-bottom: var(--size-2-2);
 }
 
+.bases-toolbox-dup-keyrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-2);
+}
+
+.bases-toolbox-dup-keyrow .bases-toolbox-dup-key {
+  margin-bottom: 0;
+}
+
+.bases-toolbox-dup-ignore-btn {
+  flex: 0 0 auto;
+  font-size: var(--font-ui-smaller);
+  padding: var(--size-2-1) var(--size-2-3);
+}
+
 .bases-toolbox-dup-row {
   display: flex;
   align-items: center;
