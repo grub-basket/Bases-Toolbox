@@ -38,11 +38,47 @@ export function changeInEffect(fm: Record<string, unknown>, change: ChangeRecord
  * missing files are skipped and counted, not clobbered. A `paths` subset
  * reverts only those files; the entry is marked reverted only on a full pass.
  */
+/**
+ * Restores whole-file snapshots (note merges). Overwrites modified files and
+ * recreates removed ones. A removed file whose path is now occupied again is
+ * counted as a conflict (fileMissing) rather than clobbered. All-or-nothing:
+ * merge reverts don't support a file subset.
+ */
+async function revertSnapshots(
+  plugin: BasesToolboxPlugin,
+  entry: HistoryEntry
+): Promise<RevertReport> {
+  const report: RevertReport = { restored: 0, propertyMissing: 0, valueChanged: 0, fileMissing: 0 };
+  for (const snap of entry.fileSnapshots ?? []) {
+    const existing = plugin.app.vault.getAbstractFileByPath(snap.path);
+    if (snap.kind === "removed") {
+      if (existing) {
+        report.fileMissing++; // path reused since the merge — don't clobber
+        continue;
+      }
+      await plugin.app.vault.create(snap.path, snap.content);
+      report.restored++;
+    } else if (existing instanceof TFile) {
+      await plugin.app.vault.modify(existing, snap.content);
+      report.restored++;
+    } else {
+      // kept note was moved/deleted since — recreate it at its old path
+      await plugin.app.vault.create(snap.path, snap.content);
+      report.restored++;
+    }
+  }
+  // Mark reverted only if every snapshot was restored (no path-reuse conflicts).
+  if (report.fileMissing === 0) entry.revertedAt = Date.now();
+  await plugin.savePluginData();
+  return report;
+}
+
 export async function revertEntry(
   plugin: BasesToolboxPlugin,
   entry: HistoryEntry,
   opts: RevertOptions = {}
 ): Promise<RevertReport> {
+  if (entry.fileSnapshots?.length) return revertSnapshots(plugin, entry);
   const report: RevertReport = { restored: 0, propertyMissing: 0, valueChanged: 0, fileMissing: 0 };
   // Paths whose deleted-property change we actually restored — used to prune the
   // deletion audit so a restored deletion doesn't linger in the JSONL.
@@ -90,6 +126,15 @@ export async function revertEntry(
 }
 
 export function reportNotice(entry: HistoryEntry, r: RevertReport): void {
+  if (entry.fileSnapshots?.length) {
+    const total = entry.fileSnapshots.length;
+    new Notice(
+      `Reverted merge: restored ${r.restored} of ${total} note${total === 1 ? "" : "s"}` +
+        (r.fileMissing ? ` (${r.fileMissing} skipped — a note now occupies that path)` : "") +
+        "."
+    );
+    return;
+  }
   const skipped: string[] = [];
   if (r.valueChanged) skipped.push(`${r.valueChanged} edited since`);
   if (r.propertyMissing) skipped.push(`${r.propertyMissing} property missing`);
@@ -112,6 +157,8 @@ export async function undoLatest(plugin: BasesToolboxPlugin): Promise<void> {
 }
 
 export function describeEntry(entry: HistoryEntry): string {
+  // Merge entries carry a ready-made human label in `property` and no find/replace.
+  if (entry.fileSnapshots?.length) return entry.property;
   const from = entry.find === null ? "all values" : `“${entry.find}”`;
   const to = entry.replace.trim() === "" ? "(cleared)" : `“${entry.replace}”`;
   return `${entry.property}: ${from} → ${to}`;

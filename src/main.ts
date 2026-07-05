@@ -107,7 +107,7 @@ export default class BasesToolboxPlugin extends Plugin {
 
     this.addCommand({
       id: "undo-last-find-replace",
-      name: "Undo last find and replace",
+      name: "Undo last change (find & replace, merge, etc.)",
       callback: () => void undoLatest(this),
     });
 
@@ -798,13 +798,13 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         note: "Run from the command palette (Cmd/Ctrl-P), or the launcher.",
         items: [
           ["Find and replace property values", "Opens the Find & Replace tab (see above)."],
-          ["Undo last find and replace", "Reverts the most recent change made by these tools."],
+          ["Undo last change", "Reverts the most recent change made by these tools — find & replace, a merge, format fixes, and so on. (Everything is also individually revertible from the History tab.)"],
           ["Convert or fork a property's format", "Bases expects dates as YYYY-MM-DD and links as [[wikilinks]], but you might store them differently. This normalizes dates or (un)wraps wikilinks — either in place, or into a SECOND property that stays in sync with the original, so you keep your format AND the one Bases wants."],
           ["Audit pinned allowed values", "You can “pin” the set of values a property is allowed to have (from the property index). This lists any value currently outside that set and lets you fix it (find & replace) or accept it (add to the allowed list)."],
           ["Compute rollup into property", "For each note in the open base, gathers the notes linked to it (incoming or outgoing) and aggregates them — count of linked notes, or sum / average / min / max of a number property on them — writing the result into a property you name. E.g. give every Project a “task-count” of the Tasks that link to it, or a “total-hours”. One-shot and revertible; re-run to refresh."],
           ["Migrate inline fields to properties", "Converts inline “key:: value” fields written in a note's body into real frontmatter properties that Bases can use."],
-          ["Merge current note into another", "Combines the current note — its body and its properties — into another note you pick, then tidies up."],
-          ["Find duplicate notes", "Finds notes that are near-duplicates of each other (by a heuristic you can tune) so you can merge or remove them."],
+          ["Merge current note into another", "Combines the current note — its body and its properties — into another note you pick, then tidies up (re-points links, trashes the source). Recorded to History, so the whole merge can be reverted."],
+          ["Find duplicate notes", "Finds notes that are near-duplicates of each other (by a heuristic you can tune) so you can merge them. Pick which note to keep; the rest merge into it with their bodies combined in creation-date order. Each merge is revertible from History."],
           ["Create companion notes for non-Markdown files", "Bases can only query Markdown notes. This creates a small Markdown “companion” beside a PDF/image/etc. that mirrors the file's metadata as properties, so those files appear in Bases."],
           ["Stamp file metadata into note properties", "Writes the file's created/modified dates into frontmatter so they're durable (survive sync/export) and usable in Bases."],
           ["Import CSV as notes", "Turns each row of a CSV into a note, with the columns becoming frontmatter properties."],

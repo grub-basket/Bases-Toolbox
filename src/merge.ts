@@ -1,6 +1,7 @@
 import { FuzzySuggestModal, ItemView, Modal, Notice, Setting, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { findKey, isUnsafeKey, valueToDisplay } from "./scan";
+import { FileSnapshot } from "./types";
 import { installMainTabAction, installSidebarAction, openFileFromView } from "./view-refresh";
 
 /* ---------- merge core ---------- */
@@ -44,11 +45,14 @@ function stripFrontmatter(content: string): string {
   return content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
 }
 
-/** Rewrites wikilinks/embeds pointing at `source` to point at `target`. */
+/** Rewrites wikilinks/embeds pointing at `source` to point at `target`. When
+ * `before` is provided, the ORIGINAL content of each note this touches is
+ * recorded (once) so a merge revert can restore third-party notes too. */
 async function rewriteBacklinks(
   plugin: BasesToolboxPlugin,
   source: TFile,
-  target: TFile
+  target: TFile,
+  before?: Map<string, string>
 ): Promise<number> {
   const app = plugin.app;
   let rewritten = 0;
@@ -63,6 +67,7 @@ async function rewriteBacklinks(
     );
     if (!refs.length) continue;
     let content = await app.vault.read(from);
+    if (before && !before.has(fromPath)) before.set(fromPath, content); // original, pre-edit
     for (const ref of refs.sort((a, b) => b.position.start.offset - a.position.start.offset)) {
       const alias =
         ref.displayText && ref.displayText !== ref.link && ref.displayText !== source.basename
@@ -87,6 +92,8 @@ async function rewriteBacklinks(
         app.metadataCache.getFirstLinkpathDest(l.link.split("#")[0], fromPath)?.path === source.path
     );
     if (!fmRefs.length) continue;
+    // Record the original content before we touch it (unless loop 1 already did).
+    if (before && !before.has(fromPath)) before.set(fromPath, await app.vault.read(from));
     const newLink = app.fileManager.generateMarkdownLink(target, fromPath);
     await app.fileManager.processFrontMatter(from, (fm) => {
       for (const ref of fmRefs) {
@@ -111,7 +118,8 @@ async function rewriteBacklinks(
  * Frontmatter-aware merge of `source` into `target`: keys missing on target
  * are copied, list-ish keys union, scalar conflicts resolve per `resolutions`
  * (default: keep target). Bodies are concatenated, backlinks re-pointed, and
- * the source goes to the vault trash (recoverable — no automated undo).
+ * the source goes to the vault trash. Recorded to history as a whole-file
+ * snapshot, so the merge is revertible.
  */
 export async function mergeNotes(
   plugin: BasesToolboxPlugin,
@@ -121,10 +129,15 @@ export async function mergeNotes(
 ): Promise<void> {
   const app = plugin.app;
   const sourceContent = await app.vault.read(source);
+  const targetContentBefore = await app.vault.read(target);
   const sourceFm = (app.metadataCache.getFileCache(source)?.frontmatter ?? {}) as Record<
     string,
     unknown
   >;
+  const snapshots: FileSnapshot[] = [
+    { path: target.path, content: targetContentBefore, kind: "modified" },
+    { path: source.path, content: sourceContent, kind: "removed" },
+  ];
 
   let kept = 0;
   await app.fileManager.processFrontMatter(target, (fm) => {
@@ -146,14 +159,28 @@ export async function mergeNotes(
     await app.vault.process(target, (content) => `${content.trimEnd()}\n\n---\n\n${sourceBody}\n`);
   }
 
-  const rewritten = await rewriteBacklinks(plugin, source, target);
+  const backlinkBefore = new Map<string, string>();
+  const rewritten = await rewriteBacklinks(plugin, source, target, backlinkBefore);
   await app.fileManager.trashFile(source); // respects the user deletion preference
+  for (const [path, content] of backlinkBefore) {
+    if (path !== target.path) snapshots.push({ path, content, kind: "modified" });
+  }
+
+  await plugin.addHistoryEntry({
+    property: `Merged “${source.basename}” into “${target.basename}”`,
+    find: null,
+    replace: "",
+    timestamp: Date.now(),
+    changes: [],
+    source: "merge",
+    fileSnapshots: snapshots,
+  });
 
   new Notice(
     `Merged "${source.basename}" into "${target.basename}"` +
       (rewritten ? `, re-pointed ${rewritten} link${rewritten === 1 ? "" : "s"}` : "") +
       (kept ? ` (${kept} conflict${kept === 1 ? "" : "s"} kept the target's value)` : "") +
-      ". Source moved to vault trash."
+      ". Source trashed. Revertible from history."
   );
 }
 
@@ -174,9 +201,19 @@ export async function mergeGroup(
   const app = plugin.app;
   const all = [keep, ...sources];
 
-  // Read every body up front (before anything is trashed).
+  // Read full content up front (before anything is trashed) — for both the body
+  // concatenation and the pre-merge snapshots the revert restores from.
+  const fullBefore = new Map<TFile, string>();
   const bodyByFile = new Map<TFile, string>();
-  for (const f of all) bodyByFile.set(f, stripFrontmatter(await app.vault.read(f)).trim());
+  for (const f of all) {
+    const content = await app.vault.read(f);
+    fullBefore.set(f, content);
+    bodyByFile.set(f, stripFrontmatter(content).trim());
+  }
+  const snapshots: FileSnapshot[] = [
+    { path: keep.path, content: fullBefore.get(keep) ?? "", kind: "modified" },
+    ...sources.map((s) => ({ path: s.path, content: fullBefore.get(s) ?? "", kind: "removed" as const })),
+  ];
 
   // Merge frontmatter into the kept note — same rules as mergeNotes, kept wins.
   await app.fileManager.processFrontMatter(keep, (fm) => {
@@ -202,16 +239,37 @@ export async function mergeGroup(
     return fmBlock ? `${fmBlock.trimEnd()}\n\n${body}\n` : `${body}\n`;
   });
 
+  // Collect originals of any third-party notes whose backlinks we re-point, so
+  // the revert restores those too.
+  const backlinkBefore = new Map<string, string>();
   let rewritten = 0;
   for (const src of sources) {
-    rewritten += await rewriteBacklinks(plugin, src, keep);
+    rewritten += await rewriteBacklinks(plugin, src, keep, backlinkBefore);
     await app.fileManager.trashFile(src);
   }
+  // Add third-party backlink notes. Skip the kept note (already snapshotted) and
+  // any source (already snapshotted as "removed" — a source that linked to
+  // another source must not also get a "modified" snapshot at the same path).
+  const sourcePaths = new Set(sources.map((s) => s.path));
+  for (const [path, content] of backlinkBefore) {
+    if (path === keep.path || sourcePaths.has(path)) continue;
+    snapshots.push({ path, content, kind: "modified" });
+  }
+
+  await plugin.addHistoryEntry({
+    property: `Merged ${sources.length} note${sources.length === 1 ? "" : "s"} into “${keep.basename}”`,
+    find: null,
+    replace: "",
+    timestamp: Date.now(),
+    changes: [],
+    source: "merge",
+    fileSnapshots: snapshots,
+  });
 
   new Notice(
     `Merged ${sources.length} note${sources.length === 1 ? "" : "s"} into "${keep.basename}"` +
       (rewritten ? `, re-pointed ${rewritten} link${rewritten === 1 ? "" : "s"}` : "") +
-      ". Bodies ordered by creation date; sources moved to vault trash."
+      ". Bodies ordered by creation date; sources trashed. Revertible from history."
   );
 }
 

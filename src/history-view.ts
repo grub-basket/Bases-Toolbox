@@ -76,9 +76,10 @@ export class HistoryView extends ItemView {
     header.createSpan({ cls: "bases-toolbox-index-prop-name", text: describeEntry(entry) });
     if (entry.source)
       header.createSpan({ cls: "bases-toolbox-index-prop-type", text: entry.source });
+    const fileCount = entry.fileSnapshots?.length ?? entry.changes.length;
     header.createSpan({
       cls: "bases-toolbox-index-prop-count",
-      text: `${new Date(entry.timestamp).toLocaleString()} · ${entry.changes.length} file${entry.changes.length === 1 ? "" : "s"}`,
+      text: `${new Date(entry.timestamp).toLocaleString()} · ${fileCount} file${fileCount === 1 ? "" : "s"}`,
     });
     if (entry.revertedAt)
       header.createSpan({ cls: "bases-toolbox-history-reverted", text: "reverted" });
@@ -90,6 +91,13 @@ export class HistoryView extends ItemView {
     });
 
     if (!this.expanded.has(entry)) return;
+
+    // Merge entries restore whole-file snapshots — render those + an all-or-
+    // nothing revert (a partial merge-revert would be incoherent).
+    if (entry.fileSnapshots?.length) {
+      this.renderMergeEntry(box, entry);
+      return;
+    }
 
     const checked = this.checked.get(entry) ?? new Set(entry.changes.map((c) => c.path));
     this.checked.set(entry, checked);
@@ -143,6 +151,44 @@ export class HistoryView extends ItemView {
         this.render();
       })());
     }
+  }
+
+  /** Snapshot-based merge entry: list the affected notes and a single armed
+   * "Revert merge" button that restores everything to the pre-merge state. */
+  private renderMergeEntry(box: HTMLElement, entry: HistoryEntry): void {
+    const list = box.createDiv({ cls: "bases-toolbox-frv-list" });
+    for (const snap of entry.fileSnapshots ?? []) {
+      const row = list.createDiv({ cls: "bases-toolbox-frv-row" });
+      const file = this.app.vault.getAbstractFileByPath(snap.path);
+      const link = row.createSpan({ cls: "bases-toolbox-frv-path", text: snap.path });
+      link.addEventListener("click", () => {
+        if (file instanceof TFile) void openFileFromView(this, file);
+        else void this.app.workspace.openLinkText(snap.path, "", true);
+      });
+      row.createSpan({
+        cls: "bases-toolbox-frv-diff",
+        text: snap.kind === "removed" ? "trashed → will be recreated" : "changed → will be restored",
+      });
+    }
+
+    if (entry.revertedAt) return;
+    box.createDiv({
+      cls: "bases-toolbox-fr-info",
+      text: "Reverting restores every note above to its pre-merge state and recreates the trashed sources. Any edits made since the merge are overwritten.",
+    });
+    const btn = box.createEl("button", { text: "Revert merge" });
+    let armed = false;
+    btn.addEventListener("click", () => void (async () => {
+      if (!armed) {
+        armed = true;
+        btn.setText("Really revert this merge? Click again");
+        btn.addClass("mod-warning");
+        return;
+      }
+      btn.disabled = true;
+      reportNotice(entry, await revertEntry(this.plugin, entry));
+      this.render();
+    })());
   }
 }
 

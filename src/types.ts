@@ -14,6 +14,19 @@ export interface ChangeRecord {
   deleted?: boolean;
 }
 
+/**
+ * A whole-file snapshot, for operations that change more than frontmatter
+ * (note merges rewrite bodies, trash sources, and re-point backlinks). Revert
+ * restores `content` verbatim — recreating the file when it was `removed`.
+ */
+export interface FileSnapshot {
+  path: string;
+  /** Full file content before the operation. */
+  content: string;
+  /** "removed" = the op trashed it (revert recreates); "modified" = overwrite. */
+  kind: "modified" | "removed";
+}
+
 export interface HistoryEntry {
   property: string;
   /** Display string of the value that was matched, or null for "all values". */
@@ -25,6 +38,12 @@ export interface HistoryEntry {
   revertedAt?: number;
   /** Which feature produced the entry (find & replace, bulk edit, rollup…). */
   source?: string;
+  /**
+   * Whole-file snapshots. Present for operations (note merges) that can't be
+   * revved by the property-diff path; when set, revert restores these instead
+   * of walking `changes` (which is empty for such entries).
+   */
+  fileSnapshots?: FileSnapshot[];
 }
 
 export interface BasesToolboxSettings {
