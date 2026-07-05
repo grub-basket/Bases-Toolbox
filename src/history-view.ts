@@ -56,14 +56,20 @@ export class HistoryView extends ItemView {
     const bar = root.createDiv({ cls: "bases-toolbox-frv-bar" });
     bar.createSpan({
       cls: "bases-toolbox-fr-info",
-      text: `${this.plugin.history.length} operation${this.plugin.history.length === 1 ? "" : "s"} logged. Reverts skip files edited since — unless forced.`,
+      text: `${this.plugin.history.length} operation${this.plugin.history.length === 1 ? "" : "s"} logged.`,
     });
     // Own line so it doesn't crowd the summary; propercased.
     const forceLabel = root.createEl("label", { cls: "bases-toolbox-fr-info bases-toolbox-frv-force" });
     const forceCb = forceLabel.createEl("input", { type: "checkbox" });
     forceCb.checked = this.force;
-    forceCb.addEventListener("change", () => (this.force = forceCb.checked));
-    forceLabel.createSpan({ text: " Force-revert drifted files" });
+    forceCb.addEventListener("change", () => {
+      this.force = forceCb.checked;
+    });
+    forceLabel.createSpan({ text: " Also revert notes I've edited since the change" });
+    root.createDiv({
+      cls: "bases-toolbox-fr-info bases-toolbox-frv-force-help",
+      text: "By default, reverting skips any note you edited again after the change (marked “edited since”), so it never overwrites your newer work. Turn this on to revert those too. Note merges always revert as a whole and ignore this setting.",
+    });
 
     for (const entry of [...this.plugin.history].reverse()) {
       this.renderEntry(root, entry);
@@ -181,7 +187,7 @@ export class HistoryView extends ItemView {
     btn.addEventListener("click", () => void (async () => {
       if (!armed) {
         armed = true;
-        btn.setText("Really revert this merge? Click again");
+        btn.setText("Click again to confirm reverting this merge");
         btn.addClass("mod-warning");
         return;
       }

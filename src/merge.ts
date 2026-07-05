@@ -770,29 +770,34 @@ class DuplicateFinderPanel {
         });
       };
 
-      const btn = box.createEl("button", { text: `Merge ${group.length - 1} into kept note` });
+      const n = group.length - 1;
+      const idleText = `Merge ${n} note${n === 1 ? "" : "s"} into the kept note`;
+      const btn = box.createEl("button", { text: idleText });
       let armed = false;
       // Disabled until a note is picked; picking one (or re-picking) also
       // disarms the confirm step so a changed choice can't merge on one click.
       function resetMergeBtn(): void {
         armed = false;
         btn.disabled = keep === null;
-        btn.removeClass("mod-warning");
-        btn.setText(`Merge ${group.length - 1} into kept note`);
+        btn.removeClass("mod-warning", "bases-toolbox-btn-success");
+        btn.setText(idleText);
       }
       resetMergeBtn();
       btn.addEventListener("click", () => void (async () => {
         if (!keep) return;
         if (!armed) {
           armed = true;
-          btn.setText(`Really merge ${group.length - 1} note${group.length === 2 ? "" : "s"} away? Click again`);
+          btn.setText(`Click again to confirm merging ${n} note${n === 1 ? "" : "s"}`);
           btn.addClass("mod-warning");
           return;
         }
         btn.disabled = true;
         const target = keep;
         await mergeGroup(this.plugin, target, group.filter((f) => f !== target));
-        box.createDiv({ cls: "bases-toolbox-fr-info", text: "Merged. Sources are in the vault trash." });
+        // The button itself becomes the confirmation: green, with the result.
+        btn.removeClass("mod-warning");
+        btn.addClass("bases-toolbox-btn-success");
+        btn.setText(`Merged — ${n} source${n === 1 ? "" : "s"} moved to trash`);
       })());
     }
   }

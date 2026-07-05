@@ -129,6 +129,20 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   padding: var(--size-2-1) var(--size-2-3);
 }
 
+/* Success state for an action button: the button itself confirms the result. */
+.bases-toolbox-btn-success,
+.bases-toolbox-btn-success:disabled {
+  background-color: var(--color-green);
+  color: var(--text-on-accent);
+  opacity: 1;
+}
+
+.bases-toolbox-frv-force-help {
+  margin-top: var(--size-2-1);
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+}
+
 .bases-toolbox-dup-row {
   display: flex;
   align-items: center;
