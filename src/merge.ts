@@ -157,6 +157,99 @@ export async function mergeNotes(
   );
 }
 
+/* ---------- merge preview ---------- */
+
+type PreviewOrigin = "kept" | "added" | "union" | "conflict";
+
+interface PreviewProp {
+  key: string;
+  /** Display of the value that ends up on the kept note. */
+  result: string;
+  origin: PreviewOrigin;
+  /** Human note: where it came from / what got dropped. */
+  detail: string;
+}
+
+interface MergePreview {
+  props: PreviewProp[];
+  /** Basenames of sources whose body gets appended below the kept note. */
+  bodiesFrom: string[];
+  /** Basenames of sources that move to the vault trash. */
+  removed: string[];
+}
+
+function asList(v: unknown): unknown[] {
+  return Array.isArray(v) ? v : v === null || v === undefined ? [] : [v];
+}
+
+/**
+ * Simulates `mergeNotes(keep, …sources)` with the default resolution (target
+ * wins conflicts) and reports, per resulting property, where its value came
+ * from and what each source lost — so the user can see the outcome without
+ * diffing notes by hand.
+ */
+async function buildMergePreview(
+  app: BasesToolboxPlugin["app"],
+  keep: TFile,
+  sources: TFile[]
+): Promise<MergePreview> {
+  const keptFm = (app.metadataCache.getFileCache(keep)?.frontmatter ?? {}) as Record<string, unknown>;
+  const result: Record<string, unknown> = {};
+  const origin = new Map<string, PreviewOrigin>();
+  const details = new Map<string, string[]>();
+  const note = (key: string, o: PreviewOrigin, d?: string) => {
+    origin.set(key, o);
+    if (d) details.set(key, [...(details.get(key) ?? []), d]);
+  };
+
+  for (const [k, v] of Object.entries(keptFm)) {
+    if (k === "position" || isUnsafeKey(k)) continue;
+    result[k] = v;
+    note(k, "kept");
+  }
+
+  const bodiesFrom: string[] = [];
+  for (const src of sources) {
+    const srcFm = (app.metadataCache.getFileCache(src)?.frontmatter ?? {}) as Record<string, unknown>;
+    const plan = planMerge(result, srcFm);
+    for (const key of plan.copied) {
+      result[key] = srcFm[key];
+      note(key, "added", `from ${src.basename}`);
+    }
+    for (const key of plan.unioned) {
+      const tk = findKey(result, key) ?? key;
+      const beforeDisplays = new Set(asList(result[tk]).map(valueToDisplay));
+      result[tk] = unionValues(result[tk], srcFm[key]);
+      const added = asList(srcFm[key])
+        .map(valueToDisplay)
+        .filter((d) => !beforeDisplays.has(d));
+      note(tk, "union", added.length ? `+${added.join(", ")} from ${src.basename}` : undefined);
+    }
+    for (const c of plan.conflicts) {
+      const tk = findKey(result, c.key) ?? c.key;
+      // Default resolution keeps the target's value; the source's is dropped.
+      note(tk, "conflict", `${src.basename}’s “${valueToDisplay(c.sourceValue)}” dropped`);
+    }
+    const body = stripFrontmatter(await app.vault.cachedRead(src)).trim();
+    if (body) bodiesFrom.push(src.basename);
+  }
+
+  const props: PreviewProp[] = Object.keys(result).map((key) => ({
+    key,
+    result: valueToDisplay(result[key]),
+    origin: origin.get(key) ?? "kept",
+    detail: (details.get(key) ?? []).join("; "),
+  }));
+  return { props, bodiesFrom, removed: sources.map((s) => s.basename) };
+}
+
+const PREVIEW_ORIGIN_LABEL: Record<PreviewOrigin, string> = {
+  kept: "kept",
+  added: "added",
+  union: "merged list",
+  conflict: "kept wins",
+};
+
 /* ---------- pairwise merge UI ---------- */
 
 export class MergeTargetPicker extends FuzzySuggestModal<TFile> {
@@ -390,6 +483,7 @@ class DuplicateFinderPanel {
         radio.addEventListener("change", () => {
           keep = file;
           resetMergeBtn();
+          void renderPreview();
         });
         const link = row.createEl("a", {
           cls: "bases-toolbox-dup-link",
@@ -406,6 +500,39 @@ class DuplicateFinderPanel {
           text: new Date(file.stat.mtime).toLocaleDateString(),
         });
       }
+      const previewEl = box.createDiv({ cls: "bases-toolbox-dup-preview-wrap" });
+      const renderPreview = async (): Promise<void> => {
+        previewEl.empty();
+        if (!keep) return;
+        const sources = group.filter((f) => f !== keep);
+        const pv = await buildMergePreview(this.app, keep, sources);
+        const wrap = previewEl.createDiv({ cls: "bases-toolbox-dup-preview" });
+        wrap.createDiv({
+          cls: "bases-toolbox-dup-preview-head",
+          text: `Keeping “${keep.basename}” — merging in ${sources.length} note${sources.length === 1 ? "" : "s"}:`,
+        });
+        const table = wrap.createDiv({ cls: "bases-toolbox-dup-pv-table" });
+        for (const p of pv.props) {
+          const r = table.createDiv({ cls: `bases-toolbox-dup-pv-row bt-origin-${p.origin}` });
+          r.createSpan({ cls: "bt-pv-key", text: p.key });
+          r.createSpan({ cls: "bt-pv-val", text: p.result || "—" });
+          r.createSpan({
+            cls: "bt-pv-origin",
+            text: p.detail ? `${PREVIEW_ORIGIN_LABEL[p.origin]} · ${p.detail}` : PREVIEW_ORIGIN_LABEL[p.origin],
+          });
+        }
+        wrap.createDiv({
+          cls: "bases-toolbox-dup-pv-foot",
+          text: pv.bodiesFrom.length
+            ? `Bodies appended below the kept note: ${pv.bodiesFrom.join(", ")}.`
+            : "No source bodies to append.",
+        });
+        wrap.createDiv({
+          cls: "bases-toolbox-dup-pv-foot bases-toolbox-dup-pv-trash",
+          text: `Moved to vault trash (recoverable): ${pv.removed.join(", ")}.`,
+        });
+      };
+
       const btn = box.createEl("button", { text: `Merge ${group.length - 1} into kept note` });
       let armed = false;
       // Disabled until a note is picked; picking one (or re-picking) also
