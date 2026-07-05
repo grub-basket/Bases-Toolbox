@@ -13,6 +13,7 @@ import {
   findDuplicateRule,
   ruleSwatchColor,
   scheduleRedecorate,
+  VALUELESS_OPS,
 } from "./conditional-format";
 import { attachPropertySuggest, attachValueSuggest } from "./suggest";
 import { installSidebarAction } from "./view-refresh";
@@ -87,7 +88,7 @@ export class ConditionalFormatView extends ItemView {
     const summary = head.createSpan({ cls: "bases-toolbox-cfcard-summary" });
     summary.setText(
       `${rule.property || "(property)"} ${OP_LABELS[rule.op]}${
-        rule.op === "empty" || rule.op === "not-empty" ? "" : ` ${rule.value}`
+        VALUELESS_OPS.has(rule.op) ? "" : ` ${rule.value}`
       }`
     );
     const enabled = head.createEl("input", { type: "checkbox" });
@@ -141,7 +142,7 @@ export class ConditionalFormatView extends ItemView {
     val.value = rule.value;
     attachValueSuggest(this.plugin, val, () => rule.property);
     const syncVal = () =>
-      val.setCssStyles({ display: rule.op === "empty" || rule.op === "not-empty" ? "none" : "" });
+      val.setCssStyles({ display: VALUELESS_OPS.has(rule.op) ? "none" : "" });
     syncVal();
     op.addEventListener("change", () => {
       rule.op = op.value as FormatOp;

@@ -24,6 +24,7 @@ import {
   ruleSwatchColor,
   scheduleRedecorate,
   BaseScopeModal,
+  VALUELESS_OPS,
 } from "./conditional-format";
 import { attachPropertySuggest, attachValueSuggest } from "./suggest";
 import { exportBaseCsv } from "./csv-export";
@@ -896,7 +897,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
     val.value = rule.value;
     attachValueSuggest(this.plugin, val, () => rule.property);
     const syncVal = () =>
-      val.setCssStyles({ display: rule.op === "empty" || rule.op === "not-empty" ? "none" : "" });
+      val.setCssStyles({ display: VALUELESS_OPS.has(rule.op) ? "none" : "" });
     syncVal();
     op.addEventListener("change", () => {
       rule.op = op.value as FormatOp;

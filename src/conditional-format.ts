@@ -1,6 +1,6 @@
 import { Modal, Notice, Setting, TFile, debounce } from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { findKey } from "./scan";
+import { findKey, valueToDisplay } from "./scan";
 
 export type FormatScope = "row" | "cell";
 
@@ -28,7 +28,8 @@ export type FormatOp =
   | "lt"
   | "lte"
   | "empty"
-  | "not-empty";
+  | "not-empty"
+  | "duplicated";
 
 export const OP_LABELS: Record<FormatOp, string> = {
   equals: "equals",
@@ -40,7 +41,11 @@ export const OP_LABELS: Record<FormatOp, string> = {
   lte: "≤",
   empty: "is empty",
   "not-empty": "is not empty",
+  duplicated: "is duplicated (in this base)",
 };
+
+/** Ops that take no value (the value input is hidden for these). */
+export const VALUELESS_OPS = new Set<FormatOp>(["empty", "not-empty", "duplicated"]);
 
 export const CUSTOM_COLOR = "custom";
 export const DEFAULT_CUSTOM_HEX = "#ff9800";
@@ -51,7 +56,7 @@ export const DEFAULT_CUSTOM_HEX = "#ff9800";
  * so the second is redundant (color aside). Used to warn on duplicates.
  */
 export function ruleMatchKey(r: FormatRule): string {
-  const needsValue = r.op !== "empty" && r.op !== "not-empty";
+  const needsValue = !VALUELESS_OPS.has(r.op);
   const bases = r.bases?.length ? [...r.bases].sort().join("|") : "*";
   return [
     r.property.trim().toLowerCase(),
@@ -199,15 +204,29 @@ function basePathForRow(plugin: BasesToolboxPlugin, row: HTMLElement): string | 
   return undefined;
 }
 
-function decorateRow(plugin: BasesToolboxPlugin, row: HTMLElement, basePath?: string): void {
-  clearRow(row); // always start clean so removed/changed rules don't linger
+/** Reads a base row's file frontmatter (via its data-href link), or null. */
+function fmForRow(plugin: BasesToolboxPlugin, row: HTMLElement): Record<string, unknown> | null {
   const href = row.querySelector("[data-href]")?.getAttribute("data-href");
   const file = href ? plugin.app.vault.getAbstractFileByPath(href) : null;
-  if (!(file instanceof TFile)) return;
-  const fm = (plugin.app.metadataCache.getFileCache(file)?.frontmatter ?? {}) as Record<
-    string,
-    unknown
-  >;
+  if (!(file instanceof TFile)) return null;
+  return (plugin.app.metadataCache.getFileCache(file)?.frontmatter ?? {}) as Record<string, unknown>;
+}
+
+/** Per property (lowercased) → value display → count, scoped to one base. */
+type DupCounts = Map<string, Map<string, number>>;
+
+const isEmptyValue = (v: unknown): boolean =>
+  v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+
+function decorateRow(
+  plugin: BasesToolboxPlugin,
+  row: HTMLElement,
+  basePath?: string,
+  dupCounts?: DupCounts
+): void {
+  clearRow(row); // always start clean so removed/changed rules don't linger
+  const fm = fmForRow(plugin, row);
+  if (fm === null) return;
 
   // Resolve which base this row belongs to only if some rule is base-scoped.
   const anyScoped = plugin.settings.formatRules.some((r) => r.bases?.length);
@@ -221,7 +240,16 @@ function decorateRow(plugin: BasesToolboxPlugin, row: HTMLElement, basePath?: st
     if (rule.bases?.length && !(bp && rule.bases.includes(bp))) continue;
     const key = findKey(fm, rule.property);
     const value = key === null ? undefined : fm[key];
-    if (!matches(rule, value)) continue;
+    let hit: boolean;
+    if (rule.op === "duplicated") {
+      // Highlight values that appear more than once among THIS base's rows.
+      const disp = isEmptyValue(value) ? null : valueToDisplay(value);
+      const m = dupCounts?.get(rule.property.toLowerCase());
+      hit = disp !== null && !!m && (m.get(disp) ?? 0) > 1;
+    } else {
+      hit = matches(rule, value);
+    }
+    if (!hit) continue;
     const color = ruleColor(rule);
     if (!color) continue;
     if (rule.scope === "cell") {
@@ -260,21 +288,66 @@ function allBaseDocuments(plugin: BasesToolboxPlugin): Set<Document> {
   return docs;
 }
 
+/**
+ * Decorate a set of rows that belong to ONE base together — precomputing, for
+ * any "duplicated" rule, how many of THESE rows share each value (so duplicate
+ * highlighting is scoped to the base's currently-shown rows).
+ */
+function decorateRowGroup(plugin: BasesToolboxPlugin, rows: HTMLElement[], basePath?: string): void {
+  const dupProps = new Set(
+    plugin.settings.formatRules
+      .filter((r) => r.enabled && r.op === "duplicated" && r.property)
+      .map((r) => r.property.toLowerCase())
+  );
+  let counts: DupCounts | undefined;
+  if (dupProps.size) {
+    counts = new Map();
+    for (const p of dupProps) counts.set(p, new Map());
+    for (const row of rows) {
+      const fm = fmForRow(plugin, row);
+      if (!fm) continue;
+      for (const p of dupProps) {
+        const key = findKey(fm, p);
+        const v = key === null ? undefined : fm[key];
+        if (isEmptyValue(v)) continue;
+        const m = counts.get(p);
+        if (!m) continue;
+        const disp = valueToDisplay(v);
+        m.set(disp, (m.get(disp) ?? 0) + 1);
+      }
+    }
+  }
+  for (const row of rows) decorateRow(plugin, row, basePath, counts);
+}
+
 export function redecorateAll(plugin: BasesToolboxPlugin): void {
   const done = new WeakSet<HTMLElement>();
-  // Base tabs (and popouts): base path is the leaf's file — pass it directly.
+  // Base tabs (and popouts): all rows in a leaf's view are one base.
   for (const leaf of plugin.app.workspace.getLeavesOfType("bases")) {
     const view = leaf.view as unknown as { containerEl?: HTMLElement; file?: TFile };
-    const basePath = view.file?.path;
-    view.containerEl?.querySelectorAll<HTMLElement>(".bases-tr").forEach((r) => {
-      decorateRow(plugin, r, basePath);
-      done.add(r);
-    });
+    const rows = view.containerEl
+      ? Array.from(view.containerEl.querySelectorAll<HTMLElement>(".bases-tr"))
+      : [];
+    decorateRowGroup(plugin, rows, view.file?.path);
+    rows.forEach((r) => done.add(r));
   }
-  // Embedded bases and anything else — decorateRow resolves the base itself.
+  // Embedded bases: group per .bases-embed so duplicates are scoped to it.
   for (const doc of allBaseDocuments(plugin)) {
+    doc.querySelectorAll<HTMLElement>(".bases-embed").forEach((embed) => {
+      const rows = Array.from(embed.querySelectorAll<HTMLElement>(".bases-tr")).filter(
+        (r) => !done.has(r)
+      );
+      if (rows.length) {
+        decorateRowGroup(plugin, rows);
+        rows.forEach((r) => done.add(r));
+      }
+    });
+    // Anything left over — decorate individually (no duplicate context).
     doc.querySelectorAll<HTMLElement>(".bases-tr").forEach((r) => {
-      if (!done.has(r)) decorateRow(plugin, r);
+      if (!done.has(r)) {
+        decorateRow(plugin, r);
+        done.add(r);
+      }
     });
   }
 }
