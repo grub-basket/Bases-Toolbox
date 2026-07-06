@@ -378,6 +378,7 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   margin: var(--size-2-1) auto;
 }
 
+.bases-toolbox-props-link,
 .bases-toolbox-props-del {
   flex: 0 0 auto;
   padding: var(--size-2-1) var(--size-2-2);

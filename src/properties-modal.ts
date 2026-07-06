@@ -1,8 +1,39 @@
-import { Modal, Notice, Setting, TFile, TFolder, normalizePath, setIcon, stringifyYaml } from "obsidian";
+import {
+  FuzzySuggestModal,
+  ItemView,
+  Modal,
+  Notice,
+  Setting,
+  TFile,
+  TFolder,
+  normalizePath,
+  setIcon,
+  stringifyYaml,
+} from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { folderPaths } from "./csv-export";
+import { folderPaths, readBaseInfo } from "./csv-export";
 import { getPropertyType } from "./scan";
 import { ListInputSuggest, attachAllowedSuggest, attachPropertySuggest } from "./suggest";
+
+/** Fuzzy note picker → returns the chosen file so a value can get a [[wikilink]]. */
+class LinkPicker extends FuzzySuggestModal<TFile> {
+  constructor(
+    private plugin: BasesToolboxPlugin,
+    private onPick: (file: TFile) => void
+  ) {
+    super(plugin.app);
+    this.setPlaceholder("Link to a note…");
+  }
+  getItems(): TFile[] {
+    return this.plugin.app.vault.getMarkdownFiles();
+  }
+  getItemText(f: TFile): string {
+    return f.path;
+  }
+  onChooseItem(f: TFile): void {
+    this.onPick(f);
+  }
+}
 
 type PropType = "text" | "number" | "checkbox" | "date" | "datetime" | "multitext" | "tags" | "aliases";
 
@@ -60,7 +91,10 @@ function parseRow(row: Row): unknown {
   return row.text; // text / date / datetime — plain string
 }
 
-type Target = { kind: "edit"; file: TFile } | { kind: "create"; folder: string };
+type Target =
+  | { kind: "edit"; file: TFile }
+  /** `keys` pre-seeds empty rows (e.g. a base view's columns); `note` labels the source. */
+  | { kind: "create"; folder: string; keys?: string[]; note?: string };
 
 /**
  * A roomy form for a note's properties — edit an existing note (with rename) or
@@ -90,7 +124,8 @@ export class PropertiesModal extends Modal {
     this.titleEl.setText(editing ? "Edit properties" : "New note with properties");
     const { contentEl } = this;
 
-    // Seed rows from the note's frontmatter (edit) or empty (create).
+    // Seed rows from the note's frontmatter (edit), the base view's columns
+    // (create-from-base), or nothing (plain create).
     if (this.target.kind === "edit") {
       const fm = (this.app.metadataCache.getFileCache(this.target.file)?.frontmatter ?? {}) as Record<
         string,
@@ -102,6 +137,15 @@ export class PropertiesModal extends Modal {
         const type = inferType(this.app, k, v);
         this.rows.push({ key: k, type, text: valueToText(v), bool: v === true });
       }
+    } else if (this.target.keys?.length) {
+      for (const k of this.target.keys) {
+        const type = inferType(this.app, k, undefined);
+        this.rows.push({ key: k, type, text: "", bool: false });
+      }
+    }
+
+    if (this.target.kind === "create" && this.target.note) {
+      contentEl.createDiv({ cls: "bases-toolbox-fr-info", text: this.target.note });
     }
 
     // File name.
@@ -221,6 +265,24 @@ export class PropertiesModal extends Modal {
       val.addEventListener("input", () => (row.text = val.value));
     }
 
+    // Internal-link insert — a note picker that appends a [[wikilink]] to the
+    // value (a new line for lists, a space for text). Not for boolean/number.
+    if (row.type === "text" || LIST_TYPES.has(row.type)) {
+      const linkBtn = el.createEl("button", {
+        cls: "bases-toolbox-props-link",
+        attr: { "aria-label": "Insert a link to a note" },
+      });
+      setIcon(linkBtn, "link");
+      linkBtn.addEventListener("click", () =>
+        new LinkPicker(this.plugin, (f) => {
+          const md = `[[${this.app.metadataCache.fileToLinktext(f, "", true)}]]`;
+          const sep = LIST_TYPES.has(row.type) ? "\n" : " ";
+          row.text = row.text.trim() ? `${row.text.trimEnd()}${sep}${md}` : md;
+          this.renderRows();
+        }).open()
+      );
+    }
+
     const del = el.createEl("button", { cls: "bases-toolbox-props-del", attr: { "aria-label": "Remove property" } });
     setIcon(del, "x");
     del.addEventListener("click", () => {
@@ -316,7 +378,58 @@ export function editActiveNoteProperties(plugin: BasesToolboxPlugin): void {
   new PropertiesModal(plugin, { kind: "edit", file }).open();
 }
 
-/** Opens the modal to create a new note. */
-export function createNoteWithProperties(plugin: BasesToolboxPlugin, folder = ""): void {
-  new PropertiesModal(plugin, { kind: "create", folder }).open();
+type BaseViewLike = { getViewType?: () => string; file?: TFile };
+const isBaseView = (v: unknown): v is Required<BaseViewLike> =>
+  !!v && (v as BaseViewLike).getViewType?.() === "bases" && (v as BaseViewLike).file instanceof TFile;
+
+/**
+ * If a base is open, borrow its current view's editable columns (dropping the
+ * computed file./formula. ones that can't be typed into a new note) and the
+ * folder it scopes to, so a new note slots straight into the base like a row.
+ */
+async function basePrefill(
+  plugin: BasesToolboxPlugin
+): Promise<{ folder: string; keys: string[]; note: string } | null> {
+  const app = plugin.app;
+  let view: unknown = app.workspace.getActiveViewOfType(ItemView);
+  if (!isBaseView(view)) view = app.workspace.getLeavesOfType("bases").map((l) => l.view).find(isBaseView) ?? null;
+  if (!isBaseView(view)) return null;
+
+  const info = await readBaseInfo(plugin, view.file.path);
+  if (!info.views.length) return null;
+  const label = activeDocument
+    .querySelector(".workspace-leaf.mod-active .bases-toolbar-views-menu")
+    ?.textContent?.trim();
+  const byLabel = info.views.findIndex((v) => v.name === label);
+  const chosen = info.views[byLabel >= 0 ? byLabel : 0];
+
+  const clauses = [...info.baseFilters, ...chosen.filters];
+  const folders = clauses.flatMap((c) =>
+    [...c.matchAll(/inFolder\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1].replace(/^\/+|\/+$/g, ""))
+  );
+  const keys = chosen.order
+    .filter((k) => !k.startsWith("file.") && !k.startsWith("formula."))
+    .map((k) => k.replace(/^note\./, ""));
+
+  const where = folders[0] || "the vault root";
+  const note =
+    `Borrowing the “${chosen.name}” view of ${view.file.basename}. New note goes in ${where}.` +
+    (folders.length > 1 ? ` (This base spans ${folders.length} folders — using the first.)` : "");
+  return { folder: folders[0] ?? "", keys, note };
+}
+
+/** Opens the modal to create a new note. When a base is open, pre-fills it from
+ * the base's current view + folder so the note slots straight in. */
+export async function createNoteWithProperties(plugin: BasesToolboxPlugin, folder = ""): Promise<void> {
+  const prefill = await basePrefill(plugin);
+  if (prefill) {
+    new PropertiesModal(plugin, {
+      kind: "create",
+      folder: prefill.folder || folder,
+      keys: prefill.keys,
+      note: prefill.note,
+    }).open();
+  } else {
+    new PropertiesModal(plugin, { kind: "create", folder }).open();
+  }
 }

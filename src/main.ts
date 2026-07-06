@@ -218,7 +218,7 @@ export default class BasesToolboxPlugin extends Plugin {
     this.addCommand({
       id: "new-note-with-properties",
       name: "New note with properties",
-      callback: () => createNoteWithProperties(this),
+      callback: () => void createNoteWithProperties(this),
     });
 
     this.addCommand({
