@@ -547,6 +547,22 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("New-note blank properties")
+      .setDesc(
+        'How many empty property rows "New note with properties" starts with (when not launched from a base). 0–20.'
+      )
+      .addText((t) => {
+        t.inputEl.type = "number";
+        t.inputEl.min = "0";
+        t.inputEl.max = "20";
+        t.setValue(String(this.plugin.settings.newNoteMinRows)).onChange(async (v) => {
+          const n = Math.max(0, Math.min(20, Math.round(Number(v) || 0)));
+          this.plugin.settings.newNoteMinRows = n;
+          await this.plugin.savePluginData();
+        });
+      });
+
+    new Setting(containerEl)
       .setName("Base embeds reference")
       .setDesc(
         "Generate a note in your vault documenting the base-embed display flags (bases-no-toolbar, bases-no-header, bt-height-<px>) with copy-paste examples. Packaged with the plugin — no internet needed."

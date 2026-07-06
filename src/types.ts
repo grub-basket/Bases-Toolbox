@@ -97,6 +97,9 @@ export interface BasesToolboxSettings {
   /** Launcher features the user pinned, by id ("view:<type>" / "cmd:<command>"
    * / "settings"). Shown in a Favorites section at the top of the launcher. */
   favoriteFeatures: string[];
+  /** How many blank property rows a plain "New note with properties" starts
+   * with (base-driven creates use the base's columns instead). */
+  newNoteMinRows: number;
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -120,6 +123,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   // saved data lacks this flag → falls back to the default).
   companionBaseExclusionApplied: false,
   favoriteFeatures: ["cmd:new-note-with-properties"],
+  newNoteMinRows: 5,
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */

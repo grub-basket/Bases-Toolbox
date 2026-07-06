@@ -88,11 +88,15 @@ export class LauncherView extends ItemView {
       text: "Open any Bases Toolbox feature. Tap the ☆ to pin one to Favorites.",
     });
 
-    // Favorites — pinned features, in the order they were pinned.
+    // Favorites — pinned features, in pin order. Drag to re-arrange.
     const favs = this.plugin.settings.favoriteFeatures;
     if (favs.length) {
       root.createDiv({ cls: "bases-toolbox-launcher-section", text: "★ Favorites" });
-      for (const id of favs) this.renderById(root, id);
+      root.createDiv({ cls: "bases-toolbox-launcher-hint", text: "Drag to re-arrange." });
+      favs.forEach((id, i) => {
+        const card = this.renderById(root, id);
+        if (card) this.makeFavDraggable(card, i);
+      });
     }
 
     // Panels & windows — the views open either in a sidebar or a main tab.
@@ -108,19 +112,21 @@ export class LauncherView extends ItemView {
     this.renderSettings(root);
   }
 
-  /** Render a feature by its favorite id, wherever it lives. */
-  private renderById(parent: HTMLElement, id: string): void {
+  /** Render a feature by its favorite id, wherever it lives. Returns the card. */
+  private renderById(parent: HTMLElement, id: string): HTMLElement | null {
     if (id === "settings") return this.renderSettings(parent);
     if (id.startsWith("view:")) {
       const f = VIEWS.find((v) => `view:${v.type}` === id);
-      if (f) this.renderView(parent, f);
-    } else if (id.startsWith("cmd:")) {
-      const f = TOOLS.find((t) => `cmd:${t.command}` === id);
-      if (f) this.renderTool(parent, f);
+      return f ? this.renderView(parent, f) : null;
     }
+    if (id.startsWith("cmd:")) {
+      const f = TOOLS.find((t) => `cmd:${t.command}` === id);
+      return f ? this.renderTool(parent, f) : null;
+    }
+    return null;
   }
 
-  private renderView(parent: HTMLElement, f: ViewFeature): void {
+  private renderView(parent: HTMLElement, f: ViewFeature): HTMLElement {
     const card = this.card(parent, f.name, f.desc, f.icon, `view:${f.type}`);
     this.launchBtn(card, "panel-right", "Sidebar", `Open ${f.name} in the sidebar`, () =>
       void this.openView(f.type, "sidebar")
@@ -131,16 +137,19 @@ export class LauncherView extends ItemView {
     this.launchBtn(card, "app-window", "Window", `Open ${f.name} in a new window`, () =>
       void this.openView(f.type, "window")
     );
+    return card;
   }
 
-  private renderTool(parent: HTMLElement, f: ToolFeature): void {
+  private renderTool(parent: HTMLElement, f: ToolFeature): HTMLElement {
     const card = this.card(parent, f.name, f.desc, f.icon, `cmd:${f.command}`);
     this.launchBtn(card, "play", "Open", `Open ${f.name}`, () => this.runCommand(f.command));
+    return card;
   }
 
-  private renderSettings(parent: HTMLElement): void {
+  private renderSettings(parent: HTMLElement): HTMLElement {
     const s = this.card(parent, "Bases Toolbox settings", "Toggles, forks, formatting rules, reference", "settings", "settings");
     this.launchBtn(s, "settings", "Open", "Open Bases Toolbox settings", () => this.runCommand("open-settings"));
+    return s;
   }
 
   private async toggleFavorite(id: string): Promise<void> {
@@ -148,6 +157,49 @@ export class LauncherView extends ItemView {
     const i = favs.indexOf(id);
     if (i >= 0) favs.splice(i, 1);
     else favs.push(id);
+    await this.plugin.savePluginData();
+    this.render();
+  }
+
+  private dragFrom: number | null = null;
+
+  /** Make a favorites card draggable to re-order settings.favoriteFeatures. */
+  private makeFavDraggable(card: HTMLElement, index: number): void {
+    card.addClass("bases-toolbox-fav-card");
+    card.setAttribute("draggable", "true");
+    card.addEventListener("dragstart", (e) => {
+      this.dragFrom = index;
+      card.addClass("is-dragging");
+      e.dataTransfer?.setData("text/plain", String(index));
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+    });
+    card.addEventListener("dragend", () => {
+      this.dragFrom = null;
+      this.contentEl.findAll(".bases-toolbox-launcher-card").forEach((c) => {
+        c.removeClass("is-dragging");
+        c.removeClass("is-drop-target");
+      });
+    });
+    card.addEventListener("dragover", (e) => {
+      if (this.dragFrom === null || this.dragFrom === index) return;
+      e.preventDefault();
+      card.addClass("is-drop-target");
+    });
+    card.addEventListener("dragleave", () => card.removeClass("is-drop-target"));
+    card.addEventListener("drop", (e) => {
+      e.preventDefault();
+      card.removeClass("is-drop-target");
+      const from = this.dragFrom;
+      if (from === null || from === index) return;
+      void this.moveFavorite(from, index);
+    });
+  }
+
+  private async moveFavorite(from: number, to: number): Promise<void> {
+    const favs = this.plugin.settings.favoriteFeatures;
+    if (from < 0 || from >= favs.length) return;
+    const [id] = favs.splice(from, 1);
+    favs.splice(to, 0, id);
     await this.plugin.savePluginData();
     this.render();
   }

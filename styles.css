@@ -1168,6 +1168,24 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
 .bases-toolbox-launcher-star.is-fav .svg-icon {
   fill: var(--color-yellow);
 }
+.bases-toolbox-launcher-hint {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+  margin-bottom: var(--size-2-1);
+}
+.bases-toolbox-fav-card {
+  cursor: grab;
+}
+.bases-toolbox-fav-card.is-dragging {
+  opacity: 0.5;
+}
+.bases-toolbox-fav-card.is-drop-target {
+  border-top: 2px solid var(--interactive-accent);
+}
+.bases-toolbox-suggest-path {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
 .bases-toolbox-launcher-icon {
   grid-column: 1;
   display: inline-flex;

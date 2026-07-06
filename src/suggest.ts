@@ -1,4 +1,4 @@
-import { AbstractInputSuggest } from "obsidian";
+import { AbstractInputSuggest, TFile } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 
 /**
@@ -93,4 +93,76 @@ export function attachAllowedSuggest(
     const usage = plugin.propertyCache.usage(property);
     return usage ? [...usage.values.keys()] : [];
   });
+}
+
+/**
+ * The value suggester for the properties modal. Two modes in one input:
+ *  - When the caret sits inside an open "[[" token, it suggests vault notes and
+ *    inserts a [[wikilink]] at that spot — so you can add MANY links in one
+ *    field (each new "[[" re-triggers, unlike a one-shot picker).
+ *  - Otherwise it suggests the property's pinned/existing values (replace-all).
+ * Works on <input> and <textarea> (lists).
+ */
+export class PropertyValueSuggest extends AbstractInputSuggest<TFile | string> {
+  constructor(
+    private plugin: BasesToolboxPlugin,
+    private el: HTMLInputElement | HTMLTextAreaElement,
+    private getProperty: () => string
+  ) {
+    super(plugin.app, el as unknown as HTMLInputElement);
+    this.limit = 30;
+  }
+
+  /** The open "[[…" token at the caret, or null. `start` is just after "[[". */
+  private openLink(): { start: number; query: string } | null {
+    const pos = this.el.selectionStart ?? this.el.value.length;
+    const m = this.el.value.slice(0, pos).match(/\[\[([^[\]]*)$/);
+    return m ? { start: pos - m[1].length, query: m[1] } : null;
+  }
+
+  getSuggestions(): (TFile | string)[] {
+    const link = this.openLink();
+    if (link) {
+      const q = link.query.toLowerCase();
+      return this.plugin.app.vault
+        .getMarkdownFiles()
+        .filter((f) => !q || f.path.toLowerCase().includes(q))
+        .slice(0, 30);
+    }
+    const property = this.getProperty();
+    const pinned = this.plugin.settings.allowedValues[property.toLowerCase()];
+    if (pinned && pinned.length) return pinned;
+    const usage = this.plugin.propertyCache.usage(property);
+    return usage ? [...usage.values.keys()] : [];
+  }
+
+  renderSuggestion(item: TFile | string, el: HTMLElement): void {
+    if (typeof item === "string") {
+      el.setText(item);
+      return;
+    }
+    el.createSpan({ text: item.basename });
+    el.createSpan({ cls: "bases-toolbox-suggest-path", text: `  ${item.path}` });
+  }
+
+  selectSuggestion(item: TFile | string): void {
+    if (typeof item === "string") {
+      this.el.value = item;
+      this.el.dispatchEvent(new Event("input"));
+      this.close();
+      return;
+    }
+    const link = this.openLink();
+    const linktext = this.plugin.app.metadataCache.fileToLinktext(item, "", true);
+    const pos = this.el.selectionStart ?? this.el.value.length;
+    const insStart = link ? link.start - 2 : pos; // include the "[["
+    const before = this.el.value.slice(0, insStart);
+    const after = this.el.value.slice(pos);
+    const inserted = `[[${linktext}]]`;
+    this.el.value = `${before}${inserted}${after}`;
+    const caret = before.length + inserted.length;
+    this.el.setSelectionRange(caret, caret);
+    this.el.dispatchEvent(new Event("input"));
+    this.close();
+  }
 }

@@ -13,7 +13,7 @@ import {
 import type BasesToolboxPlugin from "./main";
 import { folderPaths, readBaseInfo } from "./csv-export";
 import { getPropertyType } from "./scan";
-import { ListInputSuggest, attachAllowedSuggest, attachPropertySuggest } from "./suggest";
+import { ListInputSuggest, PropertyValueSuggest, attachPropertySuggest } from "./suggest";
 
 /** Fuzzy note picker → returns the chosen file so a value can get a [[wikilink]]. */
 class LinkPicker extends FuzzySuggestModal<TFile> {
@@ -142,6 +142,11 @@ export class PropertiesModal extends Modal {
         const type = inferType(this.app, k, undefined);
         this.rows.push({ key: k, type, text: "", bool: false });
       }
+    } else if (this.target.kind === "create") {
+      // Plain create (no base): start with a few blank rows so there's room to
+      // type. Count is configurable in settings.
+      const n = Math.max(0, this.plugin.settings.newNoteMinRows);
+      for (let j = 0; j < n; j++) this.rows.push({ key: "", type: "text", text: "", bool: false });
     }
 
     if (this.target.kind === "create" && this.target.note) {
@@ -250,18 +255,19 @@ export class PropertiesModal extends Modal {
     } else if (LIST_TYPES.has(row.type)) {
       const ta = el.createEl("textarea", {
         cls: "bases-toolbox-props-val",
-        attr: { placeholder: "one per line or ; separated", rows: "2" },
+        attr: { placeholder: "one per line or ; separated — type [[ to link", rows: "2" },
       });
       ta.value = row.text;
+      new PropertyValueSuggest(this.plugin, ta, () => row.key);
       ta.addEventListener("input", () => (row.text = ta.value));
     } else {
       const val = el.createEl("input", {
         type: row.type === "date" ? "date" : row.type === "datetime" ? "datetime-local" : "text",
         cls: "bases-toolbox-props-val",
-        attr: { placeholder: row.type === "number" ? "0" : "value" },
+        attr: { placeholder: row.type === "number" ? "0" : "value — type [[ to link" },
       });
       val.value = row.text;
-      if (row.type === "text") attachAllowedSuggest(this.plugin, val, () => row.key);
+      if (row.type === "text") new PropertyValueSuggest(this.plugin, val, () => row.key);
       val.addEventListener("input", () => (row.text = val.value));
     }
 
@@ -391,8 +397,11 @@ async function basePrefill(
   plugin: BasesToolboxPlugin
 ): Promise<{ folder: string; keys: string[]; note: string } | null> {
   const app = plugin.app;
-  let view: unknown = app.workspace.getActiveViewOfType(ItemView);
-  if (!isBaseView(view)) view = app.workspace.getLeavesOfType("bases").map((l) => l.view).find(isBaseView) ?? null;
+  // The view in the ACTIVELY-focused leaf — not any open base. So navigating to
+  // a non-base (or a different base) doesn't reach back to a base open elsewhere.
+  // (getActiveViewOfType(ItemView) returns null for Bases views, so read the
+  // active leaf's view directly.)
+  const view: unknown = app.workspace.activeLeaf?.view ?? null;
   if (!isBaseView(view)) return null;
 
   const info = await readBaseInfo(plugin, view.file.path);
