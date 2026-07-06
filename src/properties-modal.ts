@@ -1,4 +1,5 @@
 import {
+  App,
   FuzzySuggestModal,
   ItemView,
   Modal,
@@ -394,9 +395,28 @@ export function editActiveNoteProperties(plugin: BasesToolboxPlugin): void {
   new PropertiesModal(plugin, { kind: "edit", file }).open();
 }
 
-type BaseViewLike = { getViewType?: () => string; file?: TFile };
+type BaseViewLike = { getViewType?: () => string; file?: TFile; containerEl?: HTMLElement };
 const isBaseView = (v: unknown): v is Required<BaseViewLike> =>
   !!v && (v as BaseViewLike).getViewType?.() === "bases" && (v as BaseViewLike).file instanceof TFile;
+
+/**
+ * The base the user is looking at. Prefer the focused leaf, but fall back to an
+ * open base view — because `activeLeaf`/`getActiveFile()` can point at a
+ * non-base leaf even when a base is open and on screen (focus in a sidebar,
+ * another plugin's view holding the active leaf, or the command palette leaving
+ * a different view focused). `getLeavesOfType("bases")` is the reliable signal.
+ * When several bases are open and none is DOM-active, we don't guess.
+ */
+function activeBaseView(app: App): Required<BaseViewLike> | null {
+  const w = app.workspace;
+  if (isBaseView(w.activeLeaf?.view)) return w.activeLeaf.view as Required<BaseViewLike>;
+  const views = w.getLeavesOfType("bases").map((l) => l.view);
+  const domActive = views.find(
+    (v) => (v as BaseViewLike)?.containerEl?.closest?.(".workspace-leaf.mod-active")
+  );
+  const chosen = domActive ?? (views.length === 1 ? views[0] : null);
+  return isBaseView(chosen) ? chosen : null;
+}
 
 /**
  * If a base is open, borrow its current view's editable columns (dropping the
@@ -406,18 +426,15 @@ const isBaseView = (v: unknown): v is Required<BaseViewLike> =>
 async function basePrefill(
   plugin: BasesToolboxPlugin
 ): Promise<{ folder: string; keys: string[]; note: string } | null> {
-  const app = plugin.app;
-  // The view in the ACTIVELY-focused leaf — not any open base. So navigating to
-  // a non-base (or a different base) doesn't reach back to a base open elsewhere.
-  // (getActiveViewOfType(ItemView) returns null for Bases views, so read the
-  // active leaf's view directly.)
-  const view: unknown = app.workspace.activeLeaf?.view ?? null;
-  if (!isBaseView(view)) return null;
+  const view = activeBaseView(plugin.app);
+  if (!view) return null;
 
   const info = await readBaseInfo(plugin, view.file.path);
   if (!info.views.length) return null;
-  const label = activeDocument
-    .querySelector(".workspace-leaf.mod-active .bases-toolbar-views-menu")
+  // Read the current view label from the base's OWN leaf container, not the
+  // globally-active leaf (which may be a different view in the fallback case).
+  const label = (view.containerEl ?? activeDocument)
+    .querySelector(".bases-toolbar-views-menu")
     ?.textContent?.trim();
   const byLabel = info.views.findIndex((v) => v.name === label);
   const chosen = info.views[byLabel >= 0 ? byLabel : 0];

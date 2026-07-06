@@ -51,12 +51,22 @@ async function resolveBasesCell(
   if (!(file instanceof TFile)) return null;
 
   const embed = td.closest(".bases-embed");
+  // For a standalone base, derive the .base file from the base LEAF that owns
+  // this cell — not getActiveFile(), which can point at a different leaf when
+  // the base isn't the focused view (the same trap that broke this on some
+  // Obsidian versions). Fall back to getActiveFile() if no owning leaf matches.
+  const owningBaseFile = embed
+    ? null
+    : (app.workspace
+        .getLeavesOfType("bases")
+        .find((l) => (l.view as { containerEl?: HTMLElement })?.containerEl?.contains(td))
+        ?.view as { file?: TFile } | undefined)?.file ?? null;
   const baseFile = embed
     ? app.metadataCache.getFirstLinkpathDest(
         (embed.getAttribute("src") ?? "").split("#")[0],
         app.workspace.getActiveFile()?.path ?? ""
       )
-    : app.workspace.getActiveFile();
+    : owningBaseFile ?? app.workspace.getActiveFile();
   if (!(baseFile instanceof TFile) || baseFile.extension !== "base") return null;
 
   let doc: Record<string, unknown>;
