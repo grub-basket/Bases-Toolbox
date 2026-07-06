@@ -1,5 +1,4 @@
 import {
-  App,
   FuzzySuggestModal,
   ItemView,
   Modal,
@@ -12,6 +11,7 @@ import {
   stringifyYaml,
 } from "obsidian";
 import type BasesToolboxPlugin from "./main";
+import { activeBaseView } from "./base-detect";
 import { baseFolderScope, folderPaths, readBaseInfo } from "./csv-export";
 import { getPropertyType, isUnsafeKey } from "./scan";
 import { ListInputSuggest, PropertyValueSuggest, attachPropertySuggest } from "./suggest";
@@ -393,29 +393,6 @@ export function editActiveNoteProperties(plugin: BasesToolboxPlugin): void {
     return;
   }
   new PropertiesModal(plugin, { kind: "edit", file }).open();
-}
-
-type BaseViewLike = { getViewType?: () => string; file?: TFile; containerEl?: HTMLElement };
-const isBaseView = (v: unknown): v is Required<BaseViewLike> =>
-  !!v && (v as BaseViewLike).getViewType?.() === "bases" && (v as BaseViewLike).file instanceof TFile;
-
-/**
- * The base the user is looking at. Prefer the focused leaf, but fall back to an
- * open base view — because `activeLeaf`/`getActiveFile()` can point at a
- * non-base leaf even when a base is open and on screen (focus in a sidebar,
- * another plugin's view holding the active leaf, or the command palette leaving
- * a different view focused). `getLeavesOfType("bases")` is the reliable signal.
- * When several bases are open and none is DOM-active, we don't guess.
- */
-function activeBaseView(app: App): Required<BaseViewLike> | null {
-  const w = app.workspace;
-  if (isBaseView(w.activeLeaf?.view)) return w.activeLeaf.view as Required<BaseViewLike>;
-  const views = w.getLeavesOfType("bases").map((l) => l.view);
-  const domActive = views.find(
-    (v) => (v as BaseViewLike)?.containerEl?.closest?.(".workspace-leaf.mod-active")
-  );
-  const chosen = domActive ?? (views.length === 1 ? views[0] : null);
-  return isBaseView(chosen) ? chosen : null;
 }
 
 /**

@@ -12,7 +12,7 @@ dev-docs/
 # Private working docs: personal "why" annotations, internal reviews, forum drafts.
 docs/features.md
 docs/review-*.md
-docs/forum-post.md
+docs/forum-post*.md
 
 # Local dev test harness (isolated obs-dev instance; carries local vault paths).
 scripts/obs-dev

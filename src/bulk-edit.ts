@@ -1,5 +1,6 @@
-import { ItemView, Modal, Notice, Setting, TFile } from "obsidian";
+import { Modal, Notice, Setting, TFile } from "obsidian";
 import type BasesToolboxPlugin from "./main";
+import { activeBaseView } from "./base-detect";
 import { parseReplacement } from "./find-replace";
 import { findKey, getPropertyType, isUnsafeKey, parseValueForProperty, valueToDisplay } from "./scan";
 import { ChangeRecord } from "./types";
@@ -13,30 +14,22 @@ type BulkMode = "set" | "set-missing" | "append" | "remove" | "delete";
  * undocumented internals, probed defensively so a core change degrades to a
  * clear notice instead of wrong behavior.
  */
-type BaseView = { getViewType?: () => string; file?: TFile; controller?: { results?: unknown } };
-
-const isBaseView = (v: unknown): v is BaseView =>
-  !!v && (v as BaseView).getViewType?.() === "bases";
-
 export function activeBaseResults(
   plugin: BasesToolboxPlugin
 ): { files: TFile[]; name: string } | null {
-  // Prefer the FOCUSED base, but fall back to any open base view — so the
+  // Prefer the FOCUSED base, but fall back to the open base view — so the
   // command still works when it's triggered from the launcher / sidebar / a
   // command-palette selection (which can leave a non-base view focused) or when
   // the base is sitting in another tab. The modal shows the base name + file
   // count, so the user always sees which base it will operate on.
-  let view: unknown = plugin.app.workspace.getActiveViewOfType(ItemView);
-  if (!isBaseView(view)) {
-    view = plugin.app.workspace.getLeavesOfType("bases").map((l) => l.view).find(isBaseView) ?? null;
-  }
-  if (!isBaseView(view)) return null;
+  const view = activeBaseView(plugin.app);
+  if (!view) return null;
   const results = view.controller?.results;
   if (!(results instanceof Map)) return null;
   const files = [...results.keys()].filter(
     (f): f is TFile => f instanceof TFile && f.extension === "md"
   );
-  return { files, name: view.file?.basename ?? "base" };
+  return { files, name: view.file.basename };
 }
 
 export function openBulkEdit(plugin: BasesToolboxPlugin): void {

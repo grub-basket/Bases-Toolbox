@@ -1,5 +1,6 @@
 import { Modal, Notice, Setting, TFile, parseYaml, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
+import { baseFileForCell } from "./base-detect";
 import { openFindReplaceView } from "./find-replace-view";
 import { PropertyUsage, findKey, valueToDisplay } from "./scan";
 
@@ -153,7 +154,7 @@ async function resolveBasesCellSync(
         (embed.getAttribute("src") ?? "").split("#")[0],
         app.workspace.getActiveFile()?.path ?? ""
       )
-    : app.workspace.getActiveFile();
+    : baseFileForCell(app, td) ?? app.workspace.getActiveFile();
   if (!(baseFile instanceof TFile) || baseFile.extension !== "base") return null;
   try {
     const doc = (parseYaml(await app.vault.read(baseFile)) ?? {}) as Record<string, unknown>;

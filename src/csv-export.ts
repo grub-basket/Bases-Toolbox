@@ -1,5 +1,6 @@
-import { CachedMetadata, ItemView, Notice, TFile, getAllTags, parseYaml } from "obsidian";
+import { CachedMetadata, Notice, TFile, getAllTags, parseYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
+import { activeBaseView } from "./base-detect";
 import { ALWAYS_IGNORE_EXT, parseExts } from "./companion-notes";
 import { toCsvCell, toTsvCell } from "./csv-core";
 import { findKey } from "./scan";
@@ -9,9 +10,6 @@ import { findKey } from "./scan";
  * unwrapped, lists joined with "; ", proper quoting — copied to the clipboard
  * and written next to the .base file. Columns follow the view's order.
  */
-type BaseView = { getViewType?: () => string; file?: TFile; controller?: { results?: unknown } };
-const isBaseView = (v: unknown): v is BaseView =>
-  !!v && (v as BaseView).getViewType?.() === "bases" && !!(v as BaseView).file;
 
 /**
  * Exports the ACTIVE base view (command path): uses the base's live results and
@@ -20,12 +18,13 @@ const isBaseView = (v: unknown): v is BaseView =>
  */
 export async function exportBaseCsv(plugin: BasesToolboxPlugin): Promise<void> {
   const app = plugin.app;
-  const view = app.workspace.getActiveViewOfType(ItemView) as unknown;
-  if (!isBaseView(view) || !view.file) {
-    new Notice("Focus a base first — this command exports the active base view.");
+  const view = activeBaseView(app);
+  if (!view) {
+    new Notice(
+      "Open a base first — this command exports the active base view's results."
+    );
     return;
   }
-  const fromActive = true;
   const results = view.controller?.results;
   if (!(results instanceof Map)) {
     new Notice("Couldn't read the base's results (Obsidian internals may have changed).");
@@ -40,13 +39,12 @@ export async function exportBaseCsv(plugin: BasesToolboxPlugin): Promise<void> {
     /* fall through to default columns */
   }
   const views = Array.isArray(doc.views) ? (doc.views as Record<string, unknown>[]) : [];
-  // The active-view toolbar tells us which named view (column order) is showing.
-  // Only meaningful when the base itself is focused; otherwise use its first view.
-  const viewLabel = fromActive
-    ? activeDocument
-        .querySelector(".workspace-leaf.mod-active .bases-toolbar-views-menu")
-        ?.textContent?.trim()
-    : undefined;
+  // Which named view (column order) is showing — read from the base's OWN leaf
+  // container, not the globally-active leaf (which may be a different view when
+  // the base isn't focused).
+  const viewLabel = (view.containerEl ?? activeDocument)
+    .querySelector(".bases-toolbar-views-menu")
+    ?.textContent?.trim();
   const activeView = views.find((v) => v.name === viewLabel) ?? views[0];
   let order = (Array.isArray(activeView?.order) ? activeView.order : []).filter(
     (k): k is string => typeof k === "string"
