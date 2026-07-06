@@ -264,6 +264,8 @@ export interface BaseViewInfo {
   name: string;
   /** This view's own filter expressions (added on top of the base filters). */
   filters: string[];
+  /** The raw (un-flattened) filter tree — needed to honor `not(...)` scoping. */
+  filtersRaw: unknown;
   /** The view's column order (raw identifiers). */
   order: string[];
 }
@@ -271,7 +273,46 @@ export interface BaseViewInfo {
 export interface BaseInfo {
   /** Base-level filters, applied to every view. */
   baseFilters: string[];
+  /** The raw base-level filter tree. */
+  baseFiltersRaw: unknown;
   views: BaseViewInfo[];
+}
+
+/**
+ * Determines the folder scope of a base's filters WITHOUT flattening away the
+ * `not`/`or` structure. Collects `inFolder(...)` folders from positive (non-
+ * negated) positions only — so `not(file.inFolder("Archive"))` no longer scopes
+ * the export TO Archive. `approximate` is true when the filters have logic we
+ * don't evaluate (negation, or any non-inFolder / non-`file.ext` clause), so the
+ * caller can flag the result as a best-effort superset.
+ */
+export function baseFolderScope(...trees: unknown[]): { folders: string[]; approximate: boolean } {
+  const folders = new Set<string>();
+  let approximate = false;
+  const walk = (node: unknown, negated: boolean): void => {
+    if (typeof node === "string") {
+      const matches = [...node.matchAll(/inFolder\(\s*["']([^"']+)["']\s*\)/g)];
+      if (matches.length) {
+        if (negated) approximate = true; // a not(inFolder) — can't use it as an include
+        else matches.forEach((m) => folders.add(m[1].replace(/^\/+|\/+$/g, "")));
+      } else if (!/^\s*file\.ext\s*[=!<>]=?\s*["']?\w+["']?\s*$/.test(node)) {
+        approximate = true; // some other condition (status ==, etc.) we don't evaluate
+      }
+    } else if (Array.isArray(node)) {
+      node.forEach((n) => walk(n, negated));
+    } else if (node && typeof node === "object") {
+      for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+        if (k === "not") {
+          approximate = true;
+          walk(v, !negated);
+        } else {
+          walk(v, negated); // and / or
+        }
+      }
+    }
+  };
+  trees.forEach((t) => walk(t, false));
+  return { folders: [...folders], approximate };
 }
 
 /**
@@ -282,7 +323,7 @@ export interface BaseInfo {
 export async function readBaseInfo(plugin: BasesToolboxPlugin, basePath: string): Promise<BaseInfo> {
   const app = plugin.app;
   const f = app.vault.getAbstractFileByPath(basePath);
-  if (!(f instanceof TFile)) return { baseFilters: [], views: [] };
+  if (!(f instanceof TFile)) return { baseFilters: [], baseFiltersRaw: undefined, views: [] };
   let doc: Record<string, unknown> = {};
   try {
     doc = (parseYaml(await app.vault.read(f)) ?? {}) as Record<string, unknown>;
@@ -293,11 +334,12 @@ export async function readBaseInfo(plugin: BasesToolboxPlugin, basePath: string)
   const views: BaseViewInfo[] = rawViews.map((v, i) => ({
     name: typeof v?.name === "string" ? v.name : `View ${i + 1}`,
     filters: filterClauses(v?.filters),
+    filtersRaw: v?.filters,
     order: (Array.isArray(v?.order) ? (v.order as unknown[]) : []).filter(
       (k): k is string => typeof k === "string"
     ),
   }));
-  return { baseFilters: filterClauses(doc.filters), views };
+  return { baseFilters: filterClauses(doc.filters), baseFiltersRaw: doc.filters, views };
 }
 
 /**
@@ -381,16 +423,10 @@ export async function scanBaseView(
 ): Promise<{ data: FolderCsvData; folders: string[]; approximate: boolean }> {
   const app = plugin.app;
   const info = await readBaseInfo(plugin, basePath);
-  const view = info.views[viewIndex] ?? info.views[0] ?? { name: "", filters: [], order: [] };
-  const clauses = [...info.baseFilters, ...view.filters];
-
-  const folders = clauses.flatMap((c) =>
-    [...c.matchAll(/inFolder\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1].replace(/^\/+|\/+$/g, ""))
-  );
-  const handled = (c: string): boolean =>
-    /^\s*file\.inFolder\(/.test(c) ||
-    /^\s*file\.ext\s*[=!<>]=?\s*["']?\w+["']?\s*$/.test(c);
-  const approximate = clauses.some((c) => !handled(c));
+  const view =
+    info.views[viewIndex] ?? info.views[0] ?? { name: "", filters: [], filtersRaw: undefined, order: [] };
+  // Walk the RAW trees so a not(inFolder(...)) doesn't invert the scope.
+  const { folders, approximate } = baseFolderScope(info.baseFiltersRaw, view.filtersRaw);
 
   const order = view.order.length ? view.order : ["file.name"];
   const dataCols = order.filter((k) => k !== "file.name");

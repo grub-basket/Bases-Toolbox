@@ -11,7 +11,7 @@ import {
   stringifyYaml,
 } from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { folderPaths, readBaseInfo } from "./csv-export";
+import { baseFolderScope, folderPaths, readBaseInfo } from "./csv-export";
 import { getPropertyType, isUnsafeKey } from "./scan";
 import { ListInputSuggest, PropertyValueSuggest, attachPropertySuggest } from "./suggest";
 
@@ -422,10 +422,7 @@ async function basePrefill(
   const byLabel = info.views.findIndex((v) => v.name === label);
   const chosen = info.views[byLabel >= 0 ? byLabel : 0];
 
-  const clauses = [...info.baseFilters, ...chosen.filters];
-  const folders = clauses.flatMap((c) =>
-    [...c.matchAll(/inFolder\(\s*["']([^"']+)["']\s*\)/g)].map((m) => m[1].replace(/^\/+|\/+$/g, ""))
-  );
+  const { folders } = baseFolderScope(info.baseFiltersRaw, chosen.filtersRaw);
   const keys = chosen.order
     .filter((k) => !k.startsWith("file.") && !k.startsWith("formula."))
     .map((k) => k.replace(/^note\./, ""));
