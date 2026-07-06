@@ -207,6 +207,29 @@ beyond a bare `file.*` reference.
 This "forgetting" is Obsidian's behavior, not something this plugin can patch —
 but the property index above never forgets *your* properties.
 
+#### Recipe: look up a value from a linked note (a Bases "XLOOKUP")
+
+Bases has no built-in relational lookup, but if a property **links to another
+note**, a formula can pull one of *that* note's properties in — the equivalent
+of Excel's XLOOKUP. Say each Transaction links to an Account
+(`account: [[Chase 1234]]`) and you want the Account's bank name as a column:
+
+```yaml
+formulas:
+  bank: account.asFile().properties.bank
+```
+
+For property names with spaces or symbols, use bracket syntax on both sides:
+
+```yaml
+formulas:
+  holder: note["Account"].asFile().properties["Account Holder Name"]
+```
+
+Then add `formula.bank` / `formula.holder` to the view's `order`. It's the
+relational join Bases doesn't give you out of the box. (This is a plain Bases
+formula recipe, not a plugin feature.)
+
 ### Property format doctor
 
 Command: **Property format doctor**. Obsidian flags type-mismatched property

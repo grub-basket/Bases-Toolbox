@@ -920,6 +920,10 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           ["file.tags", "every tag in the note (frontmatter + body)"],
           ["file.links · file.backlinks · file.embeds", "outgoing links · backlinks · embeds"],
           ["file.properties", "all frontmatter properties on the file"],
+          [
+            "Recipe — XLOOKUP (look up a linked note's value)",
+            "If a property links to another note, a formula can pull that note's property in — like Excel's XLOOKUP. Simple names: `linkProp.asFile().properties.otherProp`. Names with spaces/symbols: `note[\"Account\"].asFile().properties[\"Account Holder Name\"]`. Add it under `formulas:` and reference as `formula.<name>`. (A plain Bases formula, not a plugin feature.)",
+          ],
         ],
       },
       {
