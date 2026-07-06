@@ -94,6 +94,9 @@ export interface BasesToolboxSettings {
    * existing user's companionExcludeExts. Prevents re-adding it after they
    * deliberately remove it. */
   companionBaseExclusionApplied: boolean;
+  /** Launcher features the user pinned, by id ("view:<type>" / "cmd:<command>"
+   * / "settings"). Shown in a Favorites section at the top of the launcher. */
+  favoriteFeatures: string[];
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -116,6 +119,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   // Default false so the one-time migration runs for existing users (whose
   // saved data lacks this flag → falls back to the default).
   companionBaseExclusionApplied: false,
+  favoriteFeatures: ["cmd:new-note-with-properties"],
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */

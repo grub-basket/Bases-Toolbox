@@ -83,34 +83,73 @@ export class LauncherView extends ItemView {
     const root = this.contentEl;
     root.empty();
     root.addClass("bases-toolbox-launcher");
-    root.createDiv({ cls: "bases-toolbox-launcher-intro", text: "Open any Bases Toolbox feature." });
+    root.createDiv({
+      cls: "bases-toolbox-launcher-intro",
+      text: "Open any Bases Toolbox feature. Tap the ☆ to pin one to Favorites.",
+    });
+
+    // Favorites — pinned features, in the order they were pinned.
+    const favs = this.plugin.settings.favoriteFeatures;
+    if (favs.length) {
+      root.createDiv({ cls: "bases-toolbox-launcher-section", text: "★ Favorites" });
+      for (const id of favs) this.renderById(root, id);
+    }
 
     // Panels & windows — the views open either in a sidebar or a main tab.
     root.createDiv({ cls: "bases-toolbox-launcher-section", text: "Panels & windows" });
-    for (const f of VIEWS) {
-      const card = this.card(root, f.name, f.desc, f.icon);
-      this.launchBtn(card, "panel-right", "Sidebar", `Open ${f.name} in the sidebar`, () =>
-        void this.openView(f.type, "sidebar")
-      );
-      this.launchBtn(card, "picture-in-picture-2", "Tab", `Open ${f.name} in a tab`, () =>
-        void this.openView(f.type, "tab")
-      );
-      this.launchBtn(card, "app-window", "Window", `Open ${f.name} in a new window`, () =>
-        void this.openView(f.type, "window")
-      );
-    }
+    for (const f of VIEWS) this.renderView(root, f);
 
     // Dialogs & actions — each opens its own modal / runs its action.
     root.createDiv({ cls: "bases-toolbox-launcher-section", text: "Dialogs & actions" });
-    for (const f of TOOLS) {
-      const card = this.card(root, f.name, f.desc, f.icon);
-      this.launchBtn(card, "play", "Open", `Open ${f.name}`, () => this.runCommand(f.command));
-    }
+    for (const f of TOOLS) this.renderTool(root, f);
 
     // Settings shortcut at the bottom.
     root.createDiv({ cls: "bases-toolbox-launcher-section", text: "Settings" });
-    const s = this.card(root, "Bases Toolbox settings", "Toggles, forks, formatting rules, reference", "settings");
+    this.renderSettings(root);
+  }
+
+  /** Render a feature by its favorite id, wherever it lives. */
+  private renderById(parent: HTMLElement, id: string): void {
+    if (id === "settings") return this.renderSettings(parent);
+    if (id.startsWith("view:")) {
+      const f = VIEWS.find((v) => `view:${v.type}` === id);
+      if (f) this.renderView(parent, f);
+    } else if (id.startsWith("cmd:")) {
+      const f = TOOLS.find((t) => `cmd:${t.command}` === id);
+      if (f) this.renderTool(parent, f);
+    }
+  }
+
+  private renderView(parent: HTMLElement, f: ViewFeature): void {
+    const card = this.card(parent, f.name, f.desc, f.icon, `view:${f.type}`);
+    this.launchBtn(card, "panel-right", "Sidebar", `Open ${f.name} in the sidebar`, () =>
+      void this.openView(f.type, "sidebar")
+    );
+    this.launchBtn(card, "picture-in-picture-2", "Tab", `Open ${f.name} in a tab`, () =>
+      void this.openView(f.type, "tab")
+    );
+    this.launchBtn(card, "app-window", "Window", `Open ${f.name} in a new window`, () =>
+      void this.openView(f.type, "window")
+    );
+  }
+
+  private renderTool(parent: HTMLElement, f: ToolFeature): void {
+    const card = this.card(parent, f.name, f.desc, f.icon, `cmd:${f.command}`);
+    this.launchBtn(card, "play", "Open", `Open ${f.name}`, () => this.runCommand(f.command));
+  }
+
+  private renderSettings(parent: HTMLElement): void {
+    const s = this.card(parent, "Bases Toolbox settings", "Toggles, forks, formatting rules, reference", "settings", "settings");
     this.launchBtn(s, "settings", "Open", "Open Bases Toolbox settings", () => this.runCommand("open-settings"));
+  }
+
+  private async toggleFavorite(id: string): Promise<void> {
+    const favs = this.plugin.settings.favoriteFeatures;
+    const i = favs.indexOf(id);
+    if (i >= 0) favs.splice(i, 1);
+    else favs.push(id);
+    await this.plugin.savePluginData();
+    this.render();
   }
 
   /** Run one of the plugin's commands by its (un-prefixed) id. `commands` is
@@ -121,12 +160,24 @@ export class LauncherView extends ItemView {
     ).commands.executeCommandById(`${this.plugin.manifest.id}:${command}`);
   }
 
-  private card(parent: HTMLElement, name: string, desc: string, icon: string): HTMLElement {
+  private card(parent: HTMLElement, name: string, desc: string, icon: string, id: string): HTMLElement {
     const card = parent.createDiv({ cls: "bases-toolbox-launcher-card" });
     setIcon(card.createSpan({ cls: "bases-toolbox-launcher-icon" }), icon);
     const text = card.createDiv({ cls: "bases-toolbox-launcher-text" });
     text.createDiv({ cls: "bases-toolbox-launcher-name", text: name });
     text.createDiv({ cls: "bases-toolbox-launcher-desc", text: desc });
+
+    const fav = this.plugin.settings.favoriteFeatures.includes(id);
+    const star = card.createSpan({
+      cls: `bases-toolbox-launcher-star${fav ? " is-fav" : ""}`,
+      attr: { "aria-label": fav ? "Unpin from Favorites" : "Pin to Favorites" },
+    });
+    setIcon(star, "star");
+    star.addEventListener("click", (e) => {
+      e.stopPropagation();
+      void this.toggleFavorite(id);
+    });
+
     card.createDiv({ cls: "bases-toolbox-launcher-actions" });
     return card;
   }
