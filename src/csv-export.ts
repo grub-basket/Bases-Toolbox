@@ -1,5 +1,6 @@
 import { CachedMetadata, ItemView, Notice, TFile, getAllTags, parseYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
+import { ALWAYS_IGNORE_EXT } from "./companion-notes";
 import { toCsvCell, toTsvCell } from "./csv-core";
 import { findKey } from "./scan";
 
@@ -148,7 +149,8 @@ export function subfoldersOf(plugin: BasesToolboxPlugin, folderPath: string): st
 }
 
 /** Non-markdown files in scope (images, PDFs, …) that a CSV export skips —
- * offered up so the user can companion them. Excludes .base files. */
+ * offered up so the user can companion them. Excludes the same things the
+ * companion feature always ignores (.edtz, .base, and .md.* derivatives). */
 export function nonMdFilesInScope(
   plugin: BasesToolboxPlugin,
   folderPath: string,
@@ -157,9 +159,13 @@ export function nonMdFilesInScope(
 ): TFile[] {
   const norm = normFolder(folderPath);
   const ignored = ignore.map(normFolder).filter(Boolean);
-  return plugin.app.vault
-    .getFiles()
-    .filter((f) => f.extension !== "md" && f.extension !== "base" && fileInScope(f, norm, recursive, ignored));
+  return plugin.app.vault.getFiles().filter(
+    (f) =>
+      f.extension !== "md" &&
+      !ALWAYS_IGNORE_EXT.has(f.extension.toLowerCase()) &&
+      !f.name.includes(".md.") &&
+      fileInScope(f, norm, recursive, ignored)
+  );
 }
 
 /** Renders scanned rows as CSV (comma) or, for "Copy for Excel", TSV (tab). */
