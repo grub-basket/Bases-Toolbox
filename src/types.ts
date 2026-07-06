@@ -90,6 +90,10 @@ export interface BasesToolboxSettings {
    * so the group re-flags for review.
    */
   ignoredDuplicateGroups: string[];
+  /** One-time flag: the ".base" default exclusion has been merged into an
+   * existing user's companionExcludeExts. Prevents re-adding it after they
+   * deliberately remove it. */
+  companionBaseExclusionApplied: boolean;
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -103,12 +107,15 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   removedForks: [],
   companionsFolder: "",
   companionExts: "",
-  companionExcludeExts: "",
+  companionExcludeExts: "base",
   companionVaultWide: false,
   companionFolders: "",
   companionAuto: false,
   ignoredFormatIssues: [],
   ignoredDuplicateGroups: [],
+  // Default false so the one-time migration runs for existing users (whose
+  // saved data lacks this flag → falls back to the default).
+  companionBaseExclusionApplied: false,
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */

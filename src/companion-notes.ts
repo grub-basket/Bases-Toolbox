@@ -44,9 +44,10 @@ export function parseExts(raw: string): Set<string> {
   );
 }
 
-/** Extensions never companioned regardless of settings: edit-history version
- * files (.edtz) and base files (.base — companioning them is just clutter). */
-export const ALWAYS_IGNORE_EXT = new Set(["edtz", "base"]);
+/** Extensions never companioned regardless of settings — the loop-risk ones
+ * (edit-history version files). `.base` is a *default* exclusion the user can
+ * remove (see DEFAULT_SETTINGS.companionExcludeExts + the one-time migration). */
+export const ALWAYS_IGNORE_EXT = new Set(["edtz"]);
 
 /** Whether this file's TYPE is eligible. `exclude` is a blacklist of
  *  extensions (opt-out): every non-Markdown file is eligible except those. */

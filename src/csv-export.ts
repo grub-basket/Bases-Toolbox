@@ -1,6 +1,6 @@
 import { CachedMetadata, ItemView, Notice, TFile, getAllTags, parseYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { ALWAYS_IGNORE_EXT } from "./companion-notes";
+import { ALWAYS_IGNORE_EXT, parseExts } from "./companion-notes";
 import { toCsvCell, toTsvCell } from "./csv-core";
 import { findKey } from "./scan";
 
@@ -159,13 +159,19 @@ export function nonMdFilesInScope(
 ): TFile[] {
   const norm = normFolder(folderPath);
   const ignored = ignore.map(normFolder).filter(Boolean);
-  return plugin.app.vault.getFiles().filter(
-    (f) =>
+  // Skip what the companion feature skips: hard-ignored exts, the user's own
+  // exclude list (which now defaults to include "base"), and .md.* derivatives.
+  const userExclude = parseExts(plugin.settings.companionExcludeExts);
+  return plugin.app.vault.getFiles().filter((f) => {
+    const ext = f.extension.toLowerCase();
+    return (
       f.extension !== "md" &&
-      !ALWAYS_IGNORE_EXT.has(f.extension.toLowerCase()) &&
+      !ALWAYS_IGNORE_EXT.has(ext) &&
+      !userExclude.has(ext) &&
       !f.name.includes(".md.") &&
       fileInScope(f, norm, recursive, ignored)
-  );
+    );
+  });
 }
 
 /** Renders scanned rows as CSV (comma) or, for "Copy for Excel", TSV (tab). */

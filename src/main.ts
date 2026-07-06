@@ -430,6 +430,20 @@ export default class BasesToolboxPlugin extends Plugin {
     this.disabledFilters = data.disabledFilters ?? {};
     // Migrate the pre-history single-undo slot.
     if (data.lastOperation) this.history.push(data.lastOperation);
+    // One-time: seed ".base" into the companion exclude list for existing users
+    // (new installs already default to it). They can remove it afterwards — the
+    // flag stops it coming back.
+    if (!this.settings.companionBaseExclusionApplied) {
+      const exts = parseExts(this.settings.companionExcludeExts);
+      if (!exts.has("base")) {
+        this.settings.companionExcludeExts =
+          this.settings.companionExcludeExts.trim() === ""
+            ? "base"
+            : `${this.settings.companionExcludeExts.trim()}, base`;
+      }
+      this.settings.companionBaseExclusionApplied = true;
+      await this.savePluginData();
+    }
   }
 
   async savePluginData(): Promise<void> {
