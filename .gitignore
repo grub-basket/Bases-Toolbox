@@ -14,3 +14,4 @@ scripts/obs-dev
 scripts/obs-dev.mjs
 scripts/cdp.mjs
 scripts/reload-notice.js
+.claude/audit-*.md
