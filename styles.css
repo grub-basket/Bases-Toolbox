@@ -204,6 +204,22 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   container-type: inline-size;
 }
 
+/* Give the folder/base text inputs the majority of the row so the hint and the
+   typed path are readable (they're the whole point of these fields). */
+.bases-toolbox-csv-view-inner .setting-item-control,
+.bases-toolbox-csv-modal .setting-item-control {
+  flex: 1 1 60%;
+  justify-content: flex-start;
+}
+.bases-toolbox-csv-view-inner .setting-item-control input[type="text"],
+.bases-toolbox-csv-modal .setting-item-control input[type="text"] {
+  width: 100%;
+}
+.bases-toolbox-csv-view-inner .setting-item-info,
+.bases-toolbox-csv-modal .setting-item-info {
+  flex: 0 1 40%;
+}
+
 /* In a narrow pane (sidebar), stack each Setting so the label isn't crushed to
    one character per line — the control drops below and fills the width. */
 @container (max-width: 420px) {
