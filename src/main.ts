@@ -542,6 +542,16 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         t.setValue(this.plugin.settings.multilineListCells).onChange(async (v) => {
           this.plugin.settings.multilineListCells = v;
           this.plugin.applyMultilineListCells();
+          // One-time nudge: stacking doesn't grow the (virtualized) row height,
+          // so the list scrolls inside a short cell until the user raises Bases'
+          // own row-height option. Point them there once, the first time they enable.
+          if (v && !this.plugin.settings.multilineTipShown) {
+            this.plugin.settings.multilineTipShown = true;
+            new Notice(
+              "Tip: raise the base's row height (Bases view options → row height) to see more of each stacked list.",
+              8000
+            );
+          }
           await this.plugin.savePluginData();
         })
       );

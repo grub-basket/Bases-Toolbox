@@ -55,6 +55,8 @@ export interface BasesToolboxSettings {
   historyCap: number | null;
   /** Stack list-property pills vertically in Bases table cells. */
   multilineListCells: boolean;
+  /** Whether the "raise the row height" tip was already shown once on enable. */
+  multilineTipShown: boolean;
   /** Conditional row-coloring rules for Bases views. */
   formatRules: import("./conditional-format").FormatRule[];
   /** Pinned allowed values per property (key: lowercase property name). */
@@ -107,6 +109,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   digitsOnlyTyping: true,
   historyCap: null,
   multilineListCells: false,
+  multilineTipShown: false,
   formatRules: [],
   allowedValues: {},
   propertyForks: [],
