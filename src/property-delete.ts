@@ -288,16 +288,25 @@ export class ConfirmModal extends Modal {
   }
 }
 
-/** Single-line text prompt (used for rename). */
+/** Single-line text prompt (used for rename). `attach` can wire a suggester
+ * (e.g. value/link autocomplete) onto the input. */
 export class PromptModal extends Modal {
   constructor(
     plugin: BasesToolboxPlugin,
-    private opts: { title: string; body?: string; initial: string; confirmText: string; onSubmit: (v: string) => void }
+    private opts: {
+      title: string;
+      body?: string;
+      initial: string;
+      confirmText: string;
+      onSubmit: (v: string) => void;
+      attach?: (input: HTMLInputElement) => void;
+    }
   ) {
     super(plugin.app);
   }
 
   onOpen(): void {
+    this.modalEl.addClass("bases-toolbox-prompt-modal");
     this.titleEl.setText(this.opts.title);
     if (this.opts.body) this.contentEl.createEl("p", { text: this.opts.body });
     let value = this.opts.initial;
@@ -315,6 +324,7 @@ export class PromptModal extends Modal {
           submit();
         }
       });
+      this.opts.attach?.(t.inputEl);
       window.setTimeout(() => t.inputEl.select(), 0);
     });
     new Setting(this.contentEl)

@@ -394,6 +394,22 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   margin: var(--size-2-1) auto;
 }
 
+/* Rename prompt: the single input should span the whole modal width. */
+.bases-toolbox-prompt-modal .setting-item {
+  border: none;
+  padding: var(--size-2-2) 0;
+}
+.bases-toolbox-prompt-modal .setting-item-info {
+  display: none;
+}
+.bases-toolbox-prompt-modal .setting-item-control {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+}
+.bases-toolbox-prompt-modal .setting-item-control input[type="text"] {
+  width: 100%;
+}
+
 .bases-toolbox-props-link,
 .bases-toolbox-props-del {
   flex: 0 0 auto;

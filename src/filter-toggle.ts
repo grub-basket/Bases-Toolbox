@@ -121,23 +121,27 @@ export class FilterToggleModal extends Modal {
           setting.setDesc("Nested groups can't be toggled (yet) — edit the .base directly.");
           continue;
         }
+        // Update the row in place — do NOT re-render, so rows never re-rank
+        // (enabled-over-disabled) and jump under the cursor. Revert on failure.
         setting.addToggle((t) =>
           t.setValue(row.enabled).onChange(async () => {
             try {
-              if (row.enabled) await this.disableFilter(row);
-              else await this.enableFilter(row);
+              const ok = row.enabled ? await this.disableFilter(row) : await this.enableFilter(row);
+              if (ok) row.enabled = !row.enabled;
+              else t.setValue(row.enabled);
             } catch (e) {
               new Notice(`Filter toggle failed: ${e instanceof Error ? e.message : e}`);
+              t.setValue(row.enabled);
             }
-            await this.render();
           })
         );
       }
     }
   }
 
-  /** Removes the condition from the .base file and stashes it in plugin data. */
-  private async disableFilter(row: FilterRow): Promise<void> {
+  /** Removes the condition from the .base file and stashes it in plugin data.
+   * Returns false (and does nothing) if the condition is no longer in the file. */
+  private async disableFilter(row: FilterRow): Promise<boolean> {
     const applied = await this.rewriteBase((doc) => {
       const holder = this.filtersHolder(doc, row.scope);
       if (!holder) return false;
@@ -160,16 +164,17 @@ export class FilterToggleModal extends Modal {
     });
     if (!applied) {
       // .base changed since the modal rendered — don't stash a phantom entry
-      new Notice("That filter is no longer in the file — refreshed the list.");
-      return;
+      new Notice("That filter is no longer in the file.");
+      return false;
     }
     const list = (this.plugin.disabledFilters[this.file.path] ??= []);
     list.push({ text: row.text, conj: row.conj, scope: row.scope });
     await this.plugin.savePluginData();
+    return true;
   }
 
   /** Re-inserts a stashed condition into the .base file. */
-  private async enableFilter(row: FilterRow): Promise<void> {
+  private async enableFilter(row: FilterRow): Promise<boolean> {
     await this.rewriteBase((doc) => {
       const holder = this.filtersHolder(doc, row.scope, true);
       if (!holder) throw new Error(`view "${row.scope}" no longer exists`);
@@ -193,6 +198,7 @@ export class FilterToggleModal extends Modal {
     if (i !== -1) list.splice(i, 1);
     if (!list.length) delete this.plugin.disabledFilters[this.file.path];
     await this.plugin.savePluginData();
+    return true;
   }
 
   /** Finds the object holding the `filters` key for a scope ("" = doc root). */

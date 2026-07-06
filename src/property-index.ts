@@ -6,6 +6,7 @@ import { parseReplacement, replaceIn } from "./find-replace";
 import { ForkTargetDeleteModal, forksTargeting } from "./property-fork";
 import { anchorViewWindow, installRefocusRefresh, installSidebarAction, openFileFromView } from "./view-refresh";
 import { siftMatch } from "./sift";
+import { PropertyValueSuggest } from "./suggest";
 import { PropertyUsage, findKey, typeIconName } from "./scan";
 import { ChangeRecord } from "./types";
 import {
@@ -479,6 +480,8 @@ export class PropertyIndexView extends ItemView {
       body: `Changes “${oldDisplay}” to a new value in ${files.length} file${files.length === 1 ? "" : "s"} where “${usage.name}” has it. Undoable from history.`,
       initial: oldDisplay,
       confirmText: "Rename value",
+      // A value can be an internal link — offer note/link autocomplete (type [[).
+      attach: (input) => new PropertyValueSuggest(this.plugin, input, () => usage.name),
       onSubmit: (raw) =>
         void (async () => {
           if (raw === oldDisplay) return;
