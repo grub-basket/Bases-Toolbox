@@ -107,7 +107,9 @@ export class PropertyValueSuggest extends AbstractInputSuggest<TFile | string> {
   constructor(
     private plugin: BasesToolboxPlugin,
     private el: HTMLInputElement | HTMLTextAreaElement,
-    private getProperty: () => string
+    private getProperty: () => string,
+    /** When false, "[[" never triggers note suggestions (e.g. tags/aliases). */
+    private allowLinks = true
   ) {
     super(plugin.app, el as unknown as HTMLInputElement);
     this.limit = 30;
@@ -115,6 +117,7 @@ export class PropertyValueSuggest extends AbstractInputSuggest<TFile | string> {
 
   /** The open "[[…" token at the caret, or null. `start` is just after "[[". */
   private openLink(): { start: number; query: string } | null {
+    if (!this.allowLinks) return null;
     const pos = this.el.selectionStart ?? this.el.value.length;
     const m = this.el.value.slice(0, pos).match(/\[\[([^[\]]*)$/);
     return m ? { start: pos - m[1].length, query: m[1] } : null;

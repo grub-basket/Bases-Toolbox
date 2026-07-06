@@ -49,6 +49,8 @@ const TYPE_LABELS: Record<PropType, string> = {
 };
 
 const LIST_TYPES = new Set<PropType>(["multitext", "tags", "aliases"]);
+/** Types where a value can be an internal link (tags/aliases aren't links). */
+const LINK_TYPES = new Set<PropType>(["text", "multitext"]);
 
 interface Row {
   key: string;
@@ -253,12 +255,16 @@ export class PropertiesModal extends Modal {
       cb.checked = row.bool;
       cb.addEventListener("change", () => (row.bool = cb.checked));
     } else if (LIST_TYPES.has(row.type)) {
+      const links = LINK_TYPES.has(row.type);
       const ta = el.createEl("textarea", {
         cls: "bases-toolbox-props-val",
-        attr: { placeholder: "one per line or ; separated — type [[ to link", rows: "2" },
+        attr: {
+          placeholder: `one per line or ; separated${links ? " — type [[ to link" : ""}`,
+          rows: "2",
+        },
       });
       ta.value = row.text;
-      new PropertyValueSuggest(this.plugin, ta, () => row.key);
+      new PropertyValueSuggest(this.plugin, ta, () => row.key, links);
       ta.addEventListener("input", () => (row.text = ta.value));
     } else {
       const val = el.createEl("input", {
@@ -271,9 +277,8 @@ export class PropertiesModal extends Modal {
       val.addEventListener("input", () => (row.text = val.value));
     }
 
-    // Internal-link insert — a note picker that appends a [[wikilink]] to the
-    // value (a new line for lists, a space for text). Not for boolean/number.
-    if (row.type === "text" || LIST_TYPES.has(row.type)) {
+    // Internal-link insert button — only where links make sense (not tags/aliases).
+    if (LINK_TYPES.has(row.type)) {
       const linkBtn = el.createEl("button", {
         cls: "bases-toolbox-props-link",
         attr: { "aria-label": "Insert a link to a note" },

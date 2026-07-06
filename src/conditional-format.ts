@@ -369,6 +369,11 @@ export function installConditionalFormatting(plugin: BasesToolboxPlugin): void {
   const refresh = debounce(() => redecorateAll(plugin), 150, true);
   plugin.refreshConditionalFormatting = () => scheduleRedecorate(plugin);
 
+  // "is duplicated" needs the WHOLE base's rows (counts), so single-row
+  // re-decoration can't evaluate it — route those to a group refresh instead.
+  const hasDupRule = () =>
+    plugin.settings.formatRules.some((r) => r.enabled && r.op === "duplicated" && r.property);
+
   const observe = (doc: Document) => {
     const observer = new MutationObserver((mutations) => {
       if (!plugin.settings.formatRules.length) return;
@@ -378,14 +383,14 @@ export function installConditionalFormatting(plugin: BasesToolboxPlugin): void {
           const t = mutation.target;
           if (t.instanceOf(HTMLElement)) {
             const row = (t as HTMLElement).closest<HTMLElement>(".bases-tr");
-            if (row) decorateRow(plugin, row);
+            if (row) hasDupRule() ? refresh() : decorateRow(plugin, row);
           }
           continue;
         }
         for (const node of Array.from(mutation.addedNodes)) {
           if (!node.instanceOf(HTMLElement)) continue;
           const el = node as HTMLElement;
-          if (el.matches(".bases-tr")) decorateRow(plugin, el);
+          if (el.matches(".bases-tr")) hasDupRule() ? refresh() : decorateRow(plugin, el);
           else if (el.querySelector(".bases-tr")) refresh();
         }
       }
