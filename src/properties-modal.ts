@@ -12,7 +12,7 @@ import {
 } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { folderPaths, readBaseInfo } from "./csv-export";
-import { getPropertyType } from "./scan";
+import { getPropertyType, isUnsafeKey } from "./scan";
 import { ListInputSuggest, PropertyValueSuggest, attachPropertySuggest } from "./suggest";
 
 /** Fuzzy note picker → returns the chosen file so a value can get a [[wikilink]]. */
@@ -321,6 +321,11 @@ export class PropertiesModal extends Modal {
     }
     if (/[\\/:*?"<>|]/.test(name)) {
       new Notice('A file name can\'t contain \\ / : * ? " < > |');
+      return;
+    }
+    const reserved = this.rows.find((r) => r.key && isUnsafeKey(r.key));
+    if (reserved) {
+      new Notice(`"${reserved.key}" is a reserved name and can't be used as a property.`);
       return;
     }
     this.running = true;

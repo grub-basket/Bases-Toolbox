@@ -1,6 +1,6 @@
 import { ButtonComponent, Modal, Notice, Setting, TFile, TFolder, ToggleComponent, normalizePath } from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { findKey } from "./scan";
+import { findKey, isUnsafeKey } from "./scan";
 import { ChangeRecord } from "./types";
 
 /**
@@ -395,6 +395,11 @@ export class MetadataStampModal extends Modal {
     const modifiedProp = this.modifiedEl?.value.trim() ?? "";
     if (!createdProp && !modifiedProp) {
       new Notice("Name at least one property to stamp.");
+      return;
+    }
+    const reserved = [createdProp, modifiedProp].find((p) => p && isUnsafeKey(p));
+    if (reserved) {
+      new Notice(`"${reserved}" is a reserved name and can't be used as a property.`);
       return;
     }
     this.running = true;

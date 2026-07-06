@@ -1,7 +1,7 @@
 import { ItemView, Modal, Notice, Setting, TFile } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { parseReplacement } from "./find-replace";
-import { findKey, getPropertyType, parseValueForProperty, valueToDisplay } from "./scan";
+import { findKey, getPropertyType, isUnsafeKey, parseValueForProperty, valueToDisplay } from "./scan";
 import { ChangeRecord } from "./types";
 
 const NEW_PROPERTY = "__bt_new_property__";
@@ -172,6 +172,10 @@ export class BulkEditModal extends Modal {
       this.property === NEW_PROPERTY ? (this.nameInputEl?.value.trim() ?? "") : this.property;
     if (!property) {
       new Notice("Give the new property a name first.");
+      return;
+    }
+    if (isUnsafeKey(property)) {
+      new Notice(`"${property}" is a reserved name and can't be used as a property.`);
       return;
     }
     const rawValue = this.valueEl?.value ?? "";

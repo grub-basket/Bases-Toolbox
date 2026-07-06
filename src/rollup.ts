@@ -1,7 +1,7 @@
 import { Modal, Notice, Setting, TFile } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { activeBaseResults } from "./bulk-edit";
-import { findKey } from "./scan";
+import { findKey, isUnsafeKey } from "./scan";
 import { ChangeRecord } from "./types";
 
 type Direction = "incoming" | "outgoing";
@@ -116,6 +116,10 @@ class RollupModal extends Modal {
     const sourceProp = this.sourcePropEl?.value.trim() ?? "";
     if (!targetProp) {
       new Notice("Name the property to write into.");
+      return;
+    }
+    if (isUnsafeKey(targetProp)) {
+      new Notice(`"${targetProp}" is a reserved name and can't be used as a property.`);
       return;
     }
     if (this.agg !== "count" && !sourceProp) {
