@@ -56,9 +56,7 @@ function deletionsDir(plugin: BasesToolboxPlugin): string {
 
 /** Filesystem-safe file stem for a property name. */
 function safeName(name: string): string {
-  // Matching control chars 0x00–0x1f is deliberate here — we're stripping them
-  // (plus the illegal filename chars) out of the audit filename.
-  // eslint-disable-next-line no-control-regex
+  // eslint-disable-next-line no-control-regex -- matching control chars 0x00–0x1f is deliberate: we strip them (plus illegal filename chars) out of the audit filename
   return name.replace(/[\\/:*?"<>|\x00-\x1f]/g, "_").replace(/\s+/g, " ").trim() || "_";
 }
 
