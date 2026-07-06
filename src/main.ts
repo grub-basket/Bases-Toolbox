@@ -1,4 +1,4 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, debounce, setIcon } from "obsidian";
+import { App, Notice, Plugin, PluginSettingTab, Setting, TFile, WorkspaceLeaf, debounce, setIcon } from "obsidian";
 import { AllowedValuesAuditModal, anyPinViolations, installAllowedValuePicker } from "./allowed-values";
 import { openBulkEdit } from "./bulk-edit";
 import {
@@ -30,6 +30,7 @@ import { attachPropertySuggest, attachValueSuggest } from "./suggest";
 import { exportBaseCsv } from "./csv-export";
 import { CsvImportModal } from "./csv-import";
 import { CsvImportView, VIEW_TYPE_CSV_IMPORT, openCsvImportView } from "./csv-import-view";
+import { PropertiesModal, createNoteWithProperties, editActiveNoteProperties } from "./properties-modal";
 import { CsvExportModal, CsvExportView, VIEW_TYPE_CSV_EXPORT, openCsvExportView } from "./csv-export-view";
 import { installEmbedOptions } from "./embed-options";
 import { generateEmbedReference } from "./embed-reference";
@@ -93,6 +94,20 @@ export default class BasesToolboxPlugin extends Plugin {
     const checkPins = debounce(() => this.refreshPinViolationNotice(), 1500, false);
     this.app.workspace.onLayoutReady(() => this.refreshPinViolationNotice());
     this.registerEvent(this.app.metadataCache.on("resolved", () => checkPins()));
+
+    // Right-click a note → edit its properties in the roomy form.
+    this.registerEvent(
+      this.app.workspace.on("file-menu", (menu, file) => {
+        if (file instanceof TFile && file.extension === "md") {
+          menu.addItem((item) =>
+            item
+              .setTitle("Edit properties (Bases Toolbox)")
+              .setIcon("table-properties")
+              .onClick(() => new PropertiesModal(this, { kind: "edit", file }).open())
+          );
+        }
+      })
+    );
 
     this.registerView(VIEW_TYPE_PROPERTY_INDEX, (leaf) => new PropertyIndexView(leaf, this));
     this.registerView(VIEW_TYPE_FIND_REPLACE, (leaf) => new FindReplaceView(leaf, this));
@@ -192,6 +207,18 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "open-csv-import",
       name: "Import CSV as notes (tab)",
       callback: () => void openCsvImportView(this),
+    });
+
+    this.addCommand({
+      id: "edit-note-properties",
+      name: "Edit properties of the active note",
+      callback: () => editActiveNoteProperties(this),
+    });
+
+    this.addCommand({
+      id: "new-note-with-properties",
+      name: "New note with properties",
+      callback: () => createNoteWithProperties(this),
     });
 
     this.addCommand({

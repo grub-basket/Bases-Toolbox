@@ -51,6 +51,8 @@ const TOOLS: ToolFeature[] = [
   { name: "Merge note into another", desc: "Combine two notes + their properties", icon: "merge", command: "merge-note" },
   { name: "Create companion notes", desc: "Make non-Markdown files queryable", icon: "file-plus-2", command: "companion-notes" },
   { name: "Stamp file metadata", desc: "Write created/modified into frontmatter", icon: "stamp", command: "metadata-stamp" },
+  { name: "New note with properties", desc: "Create a note via a roomy property form", icon: "file-plus", command: "new-note-with-properties" },
+  { name: "Edit note properties", desc: "Roomy form for the active note (with rename)", icon: "table-properties", command: "edit-note-properties" },
   { name: "Bulk edit base results", desc: "Edit properties across a base's rows", icon: "square-pen", command: "bulk-edit-base-results" },
   { name: "Zoom into cell", desc: "Big editor for the focused Bases cell", icon: "maximize-2", command: "zoom-into-cell" },
   { name: "Toggle base filters", desc: "Quickly enable/disable a base's filters", icon: "filter", command: "toggle-base-filters" },

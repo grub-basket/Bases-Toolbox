@@ -336,6 +336,53 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
   font-size: var(--font-ui-smaller);
 }
 
+/* Properties modal (roomy edit/create form) */
+.bases-toolbox-props-modal {
+  width: var(--modal-width);
+  max-width: 720px;
+}
+
+.bases-toolbox-props-heading {
+  font-weight: var(--font-medium);
+  margin: var(--size-4-3) 0 var(--size-2-2);
+}
+
+.bases-toolbox-props-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-2);
+}
+
+.bases-toolbox-props-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-2-2);
+}
+
+.bases-toolbox-props-key {
+  flex: 0 0 30%;
+  min-width: 0;
+}
+
+.bases-toolbox-props-type {
+  flex: 0 0 auto;
+}
+
+.bases-toolbox-props-val {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bases-toolbox-props-check {
+  align-self: center;
+  margin: var(--size-2-1) auto;
+}
+
+.bases-toolbox-props-del {
+  flex: 0 0 auto;
+  padding: var(--size-2-1) var(--size-2-2);
+}
+
 .bases-toolbox-csv-section {
   margin-bottom: var(--size-4-6);
 }
