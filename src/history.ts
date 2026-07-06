@@ -1,4 +1,4 @@
-import { Notice, TFile } from "obsidian";
+import { Notice, TFile, TFolder } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { pruneDeletionAudit } from "./property-delete";
 import { findKey } from "./scan";
@@ -53,26 +53,38 @@ async function revertSnapshots(
   entry: HistoryEntry
 ): Promise<RevertReport> {
   const report: RevertReport = { restored: 0, propertyMissing: 0, valueChanged: 0, fileMissing: 0, skipped: [] };
+  const vault = plugin.app.vault;
+  // Recreate the parent folder if it was deleted since the merge — otherwise
+  // vault.create rejects and (uncaught) would abort the whole revert mid-way.
+  const ensureFolder = async (filePath: string): Promise<void> => {
+    const dir = filePath.slice(0, filePath.lastIndexOf("/"));
+    if (dir && !(vault.getAbstractFileByPath(dir) instanceof TFolder)) {
+      await vault.createFolder(dir).catch(() => undefined);
+    }
+  };
   for (const snap of entry.fileSnapshots ?? []) {
-    const existing = plugin.app.vault.getAbstractFileByPath(snap.path);
-    if (snap.kind === "removed") {
-      if (existing) {
-        report.fileMissing++; // path reused since the merge — don't clobber
-        report.skipped.push({ path: snap.path, property: "(note)", reason: "path reused" });
-        continue;
+    const existing = vault.getAbstractFileByPath(snap.path);
+    if (snap.kind === "removed" && existing) {
+      report.fileMissing++; // path reused since the merge — don't clobber
+      report.skipped.push({ path: snap.path, property: "(note)", reason: "path reused" });
+      continue;
+    }
+    // Per-snapshot try/catch so one failure doesn't abort the rest of the revert.
+    try {
+      if (existing instanceof TFile) {
+        await vault.modify(existing, snap.content);
+      } else {
+        // removed note, or kept note moved/deleted since — recreate at its path.
+        await ensureFolder(snap.path);
+        await vault.create(snap.path, snap.content);
       }
-      await plugin.app.vault.create(snap.path, snap.content);
       report.restored++;
-    } else if (existing instanceof TFile) {
-      await plugin.app.vault.modify(existing, snap.content);
-      report.restored++;
-    } else {
-      // kept note was moved/deleted since — recreate it at its old path
-      await plugin.app.vault.create(snap.path, snap.content);
-      report.restored++;
+    } catch {
+      report.fileMissing++;
+      report.skipped.push({ path: snap.path, property: "(note)", reason: "file missing" });
     }
   }
-  // Mark reverted only if every snapshot was restored (no path-reuse conflicts).
+  // Mark reverted only if every snapshot was restored (no conflicts/failures).
   if (report.fileMissing === 0) entry.revertedAt = Date.now();
   await plugin.savePluginData();
   return report;
