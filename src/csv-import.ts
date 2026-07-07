@@ -46,6 +46,8 @@ class CsvImportPanel {
   private omitEmpty = false;
   private collision: CollisionPolicy = "suffix";
   private makeBase = true;
+  private baseNameEl: HTMLInputElement | null = null;
+  private baseNameSetting: Setting | null = null;
   private selectAllEl: HTMLInputElement | null = null;
   private importBtn: ButtonComponent | null = null;
   private running = false;
@@ -101,7 +103,10 @@ class CsvImportPanel {
 
     new Setting(contentEl)
       .setName("Target folder")
-      .setDesc("Created if it doesn't exist. One note per CSV row. Type to autocomplete.")
+      .setDesc(
+        "Created if it doesn't exist — use / for subfolders (e.g. Areas/Books). " +
+          "One note per CSV row. Type to autocomplete."
+      )
       .addText((t) => {
         t.setValue("CSV Import");
         this.folderEl = t.inputEl;
@@ -135,7 +140,22 @@ class CsvImportPanel {
     new Setting(contentEl)
       .setName("Create a .base file")
       .setDesc("Adds a table view over the imported folder with the included columns.")
-      .addToggle((t) => t.setValue(this.makeBase).onChange((v) => (this.makeBase = v)));
+      .addToggle((t) =>
+        t.setValue(this.makeBase).onChange((v) => {
+          this.makeBase = v;
+          // Only offer the base-name field when a base will actually be created.
+          this.baseNameSetting?.settingEl.toggle(v);
+        })
+      );
+
+    this.baseNameSetting = new Setting(contentEl)
+      .setName("Base file name")
+      .setDesc("Leave blank to name it after the folder. A “.base” extension is added automatically.")
+      .addText((t) => {
+        t.setPlaceholder("Leave blank to name after folder");
+        this.baseNameEl = t.inputEl;
+      });
+    this.baseNameSetting.settingEl.toggle(this.makeBase);
 
     new Setting(contentEl).addButton((b) => {
       b.setButtonText("Import").setCta().setDisabled(true).onClick(() => void this.doImport());
@@ -407,10 +427,19 @@ class CsvImportPanel {
         }
       }
 
+      let baseNote = "";
       if (this.makeBase) {
         const folderName = folder.split("/").pop() ?? folder;
-        const basePath = `${folder}/${folderName}.base`;
-        if (!this.app.vault.getAbstractFileByPath(basePath)) {
+        // Blank name → default to the folder name. Sanitise either way so a typed
+        // name can't smuggle in path separators or illegal characters.
+        const baseName = sanitizeFilename(this.baseNameEl?.value.trim() || folderName) || folderName;
+        const basePath = `${folder}/${baseName}.base`;
+        // Non-destructive: if a base with this name already exists in the folder,
+        // reuse it (the imported notes join it via the folder filter) rather than
+        // overwrite it or spawn a "-2" duplicate. Just report which happened.
+        if (this.app.vault.getAbstractFileByPath(basePath)) {
+          baseNote = `, base "${baseName}" already existed`;
+        } else {
           const order = [
             "file.name",
             ...this.columns.filter((c) => c.include && c.propName).map((c) => c.propName),
@@ -420,12 +449,14 @@ class CsvImportPanel {
             views: [{ type: "table", name: "Table", order }],
           };
           await this.app.vault.create(basePath, stringifyYaml(baseDoc));
+          baseNote = `, base "${baseName}"`;
         }
       }
       new Notice(
         `Imported ${created} note${created === 1 ? "" : "s"} into "${folder}"` +
           (overwritten ? `, overwrote ${overwritten}` : "") +
           (skipped ? `, skipped ${skipped}` : "") +
+          baseNote +
           "."
       );
       this.onDone?.();
