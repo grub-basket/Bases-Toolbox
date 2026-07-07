@@ -13,6 +13,7 @@ dev-docs/
 docs/features.md
 docs/review-*.md
 docs/forum-post*.md
+docs/archive/
 
 # Local dev test harness (isolated obs-dev instance; carries local vault paths).
 scripts/obs-dev
