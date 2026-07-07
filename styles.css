@@ -1265,3 +1265,22 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
 }
 .bases-toolbox-launcher-btn-icon { display: inline-flex; }
 .bases-toolbox-launcher-btn-icon svg { width: 14px; height: 14px; }
+
+/* Bases filter popover: keep it on-screen. The native menu is positioned with a
+   fixed `left` and grows to fit its content, so a long filter value (or zoom
+   >100%) pushes its right edge off the viewport. Cap the width to the viewport
+   and let the filter rows wrap + their inputs shrink instead of forcing the box
+   wider. Scoped to the filter menu so it can't affect other Bases menus. */
+.bases-toolbar-filter-menu {
+  max-width: min(96vw, 640px);
+  box-sizing: border-box;
+  overflow-x: auto;
+}
+.bases-toolbar-filter-menu .filter-row {
+  flex-wrap: wrap;
+}
+/* min-width:0 overrides the flex default (min-width:auto) that stops a text
+   input from shrinking below its content width — the real cause of overflow. */
+.bases-toolbar-filter-menu .filter-row > * {
+  min-width: 0;
+}
