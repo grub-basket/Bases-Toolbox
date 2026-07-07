@@ -52,6 +52,7 @@ export class ConditionalFormatView extends ItemView {
   private save(): void {
     void this.plugin.savePluginData();
     scheduleRedecorate(this.plugin);
+    this.plugin.refreshCfUi("panel"); // mirror into the settings tab if it's open
   }
 
   render(): void {

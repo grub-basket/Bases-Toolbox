@@ -492,6 +492,23 @@ export default class BasesToolboxPlugin extends Plugin {
     };
     await this.saveData(data);
   }
+
+  /**
+   * Keep the two conditional-formatting editors in sync: a change made in one
+   * (the settings tab or an open sidebar/tab panel) re-renders the OTHER so both
+   * always show the same rules. `origin` is the surface that made the change; we
+   * never re-render it (it either updated itself or the user is typing in it, so
+   * re-rendering would steal focus). Debounced so per-keystroke edits don't thrash
+   * the heavier settings re-render.
+   */
+  refreshCfUi = debounce((origin: "settings" | "panel"): void => {
+    if (origin !== "settings") this.settingTab?.refreshIfOpen();
+    if (origin !== "panel") {
+      for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_CONDITIONAL_FORMAT)) {
+        (leaf.view as ConditionalFormatView).render();
+      }
+    }
+  }, 150);
 }
 
 class BasesToolboxSettingTab extends PluginSettingTab {
@@ -977,6 +994,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
   private saveAndPaint(): void {
     void this.plugin.savePluginData();
     scheduleRedecorate(this.plugin);
+    this.plugin.refreshCfUi("settings"); // mirror into any open CF panel
   }
 
   private renderFormatRules(containerEl: HTMLElement): void {
