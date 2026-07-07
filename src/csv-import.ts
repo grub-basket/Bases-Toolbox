@@ -43,7 +43,7 @@ class CsvImportPanel {
   private statusEl: HTMLElement | null = null;
   private folderEl: HTMLInputElement | null = null;
   private templateEl: HTMLTextAreaElement | null = null;
-  private omitEmpty = true;
+  private omitEmpty = false;
   private collision: CollisionPolicy = "suffix";
   private makeBase = true;
   private selectAllEl: HTMLInputElement | null = null;
