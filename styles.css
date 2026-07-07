@@ -795,6 +795,16 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
 .bases-toolbox-cf-rule .bases-toolbox-cf-name {
   width: 96px;
 }
+.bases-toolbox-cf-scope-search {
+  width: 100%;
+  margin: var(--size-2-3) 0;
+}
+.bases-toolbox-cf-scope-folder {
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  color: var(--text-muted);
+  margin: var(--size-2-2) 0 var(--size-2-1);
+}
 .bases-toolbox-cf-rule select,
 .bases-toolbox-cf-add select {
   height: auto;

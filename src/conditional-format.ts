@@ -493,21 +493,52 @@ export class BaseScopeModal extends Modal {
       text: "Select the bases this rule colors. Select none to apply it to every base.",
     });
 
-    const bases = this.app.vault.getFiles().filter((f) => f.extension === "base");
+    const bases = this.app.vault
+      .getFiles()
+      .filter((f) => f.extension === "base")
+      .sort((a, b) => a.path.localeCompare(b.path));
     if (!bases.length) {
       contentEl.createDiv({ cls: "bases-toolbox-fr-info", text: "No .base files in this vault yet." });
     }
+
+    // Search — filters the checklist live by path/name.
+    const search = contentEl.createEl("input", {
+      type: "search",
+      cls: "bases-toolbox-cf-scope-search",
+      attr: { placeholder: "Filter bases…", "aria-label": "Filter bases" },
+    });
     const list = contentEl.createDiv({ cls: "bases-toolbox-pin-list" });
-    for (const base of bases.sort((a, b) => a.path.localeCompare(b.path))) {
-      const rowEl = list.createDiv({ cls: "bases-toolbox-dup-row" });
-      const cb = rowEl.createEl("input", { type: "checkbox" });
-      cb.checked = this.selected.has(base.path);
-      cb.addEventListener("change", () => {
-        if (cb.checked) this.selected.add(base.path);
-        else this.selected.delete(base.path);
-      });
-      rowEl.createSpan({ text: ` ${base.path}` });
-    }
+
+    // Grouped by parent folder so long vaults stay navigable.
+    const renderList = (query: string): void => {
+      list.empty();
+      const q = query.trim().toLowerCase();
+      const groups = new Map<string, TFile[]>();
+      for (const base of bases) {
+        if (q && !base.path.toLowerCase().includes(q)) continue;
+        const folder = base.parent?.path && base.parent.path !== "/" ? base.parent.path : "(vault root)";
+        (groups.get(folder) ?? groups.set(folder, []).get(folder)!).push(base);
+      }
+      if (!groups.size) {
+        list.createDiv({ cls: "bases-toolbox-fr-info", text: "No bases match." });
+        return;
+      }
+      for (const folder of [...groups.keys()].sort((a, b) => a.localeCompare(b))) {
+        list.createDiv({ cls: "bases-toolbox-cf-scope-folder", text: folder });
+        for (const base of groups.get(folder)!) {
+          const rowEl = list.createDiv({ cls: "bases-toolbox-dup-row" });
+          const cb = rowEl.createEl("input", { type: "checkbox" });
+          cb.checked = this.selected.has(base.path);
+          cb.addEventListener("change", () => {
+            if (cb.checked) this.selected.add(base.path);
+            else this.selected.delete(base.path);
+          });
+          rowEl.createSpan({ text: ` ${base.basename}` });
+        }
+      }
+    };
+    renderList("");
+    search.addEventListener("input", () => renderList(search.value));
 
     new Setting(contentEl)
       .addButton((b) =>
