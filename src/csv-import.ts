@@ -115,7 +115,15 @@ class CsvImportPanel {
 
     new Setting(contentEl)
       .setName("Note body template")
-      .setDesc("Optional body below the frontmatter. {{Column Header}} placeholders are replaced per row.")
+      .setDesc(
+        createFragment((f) => {
+          f.appendText("Optional Markdown placed below the frontmatter. Write ");
+          f.createEl("code", { text: "{{Column Header}}" });
+          f.appendText(
+            " to insert that column's value for each row — the name must match a CSV header exactly (case-sensitive, spaces allowed). Any column works, even ones you didn't include as a property; an unknown placeholder becomes empty. Which column becomes each note's title is set by the “Filename” radio in the column table below."
+          );
+        })
+      )
       .addTextArea((t) => {
         t.setPlaceholder("e.g. Imported from {{Source}} on {{Date}}");
         this.templateEl = t.inputEl;
