@@ -2,6 +2,7 @@ import { FileSystemAdapter, Modal, Notice, Platform, Setting, TFile } from "obsi
 import type BasesToolboxPlugin from "./main";
 import { ChangeRecord } from "./types";
 import { PropertyUsage, findKey, getPropertyType } from "./scan";
+import { normalizeDate } from "./csv-core";
 
 /**
  * Deleting/renaming a property from the Property Index. Deletes remove the
@@ -146,6 +147,157 @@ export async function clearPropertyFromRegistry(
   } catch {
     return false;
   }
+}
+
+/* ---------- change property type ---------- */
+
+/** The property types offered in the "Change type" UI — the user-facing widget
+ * types Obsidian's own property-type menu exposes. (file/folder/property/
+ * aliases/tags are internal or name-reserved, so they aren't offered here.) */
+export const CHANGEABLE_TYPES: { type: string; label: string }[] = [
+  { type: "text", label: "Text" },
+  { type: "multitext", label: "List" },
+  { type: "number", label: "Number" },
+  { type: "checkbox", label: "Checkbox" },
+  { type: "date", label: "Date" },
+  { type: "datetime", label: "Date & time" },
+];
+
+/**
+ * Assigns a property's type in Obsidian's registry (native "change property
+ * type" parity). Registry-only — it changes how Obsidian displays/edits the
+ * property, never the stored file values. Undocumented internal, so it's
+ * feature-detected + wrapped: returns false (no-op) if the API is gone.
+ */
+export async function setPropertyType(
+  plugin: BasesToolboxPlugin,
+  name: string,
+  type: string
+): Promise<boolean> {
+  const mtm = (plugin.app as unknown as {
+    metadataTypeManager?: { setType?: (n: string, t: string) => unknown };
+  }).metadataTypeManager;
+  if (!mtm || typeof mtm.setType !== "function") return false;
+  try {
+    await mtm.setType(name.toLowerCase(), type);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Coerces one scalar toward a target property type for the optional
+ * "also convert existing values" step. Returns a sentinel `{skip:true}` when
+ * there's no clean conversion, so the caller can leave that value untouched
+ * rather than corrupt it. null/empty always passes through unchanged.
+ */
+function coerceScalar(v: unknown, type: string): { value: unknown } | { skip: true } {
+  if (v === null || v === undefined || v === "") return { value: v };
+  const s = String(v).trim();
+  switch (type) {
+    case "number": {
+      const n = Number(s.replace(/,/g, ""));
+      return Number.isFinite(n) ? { value: n } : { skip: true };
+    }
+    case "checkbox": {
+      if (/^(true|yes|1|x|✓|done|checked)$/i.test(s)) return { value: true };
+      if (/^(false|no|0|unchecked)$/i.test(s)) return { value: false };
+      return { skip: true };
+    }
+    case "date": {
+      const d = normalizeDate(s);
+      return d ? { value: d } : { skip: true };
+    }
+    case "datetime":
+      return { value: s }; // keep as-is; Obsidian parses on display
+    case "text":
+    case "multitext":
+    default:
+      return { value: String(v) };
+  }
+}
+
+export interface ConvertResult {
+  changed: number;
+  skipped: number;
+}
+
+/**
+ * Optional value-coercion pass that follows a type change: walks every file
+ * carrying the property and rewrites its value toward the new type where a
+ * clean conversion exists. `multitext` wraps scalars into a one-item list;
+ * `text` joins lists with ", "; number/checkbox/date coerce per `coerceScalar`
+ * and SKIP anything that can't convert (leaving it intact). Fully logged to
+ * history, so the conversion is undoable in one step.
+ */
+export async function convertPropertyValues(
+  plugin: BasesToolboxPlugin,
+  usage: PropertyUsage,
+  type: string
+): Promise<ConvertResult> {
+  const changes: ChangeRecord[] = [];
+  let skipped = 0;
+  for (const file of new Set(usage.files)) {
+    await plugin.app.fileManager.processFrontMatter(file, (fm) => {
+      const key = findKey(fm, usage.name);
+      if (key === null) return;
+      const cur = fm[key];
+      let next: unknown;
+      if (type === "multitext") {
+        next = Array.isArray(cur) ? cur : cur === null || cur === undefined || cur === "" ? cur : [cur];
+      } else if (type === "text") {
+        next = Array.isArray(cur) ? cur.map((x) => String(x)).join(", ") : coerceOrFlag(cur, type, () => skipped++);
+      } else {
+        // Scalar-target: convert a scalar, or map each list item, skipping the
+        // whole value if any item can't convert cleanly.
+        if (Array.isArray(cur)) {
+          const mapped: unknown[] = [];
+          let bad = false;
+          for (const x of cur) {
+            const r = coerceScalar(x, type);
+            if ("skip" in r) { bad = true; break; }
+            mapped.push(r.value);
+          }
+          if (bad) { skipped++; return; }
+          next = mapped;
+        } else {
+          next = coerceOrFlag(cur, type, () => skipped++);
+        }
+      }
+      if (next === SKIP) return;
+      if (JSON.stringify(next) === JSON.stringify(cur)) return;
+      changes.push({
+        path: file.path,
+        property: usage.name,
+        oldValue: Array.isArray(cur) ? cur.slice() : cur,
+        newValue: Array.isArray(next) ? (next as unknown[]).slice() : next,
+      });
+      fm[key] = next;
+    });
+  }
+  if (changes.length) {
+    await plugin.addHistoryEntry({
+      property: usage.name,
+      find: null,
+      replace: `(converted to ${type})`,
+      timestamp: Date.now(),
+      changes,
+      source: "property index type conversion",
+    });
+  }
+  return { changed: changes.length, skipped };
+}
+
+/** Sentinel returned when a scalar can't be coerced, so the file is left as-is. */
+const SKIP = Symbol("skip");
+function coerceOrFlag(v: unknown, type: string, onSkip: () => void): unknown {
+  const r = coerceScalar(v, type);
+  if ("skip" in r) {
+    onSkip();
+    return SKIP;
+  }
+  return r.value;
 }
 
 export interface DeleteResult {
@@ -369,6 +521,78 @@ export class PromptModal extends Modal {
     new Setting(this.contentEl)
       .addButton((b) => b.setButtonText("Cancel").onClick(() => this.close()))
       .addButton((b) => b.setButtonText(this.opts.confirmText).setCta().onClick(submit));
+  }
+}
+
+/**
+ * Change a property's type (native "property type" parity), with an optional
+ * one-shot value coercion of existing values. Changing the type is registry-
+ * only and instant; the coercion (opt-in) rewrites file values toward the new
+ * type where a clean conversion exists and is fully undoable from history.
+ */
+export class ChangeTypeModal extends Modal {
+  private target: string;
+  private coerce = false;
+
+  constructor(
+    private plugin: BasesToolboxPlugin,
+    private usage: PropertyUsage,
+    private onDone: () => void
+  ) {
+    super(plugin.app);
+    // Default the picker to the current type when it's one we offer, else Text.
+    const cur = usage.type ?? getPropertyType(plugin.app, usage.name);
+    this.target = CHANGEABLE_TYPES.some((t) => t.type === cur) ? (cur as string) : "text";
+  }
+
+  onOpen(): void {
+    this.titleEl.setText(`Change type: ${this.usage.name}`);
+    const { contentEl } = this;
+    const cur = this.usage.type ?? getPropertyType(this.plugin.app, this.usage.name) ?? "unset";
+    contentEl.createEl("p", {
+      cls: "bases-toolbox-fr-info",
+      text: `Current type: ${cur}. Changing the type updates how Obsidian shows and edits “${this.usage.name}” — your stored values are untouched unless you tick conversion below.`,
+    });
+
+    new Setting(contentEl).setName("New type").addDropdown((dd) => {
+      for (const { type, label } of CHANGEABLE_TYPES) dd.addOption(type, label);
+      dd.setValue(this.target);
+      dd.onChange((v) => (this.target = v));
+    });
+
+    new Setting(contentEl)
+      .setName("Also convert existing values")
+      .setDesc(
+        "Rewrite current values to match the new type (numbers parsed, checkboxes from yes/no, dates normalized, lists wrapped/joined). Values that can't convert cleanly are left as-is. Undoable from history."
+      )
+      .addToggle((t) => t.setValue(this.coerce).onChange((v) => (this.coerce = v)));
+
+    new Setting(contentEl)
+      .addButton((b) => b.setButtonText("Cancel").onClick(() => this.close()))
+      .addButton((b) =>
+        b
+          .setButtonText("Change type")
+          .setCta()
+          .onClick(() => void this.apply())
+      );
+  }
+
+  private async apply(): Promise<void> {
+    const ok = await setPropertyType(this.plugin, this.usage.name, this.target);
+    if (!ok) {
+      new Notice("Couldn't change the type — Obsidian's property API is unavailable in this version.");
+      return;
+    }
+    let msg = `“${this.usage.name}” is now type “${this.target}”.`;
+    if (this.coerce) {
+      const { changed, skipped } = await convertPropertyValues(this.plugin, this.usage, this.target);
+      msg += ` Converted ${changed} file${changed === 1 ? "" : "s"}`;
+      if (skipped) msg += `, left ${skipped} unconvertible value${skipped === 1 ? "" : "s"} as-is`;
+      msg += ".";
+    }
+    new Notice(msg);
+    this.close();
+    this.onDone();
   }
 }
 

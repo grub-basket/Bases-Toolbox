@@ -10,6 +10,7 @@ import { PropertyValueSuggest } from "./suggest";
 import { PropertyUsage, findKey, typeIconName } from "./scan";
 import { ChangeRecord } from "./types";
 import {
+  ChangeTypeModal,
   ConfirmModal,
   DeleteResult,
   PromptModal,
@@ -435,6 +436,15 @@ export class PropertyIndexView extends ItemView {
         .onClick(() => void this.openAllInTabs(usage.files))
     );
     menu.addItem((i) => i.setTitle("Rename property…").setIcon("pencil").onClick(() => this.promptRename(usage)));
+    menu.addItem((i) =>
+      i
+        .setTitle("Change type…")
+        .setIcon("shapes")
+        .onClick(() => new ChangeTypeModal(this.plugin, usage, () => {
+          this.plugin.propertyCache.markDirty();
+          this.renderList();
+        }).open())
+    );
     menu.addItem((i) =>
       i.setTitle("Show in All properties view").setIcon("search").onClick(() => void this.openInAllProperties(usage.name))
     );
