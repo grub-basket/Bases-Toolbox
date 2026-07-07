@@ -6,6 +6,8 @@ export type FormatScope = "row" | "cell";
 
 export interface FormatRule {
   id: string;
+  /** Optional human label for the rule (shown instead of the raw condition). */
+  name?: string;
   property: string;
   op: FormatOp;
   value: string;

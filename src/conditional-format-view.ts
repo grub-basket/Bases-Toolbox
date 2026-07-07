@@ -86,11 +86,12 @@ export class ConditionalFormatView extends ItemView {
     const swatch = head.createDiv({ cls: "bases-toolbox-cf-swatch" });
     swatch.setCssStyles({ backgroundColor: ruleSwatchColor(rule) });
     const summary = head.createSpan({ cls: "bases-toolbox-cfcard-summary" });
-    summary.setText(
+    const conditionText = () =>
       `${rule.property || "(property)"} ${OP_LABELS[rule.op]}${
         VALUELESS_OPS.has(rule.op) ? "" : ` ${rule.value}`
-      }`
-    );
+      }`;
+    const refreshSummary = () => summary.setText(rule.name?.trim() || conditionText());
+    refreshSummary();
     const enabled = head.createEl("input", { type: "checkbox" });
     enabled.checked = rule.enabled;
     enabled.setAttribute("aria-label", "Enable rule");
@@ -133,12 +134,23 @@ export class ConditionalFormatView extends ItemView {
 
     // body: stacked controls
     const body = card.createDiv({ cls: "bases-toolbox-cfcard-body" });
+    const nameInput = body.createEl("input", {
+      type: "text",
+      cls: "bases-toolbox-cf-name",
+      attr: { placeholder: "Rule name (optional)" },
+    });
+    nameInput.value = rule.name ?? "";
+    nameInput.addEventListener("input", () => {
+      rule.name = nameInput.value.trim() || undefined;
+      refreshSummary();
+      this.save();
+    });
     const prop = body.createEl("input", { type: "text", attr: { placeholder: "property" } });
     prop.value = rule.property;
     attachPropertySuggest(this.plugin, prop);
     prop.addEventListener("input", () => {
       rule.property = prop.value.trim();
-      summary.setText(prop.value);
+      refreshSummary();
       this.save();
     });
 
@@ -155,10 +167,12 @@ export class ConditionalFormatView extends ItemView {
     op.addEventListener("change", () => {
       rule.op = op.value as FormatOp;
       syncVal();
+      refreshSummary();
       this.save();
     });
     val.addEventListener("input", () => {
       rule.value = val.value;
+      refreshSummary();
       this.save();
     });
 

@@ -792,6 +792,9 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
 .bases-toolbox-cf-val {
   width: 96px;
 }
+.bases-toolbox-cf-rule .bases-toolbox-cf-name {
+  width: 96px;
+}
 .bases-toolbox-cf-rule select,
 .bases-toolbox-cf-add select {
   height: auto;

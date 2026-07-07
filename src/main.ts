@@ -1013,6 +1013,17 @@ class BasesToolboxSettingTab extends PluginSettingTab {
     const paintSwatch = () => swatch.setCssStyles({ backgroundColor: ruleSwatchColor(rule) });
     paintSwatch();
 
+    const name = row.createEl("input", {
+      type: "text",
+      cls: "bases-toolbox-cf-name",
+      attr: { placeholder: "name", "aria-label": "Rule name (optional)" },
+    });
+    name.value = rule.name ?? "";
+    name.addEventListener("input", () => {
+      rule.name = name.value.trim() || undefined;
+      this.saveAndPaint();
+    });
+
     const prop = row.createEl("input", {
       type: "text",
       cls: "bases-toolbox-cf-prop",
