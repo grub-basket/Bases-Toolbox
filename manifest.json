@@ -1,7 +1,7 @@
 {
   "id": "bases-toolbox",
   "name": "Bases Toolbox",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "minAppVersion": "1.9.0",
   "description": "Quality-of-life tools for Bases and properties: find & replace property values across the vault, stop number properties from changing on arrow keys or scroll wheel, and a searchable index of every property.",
   "author": "Human",

@@ -1,4 +1,4 @@
-import { FuzzySuggestModal, ItemView, Modal, Notice, Setting, TFile, WorkspaceLeaf, setIcon } from "obsidian";
+import { FuzzySuggestModal, ItemView, Modal, Notice, Setting, TFile, WorkspaceLeaf, normalizePath, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { findKey, isUnsafeKey, valueToDisplay } from "./scan";
 import { FileSnapshot } from "./types";
@@ -503,6 +503,24 @@ function normalizeName(basename: string): string {
 }
 
 /**
+ * True for basenames that are a date (2026-07-01, 2026_07, 2026.07.01) or made
+ * only of digits and separators (20260701, 1-2-3). normalizeName strips the
+ * trailing number, so otherwise every daily/sequential note in a period collapses
+ * into one bogus "similar name" group. Names containing letters are never treated
+ * as date-like, so real title dupes ("Meeting notes 2") still group.
+ */
+function isDateOrNumericName(basename: string): boolean {
+  const s = basename.trim();
+  if (/^\d{4}[-_.]\d{1,2}([-_.]\d{1,2})?$/.test(s)) return true;
+  return /^[\d\s\-_.]+$/.test(s) && (s.match(/\d/g)?.length ?? 0) >= 3;
+}
+
+/** Is `path` inside one of the excluded folders (or exactly one)? */
+function inExcludedFolder(path: string, folders: string[]): boolean {
+  return folders.some((f) => f && (path === f || path.startsWith(`${f}/`)));
+}
+
+/**
  * Shared duplicate-finder UI (scan controls + grouped results). Rendered into
  * either a modal or a workspace tab; the only difference is `openFile`, which
  * decides where a clicked note link lands.
@@ -555,6 +573,33 @@ class DuplicateFinderPanel {
       .addToggle((t) => t.setValue(this.byName).onChange((v) => (this.byName = v)));
 
     new Setting(contentEl)
+      .setName("Ignore date-like & numeric names")
+      .setDesc(
+        "Don't flag daily notes / numbered notes (e.g. 2026-07-01, 42) as name duplicates. Recommended on."
+      )
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.dupSkipDateLikeNames).onChange((v) => {
+          this.plugin.settings.dupSkipDateLikeNames = v;
+          void this.plugin.savePluginData();
+        })
+      );
+
+    new Setting(contentEl)
+      .setName("Exclude folders")
+      .setDesc("Comma-separated folder paths to skip entirely (e.g. Daily Notes, Journal).")
+      .addText((t) => {
+        t.setPlaceholder("Daily Notes, Journal");
+        t.setValue(this.plugin.settings.dupExcludeFolders.join(", "));
+        t.inputEl.addEventListener("change", () => {
+          this.plugin.settings.dupExcludeFolders = t.inputEl.value
+            .split(",")
+            .map((s) => normalizePath(s.trim()))
+            .filter(Boolean);
+          void this.plugin.savePluginData();
+        });
+      });
+
+    new Setting(contentEl)
       .setName("Same value of property")
       .setDesc("Notes sharing a value of this property group as duplicates. Leave empty to skip.")
       .addText((t) => {
@@ -588,10 +633,14 @@ class DuplicateFinderPanel {
       groups.set(key, g);
     };
 
+    const excludeFolders = this.plugin.settings.dupExcludeFolders;
+    const skipDateLike = this.plugin.settings.dupSkipDateLikeNames;
     const files = this.app.vault.getMarkdownFiles();
     const bodies = new Map<TFile, string>();
     for (const file of files) {
-      if (this.byName) add(`name:${normalizeName(file.basename)}`, file);
+      if (excludeFolders.length && inExcludedFolder(file.path, excludeFolders)) continue;
+      if (this.byName && !(skipDateLike && isDateOrNumericName(file.basename)))
+        add(`name:${normalizeName(file.basename)}`, file);
       if (prop) {
         const fm = (this.app.metadataCache.getFileCache(file)?.frontmatter ?? {}) as Record<
           string,

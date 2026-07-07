@@ -95,6 +95,11 @@ export interface BasesToolboxSettings {
    * so the group re-flags for review.
    */
   ignoredDuplicateGroups: string[];
+  /** Duplicate finder: folders to skip entirely when scanning (e.g. daily notes). */
+  dupExcludeFolders: string[];
+  /** Duplicate finder: don't name-group date-like / purely numeric basenames
+   * (kills the "every daily note is a duplicate" false positives). */
+  dupSkipDateLikeNames: boolean;
   /** One-time flag: the ".base" default exclusion has been merged into an
    * existing user's companionExcludeExts. Prevents re-adding it after they
    * deliberately remove it. */
@@ -126,6 +131,8 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   companionAuto: false,
   ignoredFormatIssues: [],
   ignoredDuplicateGroups: [],
+  dupExcludeFolders: [],
+  dupSkipDateLikeNames: true,
   // Default false so the one-time migration runs for existing users (whose
   // saved data lacks this flag → falls back to the default).
   companionBaseExclusionApplied: false,
