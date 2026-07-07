@@ -101,12 +101,15 @@ export function ruleColor(rule: FormatRule): string | null {
 }
 
 /**
- * Background-tint opacity for conditional-format fills. Bumped from the original
- * 0.18 toward Excel's bolder fills (which are near-opaque) while staying light
- * enough that the row's text keeps contrast in both light and dark themes.
- * Single knob so the whole palette + custom colors tune together.
+ * Background-tint opacity for conditional-format fills. Kept at the original
+ * 0.18: bumping it toward Excel's bolder fills didn't actually read as more
+ * saturated — Obsidian's built-in --color-*-rgb hues are muted (the orange
+ * reads brown/black rather than a vivid orange), so more alpha just darkens.
+ * The real fix is a different, Excel-like hue set — parked as a research todo
+ * (see .claude/OPEN-QUESTIONS.md). This single knob stays so the palette + the
+ * custom-hex path tune together once new hues land.
  */
-export const TINT_ALPHA = 0.3;
+export const TINT_ALPHA = 0.18;
 
 /** A solid swatch color of the rule's choice, for the settings preview. */
 export function ruleSwatchColor(rule: FormatRule): string {
