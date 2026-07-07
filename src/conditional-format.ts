@@ -167,8 +167,42 @@ function matches(rule: FormatRule, fmValue: unknown): boolean {
   });
 }
 
-/** Maps a property name to its column index in the table containing `row`. */
-function columnIndexFor(row: HTMLElement, property: string): number {
+/** Normalise a property id for comparison: lowercase, drop the `note.` prefix
+ * (`file.` is kept so file.name never collides with a note property called
+ * "name"). */
+const normProp = (s: string): string => s.toLowerCase().replace(/^note\./, "");
+
+/**
+ * The live, ordered list of visible column ids for a base view
+ * (`["file.name", "note.category", …]`), read from the view controller's
+ * property menu. This is the SAME order the table renders its columns and its
+ * `.bases-td` cells in, and it respects the active view, runtime column
+ * reordering, display names, and formula columns. Returns null on builds that
+ * don't expose it (callers fall back to header-text matching).
+ */
+export function visibleColumnOrder(view: unknown): string[] | null {
+  const order = (
+    view as { controller?: { propertyMenu?: { viewConfig?: { order?: unknown } } } }
+  )?.controller?.propertyMenu?.viewConfig?.order;
+  return Array.isArray(order) && order.every((k) => typeof k === "string")
+    ? (order as string[])
+    : null;
+}
+
+/**
+ * Maps a property name to its column index in the table containing `row`.
+ * Prefers the view's live column `order` (robust — survives display names,
+ * formula columns, and reordering); falls back to matching the header's DISPLAY
+ * text, which silently misses a column whose header was renamed (the cause of
+ * "conditional formatting colours rows but not cells" when a column has a
+ * display name).
+ */
+function columnIndexFor(row: HTMLElement, property: string, order?: string[] | null): number {
+  if (order && order.length) {
+    const target = normProp(property);
+    const idx = order.findIndex((k) => normProp(k) === target);
+    if (idx >= 0) return idx;
+  }
   // Headers live in a separate thead OUTSIDE .bases-table — scope to the
   // whole view so both the header row and the body rows are in reach.
   const view = row.closest<HTMLElement>(".bases-view") ?? row.closest<HTMLElement>(".view-content");
@@ -222,7 +256,8 @@ function decorateRow(
   plugin: BasesToolboxPlugin,
   row: HTMLElement,
   basePath?: string,
-  dupCounts?: DupCounts
+  dupCounts?: DupCounts,
+  order?: string[] | null
 ): void {
   clearRow(row); // always start clean so removed/changed rules don't linger
   const fm = fmForRow(plugin, row);
@@ -253,7 +288,7 @@ function decorateRow(
     const color = ruleColor(rule);
     if (!color) continue;
     if (rule.scope === "cell") {
-      const idx = columnIndexFor(row, rule.property);
+      const idx = columnIndexFor(row, rule.property, order);
       if (idx >= 0 && !cellColors.has(idx)) cellColors.set(idx, color); // first per cell wins
     } else if (rowColor === null) {
       rowColor = color; // first matching row rule wins
@@ -293,7 +328,12 @@ function allBaseDocuments(plugin: BasesToolboxPlugin): Set<Document> {
  * any "duplicated" rule, how many of THESE rows share each value (so duplicate
  * highlighting is scoped to the base's currently-shown rows).
  */
-function decorateRowGroup(plugin: BasesToolboxPlugin, rows: HTMLElement[], basePath?: string): void {
+function decorateRowGroup(
+  plugin: BasesToolboxPlugin,
+  rows: HTMLElement[],
+  basePath?: string,
+  order?: string[] | null
+): void {
   const dupProps = new Set(
     plugin.settings.formatRules
       .filter((r) => r.enabled && r.op === "duplicated" && r.property)
@@ -317,7 +357,7 @@ function decorateRowGroup(plugin: BasesToolboxPlugin, rows: HTMLElement[], baseP
       }
     }
   }
-  for (const row of rows) decorateRow(plugin, row, basePath, counts);
+  for (const row of rows) decorateRow(plugin, row, basePath, counts, order);
 }
 
 export function redecorateAll(plugin: BasesToolboxPlugin): void {
@@ -328,7 +368,7 @@ export function redecorateAll(plugin: BasesToolboxPlugin): void {
     const rows = view.containerEl
       ? Array.from(view.containerEl.querySelectorAll<HTMLElement>(".bases-tr"))
       : [];
-    decorateRowGroup(plugin, rows, view.file?.path);
+    decorateRowGroup(plugin, rows, view.file?.path, visibleColumnOrder(leaf.view));
     rows.forEach((r) => done.add(r));
   }
   // Embedded bases: group per .bases-embed so duplicates are scoped to it.
