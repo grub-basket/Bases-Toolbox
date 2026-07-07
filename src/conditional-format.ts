@@ -94,11 +94,19 @@ export function ruleColor(rule: FormatRule): string | null {
     const m = (rule.customColor ?? DEFAULT_CUSTOM_HEX).match(/^#?([0-9a-fA-F]{6})$/);
     if (!m) return null;
     const n = parseInt(m[1], 16);
-    // same 0.18 alpha as the palette tints, so custom rows blend in
-    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, 0.18)`;
+    // same alpha as the palette tints, so custom rows blend in
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${TINT_ALPHA})`;
   }
   return RULE_COLORS[rule.color] ?? null;
 }
+
+/**
+ * Background-tint opacity for conditional-format fills. Bumped from the original
+ * 0.18 toward Excel's bolder fills (which are near-opaque) while staying light
+ * enough that the row's text keeps contrast in both light and dark themes.
+ * Single knob so the whole palette + custom colors tune together.
+ */
+export const TINT_ALPHA = 0.3;
 
 /** A solid swatch color of the rule's choice, for the settings preview. */
 export function ruleSwatchColor(rule: FormatRule): string {
@@ -108,14 +116,14 @@ export function ruleSwatchColor(rule: FormatRule): string {
 
 /** Theme-aware tints via Obsidian's extended color palette variables. */
 export const RULE_COLORS: Record<string, string> = {
-  red: "rgba(var(--color-red-rgb), 0.18)",
-  orange: "rgba(var(--color-orange-rgb), 0.18)",
-  yellow: "rgba(var(--color-yellow-rgb), 0.18)",
-  green: "rgba(var(--color-green-rgb), 0.18)",
-  cyan: "rgba(var(--color-cyan-rgb), 0.18)",
-  blue: "rgba(var(--color-blue-rgb), 0.18)",
-  purple: "rgba(var(--color-purple-rgb), 0.18)",
-  pink: "rgba(var(--color-pink-rgb), 0.18)",
+  red: `rgba(var(--color-red-rgb), ${TINT_ALPHA})`,
+  orange: `rgba(var(--color-orange-rgb), ${TINT_ALPHA})`,
+  yellow: `rgba(var(--color-yellow-rgb), ${TINT_ALPHA})`,
+  green: `rgba(var(--color-green-rgb), ${TINT_ALPHA})`,
+  cyan: `rgba(var(--color-cyan-rgb), ${TINT_ALPHA})`,
+  blue: `rgba(var(--color-blue-rgb), ${TINT_ALPHA})`,
+  purple: `rgba(var(--color-purple-rgb), ${TINT_ALPHA})`,
+  pink: `rgba(var(--color-pink-rgb), ${TINT_ALPHA})`,
 };
 
 /** Fully-opaque versions for the settings preview swatch. */
