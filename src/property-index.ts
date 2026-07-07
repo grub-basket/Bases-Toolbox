@@ -552,8 +552,13 @@ export class PropertyIndexView extends ItemView {
 
     new ConfirmModal(this.plugin, {
       title: `Delete “${name}”?`,
-      body: `Removes “${name}” from ${where}. Undoable from the bulk file change history; every removal is logged to deletions/${name}.jsonl.`,
-      confirmText: "Delete property",
+      body:
+        `Removes “${name}” from ${where}.` +
+        (scope === "property"
+          ? ` This also clears the property from Obsidian's property list (including any type you set for it), so it disappears entirely.`
+          : ` The property itself stays — this only clears the targeted values.`) +
+        ` Undoable from the bulk file change history; every removal is logged to deletions/${name}.jsonl.`,
+      confirmText: scope === "property" ? "Delete property" : "Remove values",
       danger: true,
       onConfirm: () => this.runDelete(name, files, scope, value, type),
     }).open();

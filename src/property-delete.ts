@@ -112,6 +112,42 @@ export async function pruneDeletionAudit(
 
 /* ---------- delete ---------- */
 
+/**
+ * Clears a property from Obsidian's property REGISTRY (not just files).
+ *
+ * `getAllProperties()` / the native "All properties" list is file-driven —
+ * once a property is removed from every file, its occurrence-based entry drops
+ * on the next metadata recompute. But a property the user has manually TYPED
+ * lives on in `metadataTypeManager.assignedWidgets` and lingers there at zero
+ * occurrences (this is why "delete" felt like it "didn't delete the property
+ * itself"). `unsetType` deletes that saved type assignment; forcing
+ * `updatePropertyInfoCache` then recomputes the list immediately so an open
+ * base / property view reflects the removal without a reload.
+ *
+ * Both calls are undocumented Obsidian internals, so everything is feature-
+ * detected and wrapped — on an API change this becomes a no-op, never a throw.
+ * Returns true if the registry entry was cleared. Only call this for a
+ * WHOLE-property delete (every file), never value/file-scoped removals, since
+ * it drops the user's chosen type for the property.
+ */
+export async function clearPropertyFromRegistry(
+  plugin: BasesToolboxPlugin,
+  property: string
+): Promise<boolean> {
+  const mtm = (plugin.app as unknown as { metadataTypeManager?: {
+    unsetType?: (name: string) => unknown;
+    updatePropertyInfoCache?: () => void;
+  } }).metadataTypeManager;
+  if (!mtm) return false;
+  try {
+    if (typeof mtm.unsetType === "function") await mtm.unsetType(property.toLowerCase());
+    if (typeof mtm.updatePropertyInfoCache === "function") mtm.updatePropertyInfoCache();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface DeleteResult {
   property: string;
   count: number;
@@ -166,6 +202,11 @@ export async function deletePropertyFromFiles(
       source: "property index delete",
     });
     await appendAudit(plugin, property, records);
+    // Whole-property delete: also clear it from Obsidian's property registry so
+    // the property fully disappears (not just its values), including a manually
+    // set type that would otherwise linger at zero occurrences. Scoped deletes
+    // (value/file) leave the property in place, so they must NOT touch it.
+    if (opts.scope === "property") await clearPropertyFromRegistry(plugin, property);
   }
   return { property, count: changes.length, records, absPath: absPropertyAuditPath(plugin, property) };
 }
