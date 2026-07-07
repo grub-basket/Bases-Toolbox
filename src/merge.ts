@@ -1,7 +1,7 @@
 import { FuzzySuggestModal, ItemView, Modal, Notice, Setting, TFile, WorkspaceLeaf, normalizePath, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { findKey, isUnsafeKey, valueToDisplay } from "./scan";
-import { FileSnapshot } from "./types";
+import { BasesToolboxSettings, FileSnapshot } from "./types";
 import { installMainTabAction, installSidebarAction, openFileFromView } from "./view-refresh";
 
 /* ---------- merge core ---------- */
@@ -556,6 +556,23 @@ class DuplicateFinderPanel {
       .join("\0");
   }
 
+  /** The note pre-selected as the survivor for a group, per the keep-policy.
+   * Oldest/newest by creation date; longest by file size. Returns null when the
+   * policy is "none" so the user must pick explicitly. Ties break on path so the
+   * pick is stable across renders. */
+  private defaultKeep(group: TFile[]): TFile | null {
+    const policy = this.plugin.settings.dupKeepPolicy;
+    if (policy === "none" || !group.length) return null;
+    const sorted = [...group];
+    if (policy === "oldest")
+      sorted.sort((a, b) => a.stat.ctime - b.stat.ctime || a.path.localeCompare(b.path));
+    else if (policy === "newest")
+      sorted.sort((a, b) => b.stat.ctime - a.stat.ctime || a.path.localeCompare(b.path));
+    else /* longest */
+      sorted.sort((a, b) => b.stat.size - a.stat.size || a.path.localeCompare(b.path));
+    return sorted[0];
+  }
+
   private async toggleIgnore(group: TFile[]): Promise<void> {
     const key = this.groupKey(group);
     const list = this.plugin.settings.ignoredDuplicateGroups;
@@ -583,6 +600,25 @@ class DuplicateFinderPanel {
           void this.plugin.savePluginData();
         })
       );
+
+    new Setting(contentEl)
+      .setName("Default note to keep")
+      .setDesc(
+        "Pre-select which note in each group survives the merge. You can still change the pick per group. Oldest/newest by creation date; longest by file size."
+      )
+      .addDropdown((dd) => {
+        dd.addOption("none", "None — pick manually");
+        dd.addOption("oldest", "Keep oldest (earliest created)");
+        dd.addOption("newest", "Keep newest (most recently created)");
+        dd.addOption("longest", "Keep longest (largest file)");
+        dd.setValue(this.plugin.settings.dupKeepPolicy);
+        dd.onChange((v) => {
+          this.plugin.settings.dupKeepPolicy = v as BasesToolboxSettings["dupKeepPolicy"];
+          void this.plugin.savePluginData();
+          // Re-apply to already-rendered groups without a re-scan.
+          if (this.scanned) this.renderResults();
+        });
+      });
 
     new Setting(contentEl)
       .setName("Exclude folders")
@@ -727,7 +763,11 @@ class DuplicateFinderPanel {
       cls: "bases-toolbox-fr-info",
       text: this.showIgnored
         ? "Groups you've ignored. Each re-flags automatically if a member is added or removed. Un-ignore to move it back to “To review”."
-        : `${groups.length} group${groups.length === 1 ? "" : "s"} to review. Pick the note to keep; the rest merge into it (conflicts keep the kept note's values). “Ignore” hides a group until its membership changes.`,
+        : `${groups.length} group${groups.length === 1 ? "" : "s"} to review. ${
+            this.plugin.settings.dupKeepPolicy === "none"
+              ? "Pick the note to keep"
+              : "A note is pre-selected to keep (change it per group)"
+          }; the rest merge into it (conflicts keep the kept note's values). “Ignore” hides a group until its membership changes.`,
     });
 
     for (const [key, group] of groups) this.renderGroup(root, key, group, this.showIgnored);
@@ -746,12 +786,16 @@ class DuplicateFinderPanel {
         text: isIgnored ? "Un-ignore" : "Ignore",
       });
       ignoreBtn.addEventListener("click", () => void this.toggleIgnore(group));
-      // No default keep — the user must explicitly pick the note to keep.
+      // Keep is pre-selected by the keep-policy (defaultKeep), or null when the
+      // policy is "none" — then the user must explicitly pick.
       let keep: TFile | null = null;
+      const defaultKeep = this.defaultKeep(group);
       const radioName = `bt-dup-${simpleHash(key)}`;
+      const radios: { file: TFile; radio: HTMLInputElement }[] = [];
       for (const file of group) {
         const row = box.createDiv({ cls: "bases-toolbox-dup-row" });
         const radio = row.createEl("input", { type: "radio", attr: { name: radioName } });
+        radios.push({ file, radio });
         radio.addEventListener("change", () => {
           keep = file;
           resetMergeBtn();
@@ -832,6 +876,17 @@ class DuplicateFinderPanel {
         btn.setText(idleText);
       }
       resetMergeBtn();
+      // Apply the keep-policy pre-selection: check the matching radio, set keep,
+      // and render its preview — exactly as if the user had clicked it.
+      if (defaultKeep) {
+        const match = radios.find((r) => r.file === defaultKeep);
+        if (match) {
+          match.radio.checked = true;
+          keep = defaultKeep;
+          resetMergeBtn();
+          void renderPreview();
+        }
+      }
       btn.addEventListener("click", () => void (async () => {
         if (!keep) return;
         if (!armed) {

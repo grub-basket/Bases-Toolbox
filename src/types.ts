@@ -100,6 +100,10 @@ export interface BasesToolboxSettings {
   /** Duplicate finder: don't name-group date-like / purely numeric basenames
    * (kills the "every daily note is a duplicate" false positives). */
   dupSkipDateLikeNames: boolean;
+  /** Duplicate finder: which note in each group is pre-selected as the one to
+   * keep. "none" = no default (user picks explicitly). Applied across every
+   * merge group in the finder. */
+  dupKeepPolicy: "none" | "oldest" | "newest" | "longest";
   /** One-time flag: the ".base" default exclusion has been merged into an
    * existing user's companionExcludeExts. Prevents re-adding it after they
    * deliberately remove it. */
@@ -133,6 +137,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   ignoredDuplicateGroups: [],
   dupExcludeFolders: [],
   dupSkipDateLikeNames: true,
+  dupKeepPolicy: "none",
   // Default false so the one-time migration runs for existing users (whose
   // saved data lacks this flag → falls back to the default).
   companionBaseExclusionApplied: false,
