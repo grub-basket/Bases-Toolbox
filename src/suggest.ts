@@ -1,4 +1,4 @@
-import { AbstractInputSuggest, TFile } from "obsidian";
+import { AbstractInputSuggest, TFile, TFolder } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 
 /**
@@ -45,6 +45,60 @@ export class ListInputSuggest extends AbstractInputSuggest<string> {
     this.el.value = value;
     // Fire input so the row's change listener persists the choice.
     this.el.dispatchEvent(new Event("input"));
+    this.close();
+  }
+}
+
+/**
+ * Folder-path autocomplete. Suggests vault folders; in `multi` mode (a comma-
+ * separated list, e.g. the duplicate finder's "exclude folders" box) it matches
+ * and completes only the segment after the last comma, preserving earlier
+ * entries. Fires both "input" and "change" so listeners on either persist.
+ */
+export class FolderPathSuggest extends AbstractInputSuggest<string> {
+  constructor(
+    private plugin: BasesToolboxPlugin,
+    private el: HTMLInputElement,
+    private multi = false
+  ) {
+    super(plugin.app, el);
+    this.limit = 0;
+  }
+
+  /** Split a comma-list into the fixed prefix and the last (in-progress) seg. */
+  private split(v: string): { prefix: string; seg: string } {
+    if (!this.multi) return { prefix: "", seg: v };
+    const i = v.lastIndexOf(",");
+    return i < 0 ? { prefix: "", seg: v } : { prefix: v.slice(0, i + 1), seg: v.slice(i + 1) };
+  }
+
+  private allFolders(): string[] {
+    const out: string[] = [];
+    for (const f of this.plugin.app.vault.getAllLoadedFiles())
+      if (f instanceof TFolder && f.path && f.path !== "/") out.push(f.path);
+    return out.sort((a, b) => a.localeCompare(b));
+  }
+
+  protected getSuggestions(query: string): string[] {
+    const q = this.split(query).seg.trim().toLowerCase();
+    return this.allFolders()
+      .filter((p) => !q || p.toLowerCase().includes(q))
+      .slice(0, 50);
+  }
+
+  renderSuggestion(value: string, el: HTMLElement): void {
+    el.setText(value);
+  }
+
+  selectSuggestion(value: string): void {
+    if (this.multi) {
+      const { prefix } = this.split(this.el.value);
+      this.el.value = prefix ? `${prefix.replace(/,\s*$/, ", ")}${value}` : value;
+    } else {
+      this.el.value = value;
+    }
+    this.el.dispatchEvent(new Event("input"));
+    this.el.dispatchEvent(new Event("change"));
     this.close();
   }
 }

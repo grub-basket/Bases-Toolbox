@@ -3,6 +3,7 @@ import type BasesToolboxPlugin from "./main";
 import { findKey, isUnsafeKey, valueToDisplay } from "./scan";
 import { BasesToolboxSettings, FileSnapshot } from "./types";
 import { installMainTabAction, installSidebarAction, openFileFromView } from "./view-refresh";
+import { FolderPathSuggest, attachPropertySuggest } from "./suggest";
 
 /* ---------- merge core ---------- */
 
@@ -626,6 +627,7 @@ class DuplicateFinderPanel {
       .addText((t) => {
         t.setPlaceholder("Daily Notes, Journal");
         t.setValue(this.plugin.settings.dupExcludeFolders.join(", "));
+        new FolderPathSuggest(this.plugin, t.inputEl, true);
         t.inputEl.addEventListener("change", () => {
           this.plugin.settings.dupExcludeFolders = t.inputEl.value
             .split(",")
@@ -641,6 +643,7 @@ class DuplicateFinderPanel {
       .addText((t) => {
         t.setPlaceholder("e.g. id");
         this.propEl = t.inputEl;
+        attachPropertySuggest(this.plugin, t.inputEl);
       });
 
     new Setting(contentEl)
