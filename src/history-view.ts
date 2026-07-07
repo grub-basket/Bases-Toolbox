@@ -32,7 +32,7 @@ export class HistoryView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "Frontmatter (properties & values) History";
+    return "Bulk file change history";
   }
 
   async onOpen(): Promise<void> {

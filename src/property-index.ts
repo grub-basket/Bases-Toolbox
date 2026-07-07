@@ -552,7 +552,7 @@ export class PropertyIndexView extends ItemView {
 
     new ConfirmModal(this.plugin, {
       title: `Delete “${name}”?`,
-      body: `Removes “${name}” from ${where}. Undoable from find & replace history; every removal is logged to deletions/${name}.jsonl.`,
+      body: `Removes “${name}” from ${where}. Undoable from the bulk file change history; every removal is logged to deletions/${name}.jsonl.`,
       confirmText: "Delete property",
       danger: true,
       onConfirm: () => this.runDelete(name, files, scope, value, type),

@@ -133,7 +133,7 @@ export default class BasesToolboxPlugin extends Plugin {
 
     this.addCommand({
       id: "find-replace-history",
-      name: "Frontmatter (properties & values) history",
+      name: "Bulk file change history",
       callback: () => void openHistoryView(this),
     });
 
@@ -840,7 +840,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("History cap")
       .setDesc(
-        "Max find & replace operations to keep in the history. Leave empty for no cap. Lowering it drops the oldest entries immediately."
+        "Max operations to keep in the change history. Leave empty for no cap. Lowering it drops the oldest entries immediately."
       )
       .addText((t) => {
         t.setPlaceholder("No cap");
@@ -856,7 +856,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Clear find & replace history")
+      .setName("Clear change history")
       .setDesc("Removes all logged operations. Reverting them is no longer possible.")
       .addButton((b) => {
         const label = () =>
@@ -898,7 +898,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         items: [
           ["Property index", "An always-complete, searchable list of every frontmatter property in your vault — each value it takes and the files using that value — so you can review, rename, delete, pin allowed values, or open the files. Unlike the Bases filter dropdown it never “forgets” a property. Also on the left ribbon (table icon)."],
           ["Find & replace", "Change a property's values across the whole vault: pick the property, pick one value (or “all values”), preview exactly which files change (old → new) as a checklist, and apply only the ones you check. An empty replacement clears the value."],
-          ["Frontmatter (properties & values) history", "A log of every change these tools make. Expand an entry to see the per-file before → after, then revert it — all of it, or just the files you pick (with an option to force-overwrite files that were edited since)."],
+          ["Bulk file change history", "A log of every change these tools make — find & replace, merges, format fixes, property removals, and so on. Expand an entry to see the per-file before → after, then revert it — all of it, or just the files you pick (with an option to force-overwrite files that were edited since)."],
           ["Property format doctor", "Finds values that don't match their property's assigned type — e.g. a date property holding “March 4, 2024”, or an aliases property holding a bare word — shows a suggested fix you can edit, and applies only what you check. Nothing is ever erased. Ignore any you're happy to leave as-is (it re-flags if the value later changes)."],
           ["Conditional formatting", "Color Bases rows or cells by their values, using rules you define — e.g. color a row red when Status = “blocked”, or highlight duplicate values. Manage the rules in a side panel or in settings; the panel pops out to its own tab."],
         ],
