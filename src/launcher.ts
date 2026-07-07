@@ -8,6 +8,7 @@ import { VIEW_TYPE_CONDITIONAL_FORMAT } from "./conditional-format-view";
 import { VIEW_TYPE_DUPLICATE_FINDER } from "./merge";
 import { VIEW_TYPE_CSV_IMPORT } from "./csv-import-view";
 import { VIEW_TYPE_CSV_EXPORT } from "./csv-export-view";
+import { siftMatch } from "./sift";
 
 export const VIEW_TYPE_LAUNCHER = "bases-toolbox-launcher";
 
@@ -135,7 +136,7 @@ export class LauncherView extends ItemView {
    * query shows everything.
    */
   private applyFilter(): void {
-    const q = this.filterQuery.trim().toLowerCase();
+    const q = this.filterQuery.trim();
     const root = this.contentEl;
     const nodes = Array.from(root.children) as HTMLElement[];
     let sectionHeader: HTMLElement | null = null;
@@ -154,7 +155,10 @@ export class LauncherView extends ItemView {
       } else if (node.hasClass("bases-toolbox-launcher-hint")) {
         sectionHint = node;
       } else if (node.hasClass("bases-toolbox-launcher-card")) {
-        const hit = !q || (node.dataset.search ?? "").includes(q);
+        // Fuzzy match: siftMatch is whitespace-tokenized (every token must hit)
+        // and treats -/_/space as equivalent, so "csv imp" or "find-replace"
+        // both land — more forgiving than the old plain substring test.
+        const hit = !q || siftMatch(q, node.dataset.search ?? "");
         node.toggle(hit);
         if (hit) sectionHasVisible = true;
       }
