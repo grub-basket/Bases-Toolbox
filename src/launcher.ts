@@ -61,6 +61,8 @@ const TOOLS: ToolFeature[] = [
 export class LauncherView extends ItemView {
   icon = "wrench";
   private plugin: BasesToolboxPlugin;
+  /** Live search query; survives re-renders (favoriting rebuilds the list). */
+  private filterQuery = "";
 
   constructor(leaf: WorkspaceLeaf, plugin: BasesToolboxPlugin) {
     super(leaf);
@@ -88,6 +90,18 @@ export class LauncherView extends ItemView {
       text: "Open any Bases Toolbox feature. Tap the ☆ to pin one to Favorites.",
     });
 
+    // Search/filter — narrows the visible cards by name or description.
+    const search = root.createEl("input", {
+      type: "search",
+      cls: "bases-toolbox-launcher-search",
+      attr: { placeholder: "Search tools…", "aria-label": "Search tools" },
+    });
+    search.value = this.filterQuery;
+    search.addEventListener("input", () => {
+      this.filterQuery = search.value;
+      this.applyFilter();
+    });
+
     // Favorites — pinned features, in pin order. Drag to re-arrange.
     const favs = this.plugin.settings.favoriteFeatures;
     if (favs.length) {
@@ -110,6 +124,42 @@ export class LauncherView extends ItemView {
     // Settings shortcut at the bottom.
     root.createDiv({ cls: "bases-toolbox-launcher-section", text: "Settings" });
     this.renderSettings(root);
+
+    // Re-apply any active query after a rebuild (e.g. after favoriting).
+    this.applyFilter();
+  }
+
+  /**
+   * Hide cards whose name/description don't match the query, and hide any section
+   * header (and its hint) that ends up with no visible cards under it. Empty
+   * query shows everything.
+   */
+  private applyFilter(): void {
+    const q = this.filterQuery.trim().toLowerCase();
+    const root = this.contentEl;
+    const nodes = Array.from(root.children) as HTMLElement[];
+    let sectionHeader: HTMLElement | null = null;
+    let sectionHint: HTMLElement | null = null;
+    let sectionHasVisible = false;
+    const closeSection = () => {
+      if (sectionHeader) sectionHeader.toggle(sectionHasVisible);
+      if (sectionHint) sectionHint.toggle(sectionHasVisible);
+    };
+    for (const node of nodes) {
+      if (node.hasClass("bases-toolbox-launcher-section")) {
+        closeSection();
+        sectionHeader = node;
+        sectionHint = null;
+        sectionHasVisible = false;
+      } else if (node.hasClass("bases-toolbox-launcher-hint")) {
+        sectionHint = node;
+      } else if (node.hasClass("bases-toolbox-launcher-card")) {
+        const hit = !q || (node.dataset.search ?? "").includes(q);
+        node.toggle(hit);
+        if (hit) sectionHasVisible = true;
+      }
+    }
+    closeSection();
   }
 
   /** Render a feature by its favorite id, wherever it lives. Returns the card. */
@@ -214,6 +264,7 @@ export class LauncherView extends ItemView {
 
   private card(parent: HTMLElement, name: string, desc: string, icon: string, id: string): HTMLElement {
     const card = parent.createDiv({ cls: "bases-toolbox-launcher-card" });
+    card.dataset.search = `${name} ${desc}`.toLowerCase();
     setIcon(card.createSpan({ cls: "bases-toolbox-launcher-icon" }), icon);
     const text = card.createDiv({ cls: "bases-toolbox-launcher-text" });
     text.createDiv({ cls: "bases-toolbox-launcher-name", text: name });

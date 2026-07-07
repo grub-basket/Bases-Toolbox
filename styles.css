@@ -1171,6 +1171,10 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   font-size: var(--font-ui-small);
   margin-bottom: var(--size-2-2);
 }
+.bases-toolbox-launcher-search {
+  width: 100%;
+  margin-bottom: var(--size-4-2);
+}
 .bases-toolbox-launcher-section {
   font-weight: var(--font-semibold);
   color: var(--text-normal);
