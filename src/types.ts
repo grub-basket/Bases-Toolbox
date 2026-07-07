@@ -59,6 +59,9 @@ export interface BasesToolboxSettings {
   multilineTipShown: boolean;
   /** Conditional row-coloring rules for Bases views. */
   formatRules: import("./conditional-format").FormatRule[];
+  /** Master switch for conditional formatting — off suspends ALL rules without
+   * deleting them (and clears any applied colors). */
+  cfEnabled: boolean;
   /** Pinned allowed values per property (key: lowercase property name). */
   allowedValues: Record<string, string[]>;
   /** Live-synced property forks (source → target with a transform). */
@@ -111,6 +114,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   multilineListCells: false,
   multilineTipShown: false,
   formatRules: [],
+  cfEnabled: true,
   allowedValues: {},
   propertyForks: [],
   removedForks: [],

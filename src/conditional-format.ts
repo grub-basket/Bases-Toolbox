@@ -260,6 +260,7 @@ function decorateRow(
   order?: string[] | null
 ): void {
   clearRow(row); // always start clean so removed/changed rules don't linger
+  if (!plugin.settings.cfEnabled) return; // master switch off → leave rows bare
   const fm = fmForRow(plugin, row);
   if (fm === null) return;
 
@@ -361,6 +362,14 @@ function decorateRowGroup(
 }
 
 export function redecorateAll(plugin: BasesToolboxPlugin): void {
+  // Master switch off → strip any colors we applied and stop. Rules are kept in
+  // settings, just suspended.
+  if (!plugin.settings.cfEnabled) {
+    for (const doc of allBaseDocuments(plugin)) {
+      doc.querySelectorAll<HTMLElement>(".bases-tr").forEach((r) => clearRow(r));
+    }
+    return;
+  }
   const done = new WeakSet<HTMLElement>();
   // Base tabs (and popouts): all rows in a leaf's view are one base.
   for (const leaf of plugin.app.workspace.getLeavesOfType("bases")) {

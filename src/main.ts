@@ -303,6 +303,17 @@ export default class BasesToolboxPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "toggle-conditional-formatting",
+      name: "Toggle conditional formatting (all rules)",
+      callback: () => {
+        this.settings.cfEnabled = !this.settings.cfEnabled;
+        void this.savePluginData();
+        scheduleRedecorate(this);
+        new Notice(`Conditional formatting ${this.settings.cfEnabled ? "enabled" : "disabled"}.`);
+      },
+    });
+
+    this.addCommand({
       id: "open-launcher",
       name: "Open Bases Toolbox launcher",
       callback: () => void openLauncher(this),
@@ -974,6 +985,16 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       .setDesc("Color Bases rows or cells by property value. Rules apply top to bottom; the first match wins (per row, and per cell).")
       .setHeading()
       .settingEl.setAttribute("data-bt-section", "formatting");
+
+    new Setting(containerEl)
+      .setName("Enable conditional formatting")
+      .setDesc("Master switch. Turn off to suspend every rule at once (nothing is deleted) and clear all applied colors.")
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.cfEnabled).onChange((v) => {
+          this.plugin.settings.cfEnabled = v;
+          this.saveAndPaint();
+        })
+      );
 
     const rules = this.plugin.settings.formatRules;
     const list = containerEl.createDiv({ cls: "bases-toolbox-cf-list" });
