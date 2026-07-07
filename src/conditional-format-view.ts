@@ -224,6 +224,15 @@ export class ConditionalFormatView extends ItemView {
     const color = styleRow.createEl("select", { cls: "dropdown" });
     for (const c of Object.keys(RULE_COLORS)) color.createEl("option", { value: c, text: colorLabel(c) });
     color.createEl("option", { value: CUSTOM_COLOR, text: colorLabel(CUSTOM_COLOR) });
+    // Show the custom-colour picker inline as soon as "Custom" is picked, so the
+    // colour can be chosen BEFORE the rule is added (previously it only appeared
+    // once the rule was saved and re-rendered as a card).
+    const custom = styleRow.createEl("input", { type: "color", cls: "bases-toolbox-color-input" });
+    custom.value = DEFAULT_CUSTOM_HEX;
+    const syncCustom = () =>
+      custom.setCssStyles({ display: color.value === CUSTOM_COLOR ? "" : "none" });
+    syncCustom();
+    color.addEventListener("change", syncCustom);
     const add = body.createEl("button", { cls: "mod-cta", text: "Add rule" });
     add.addEventListener("click", () => {
       const property = prop.value.trim();
@@ -235,6 +244,7 @@ export class ConditionalFormatView extends ItemView {
         value: val.value,
         scope: scope.value as FormatScope,
         color: color.value,
+        ...(color.value === CUSTOM_COLOR ? { customColor: custom.value } : {}),
         enabled: true,
       };
       const dup = findDuplicateRule(this.plugin.settings.formatRules, candidate);
