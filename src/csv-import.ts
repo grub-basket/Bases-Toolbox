@@ -48,6 +48,8 @@ class CsvImportPanel {
   private makeBase = true;
   private baseNameEl: HTMLInputElement | null = null;
   private baseNameSetting: Setting | null = null;
+  /** Live "will create / will reuse" hint under the base-name field. */
+  private refreshBaseHint: () => void = () => {};
   private selectAllEl: HTMLInputElement | null = null;
   private importBtn: ButtonComponent | null = null;
   private running = false;
@@ -153,6 +155,7 @@ class CsvImportPanel {
           this.makeBase = v;
           // Only offer the base-name field when a base will actually be created.
           this.baseNameSetting?.settingEl.toggle(v);
+          this.refreshBaseHint();
         })
       );
 
@@ -164,6 +167,29 @@ class CsvImportPanel {
         this.baseNameEl = t.inputEl;
       });
     this.baseNameSetting.settingEl.toggle(this.makeBase);
+
+    // Live hint so the reuse-vs-create outcome is clear BEFORE importing (the
+    // completion Notice says the same thing after the fact).
+    const baseHint = contentEl.createDiv({ cls: "bases-toolbox-fr-info bases-toolbox-import-basehint" });
+    this.refreshBaseHint = () => {
+      if (!this.makeBase) {
+        baseHint.toggle(false);
+        return;
+      }
+      baseHint.toggle(true);
+      const folder = normalizePath(this.folderEl?.value.trim() || "CSV Import");
+      const folderName = folder.split("/").pop() ?? folder;
+      const name = sanitizeFilename(this.baseNameEl?.value.trim() || folderName) || folderName;
+      const exists = this.app.vault.getAbstractFileByPath(`${folder}/${name}.base`);
+      baseHint.setText(
+        exists
+          ? `A base “${name}.base” already exists in “${folder}” — it’ll be reused (not overwritten); the imported notes just join it.`
+          : `Will create “${name}.base” in “${folder}”.`
+      );
+    };
+    this.baseNameEl?.addEventListener("input", this.refreshBaseHint);
+    this.folderEl?.addEventListener("input", this.refreshBaseHint);
+    this.refreshBaseHint();
 
     new Setting(contentEl).addButton((b) => {
       b.setButtonText("Import").setCta().setDisabled(true).onClick(() => void this.doImport());
