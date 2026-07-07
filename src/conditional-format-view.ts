@@ -117,6 +117,14 @@ export class ConditionalFormatView extends ItemView {
       this.save();
       this.render();
     });
+    mkBtn("copy", "Duplicate rule", false, () => {
+      rules.splice(index + 1, 0, {
+        ...rule,
+        id: `${Date.now()}-${rules.length}`,
+      });
+      this.save();
+      this.render();
+    });
     mkBtn("trash", "Delete rule", false, () => {
       this.plugin.settings.formatRules = rules.filter((r) => r !== rule);
       this.save();

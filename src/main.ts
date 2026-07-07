@@ -1100,6 +1100,11 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       this.saveAndPaint();
       this.display();
     });
+    mkBtn("copy", "Duplicate rule", false, () => {
+      rules.splice(index + 1, 0, { ...rule, id: `${Date.now()}-${rules.length}` });
+      this.saveAndPaint();
+      this.display();
+    });
     mkBtn("trash", "Delete rule", false, () => {
       this.plugin.settings.formatRules = rules.filter((r) => r !== rule);
       this.saveAndPaint();
