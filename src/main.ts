@@ -1036,6 +1036,8 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       this.saveAndPaint();
       this.display();
     });
+    // Up/down stacked into a column on the left of the row.
+    const reorderStack = row.createDiv({ cls: "bases-toolbox-cf-reorder" });
 
     const swatch = row.createDiv({ cls: "bases-toolbox-cf-swatch" });
     const paintSwatch = () => swatch.setCssStyles({ backgroundColor: ruleSwatchColor(rule) });
@@ -1141,9 +1143,16 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       this.saveAndPaint();
     });
 
-    const mkBtn = (icon: string, label: string, disabled: boolean, fn: () => void) => {
-      const b = row.createEl("button", {
-        cls: "bases-toolbox-cf-btn clickable-icon",
+    const mkBtn = (
+      icon: string,
+      label: string,
+      disabled: boolean,
+      fn: () => void,
+      parent: HTMLElement = row,
+      extraCls = ""
+    ) => {
+      const b = parent.createEl("button", {
+        cls: `bases-toolbox-cf-btn clickable-icon ${extraCls}`.trim(),
         attr: { "aria-label": label },
       });
       setIcon(b, icon);
@@ -1154,12 +1163,12 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       [rules[index - 1], rules[index]] = [rules[index], rules[index - 1]];
       this.saveAndPaint();
       this.display();
-    });
+    }, reorderStack);
     mkBtn("chevron-down", "Move down", index === rules.length - 1, () => {
       [rules[index + 1], rules[index]] = [rules[index], rules[index + 1]];
       this.saveAndPaint();
       this.display();
-    });
+    }, reorderStack);
     mkBtn("copy", "Duplicate rule", false, () => {
       rules.splice(index + 1, 0, { ...rule, id: `${Date.now()}-${rules.length}` });
       this.saveAndPaint();
@@ -1169,7 +1178,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       this.plugin.settings.formatRules = rules.filter((r) => r !== rule);
       this.saveAndPaint();
       this.display();
-    });
+    }, row, "bases-toolbox-cf-trash");
 
     // Flag a rule that duplicates the condition of an earlier one (redundant).
     const dupOf = findDuplicateRule(rules, rule, index);

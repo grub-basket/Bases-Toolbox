@@ -2,6 +2,9 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.41
+- **Conditional formatting:** tidier rule-row layout — the up/down arrows are now stacked together on the left of each row, and the delete button sits at the far right.
+
 ## 0.1.40
 - **Conditional formatting:** rule rows now have a drag handle (⋮⋮) — grab it to reorder rules by dragging, in both the settings tab and the sidebar panel. The up/down arrows still work too.
 

@@ -93,6 +93,8 @@ export class ConditionalFormatView extends ItemView {
       this.save();
       this.render();
     });
+    // Up/down stacked into a column on the left of the row.
+    const reorderStack = head.createDiv({ cls: "bases-toolbox-cf-reorder" });
     const swatch = head.createDiv({ cls: "bases-toolbox-cf-swatch" });
     swatch.setCssStyles({ backgroundColor: ruleSwatchColor(rule) });
     const summary = head.createSpan({ cls: "bases-toolbox-cfcard-summary" });
@@ -109,9 +111,16 @@ export class ConditionalFormatView extends ItemView {
       rule.enabled = enabled.checked;
       this.save();
     });
-    const mkBtn = (icon: string, label: string, disabled: boolean, fn: () => void) => {
-      const b = head.createEl("button", {
-        cls: "bases-toolbox-cf-btn clickable-icon",
+    const mkBtn = (
+      icon: string,
+      label: string,
+      disabled: boolean,
+      fn: () => void,
+      parent: HTMLElement = head,
+      extraCls = ""
+    ) => {
+      const b = parent.createEl("button", {
+        cls: `bases-toolbox-cf-btn clickable-icon ${extraCls}`.trim(),
         attr: { "aria-label": label },
       });
       setIcon(b, icon);
@@ -122,12 +131,12 @@ export class ConditionalFormatView extends ItemView {
       [rules[index - 1], rules[index]] = [rules[index], rules[index - 1]];
       this.save();
       this.render();
-    });
+    }, reorderStack);
     mkBtn("chevron-down", "Move down", index === rules.length - 1, () => {
       [rules[index + 1], rules[index]] = [rules[index], rules[index + 1]];
       this.save();
       this.render();
-    });
+    }, reorderStack);
     mkBtn("copy", "Duplicate rule", false, () => {
       rules.splice(index + 1, 0, {
         ...rule,
@@ -140,7 +149,7 @@ export class ConditionalFormatView extends ItemView {
       this.plugin.settings.formatRules = rules.filter((r) => r !== rule);
       this.save();
       this.render();
-    });
+    }, head, "bases-toolbox-cf-trash");
 
     // body: stacked controls
     const body = card.createDiv({ cls: "bases-toolbox-cfcard-body" });

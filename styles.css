@@ -829,6 +829,27 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
 .bases-toolbox-cf-dragging { opacity: 0.4; }
 .bases-toolbox-cf-drop-before { box-shadow: 0 -2px 0 0 var(--interactive-accent); }
 .bases-toolbox-cf-drop-after { box-shadow: 0 2px 0 0 var(--interactive-accent); }
+/* Up/down stacked vertically on the left of each CF rule row. */
+.bases-toolbox-cf-reorder {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+.bases-toolbox-cf-reorder .bases-toolbox-cf-btn {
+  padding: 0;
+  height: 15px;
+  width: 18px;
+}
+.bases-toolbox-cf-reorder .bases-toolbox-cf-btn svg {
+  width: 13px;
+  height: 13px;
+}
+/* Trash pinned to the right end of the row. In the settings row (no flex-grow
+   child) margin-left:auto pushes it right; in the sidebar card the flex:1
+   summary already does, so this is a harmless no-op there. */
+.bases-toolbox-cf-trash {
+  margin-left: auto;
+}
 .bases-toolbox-cf-btn {
   padding: var(--size-2-1);
 }
