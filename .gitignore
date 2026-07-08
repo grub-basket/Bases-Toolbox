@@ -5,9 +5,10 @@ main.js
 .deploy-target
 dev-docs/
 
-# Internal Claude working docs (session recaps, request log). Not for publishing.
+# Internal Claude working docs (session recaps, request log, handoffs). Not for publishing.
 .claude/requests-log.md
 .claude/chat-history/
+.claude/handoffs/
 
 # Private working docs: personal "why" annotations, internal reviews, forum drafts.
 docs/features.md
