@@ -2,6 +2,9 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.40
+- **Conditional formatting:** rule rows now have a drag handle (⋮⋮) — grab it to reorder rules by dragging, in both the settings tab and the sidebar panel. The up/down arrows still work too.
+
 ## 0.1.39
 - **Duplicate finder:** the "Exclude folders" and "Same value of property" boxes now have autocomplete — folder paths (comma-separated, completes the segment you're typing) and vault property names.
 - **Launcher:** the tool search box is now fuzzy — token-based matching that treats `-`, `_`, and spaces as equivalent, so "csv imp" or "find-replace" both match.

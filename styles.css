@@ -814,6 +814,21 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   min-width: unset;
   field-sizing: content;
 }
+.bases-toolbox-cf-grip {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  cursor: grab;
+  color: var(--text-faint);
+}
+.bases-toolbox-cf-grip:hover { color: var(--text-muted); }
+.bases-toolbox-cf-grip:active { cursor: grabbing; }
+.bases-toolbox-cf-grip svg { width: 14px; height: 14px; }
+/* The row being dragged fades; the drop target shows an accent edge on the side
+   the dragged row will land. */
+.bases-toolbox-cf-dragging { opacity: 0.4; }
+.bases-toolbox-cf-drop-before { box-shadow: 0 -2px 0 0 var(--interactive-accent); }
+.bases-toolbox-cf-drop-after { box-shadow: 0 2px 0 0 var(--interactive-accent); }
 .bases-toolbox-cf-btn {
   padding: var(--size-2-1);
 }

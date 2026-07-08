@@ -4,6 +4,75 @@ import { findKey, valueToDisplay } from "./scan";
 
 export type FormatScope = "row" | "cell";
 
+/* ---------- drag-to-reorder ---------- */
+
+/** Index of the row currently being dragged, shared across CF surfaces (only
+ * one drag happens at a time). -1 when nothing is being dragged. */
+let cfDragFrom = -1;
+
+/**
+ * Wires HTML5 drag-and-drop reordering onto one CF rule row via its grip handle.
+ * The handle is the only draggable part (so inputs stay selectable); the whole
+ * row is used as the drag image. Dropping onto a row inserts before/after it
+ * depending on which half the cursor is over, then calls `reorder(from, to)`
+ * where `to` is the destination index in the ORIGINAL list (the caller adjusts
+ * for the removal). `count` is the list length, used only to clamp.
+ */
+export function installCfRowDrag(
+  row: HTMLElement,
+  handle: HTMLElement,
+  index: number,
+  count: number,
+  reorder: (from: number, to: number) => void
+): void {
+  handle.draggable = true;
+  handle.addEventListener("dragstart", (e) => {
+    cfDragFrom = index;
+    row.addClass("bases-toolbox-cf-dragging");
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", String(index));
+      e.dataTransfer.setDragImage(row, 12, 12);
+    }
+  });
+  handle.addEventListener("dragend", () => {
+    cfDragFrom = -1;
+    row.removeClass("bases-toolbox-cf-dragging");
+    row.removeClass("bases-toolbox-cf-drop-before", "bases-toolbox-cf-drop-after");
+  });
+  row.addEventListener("dragover", (e) => {
+    if (cfDragFrom < 0 || cfDragFrom === index) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    const rect = row.getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    row.toggleClass("bases-toolbox-cf-drop-before", !after);
+    row.toggleClass("bases-toolbox-cf-drop-after", after);
+  });
+  row.addEventListener("dragleave", () => {
+    row.removeClass("bases-toolbox-cf-drop-before", "bases-toolbox-cf-drop-after");
+  });
+  row.addEventListener("drop", (e) => {
+    if (cfDragFrom < 0 || cfDragFrom === index) return;
+    e.preventDefault();
+    const rect = row.getBoundingClientRect();
+    const after = e.clientY > rect.top + rect.height / 2;
+    const to = Math.max(0, Math.min(count, index + (after ? 1 : 0)));
+    const from = cfDragFrom;
+    cfDragFrom = -1;
+    row.removeClass("bases-toolbox-cf-drop-before", "bases-toolbox-cf-drop-after");
+    if (from !== to && from !== to - 1) reorder(from, to);
+  });
+}
+
+/** Applies a drag reorder to a rules array: moves `from` to land at original
+ * index `to`, accounting for the removal shift. Returns the mutated array. */
+export function reorderRules<T>(arr: T[], from: number, to: number): T[] {
+  const [item] = arr.splice(from, 1);
+  arr.splice(from < to ? to - 1 : to, 0, item);
+  return arr;
+}
+
 export interface FormatRule {
   id: string;
   /** Optional human label for the rule (shown instead of the raw condition). */

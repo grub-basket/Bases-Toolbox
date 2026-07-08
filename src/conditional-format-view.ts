@@ -11,6 +11,8 @@ import {
   RULE_COLORS,
   colorLabel,
   findDuplicateRule,
+  installCfRowDrag,
+  reorderRules,
   ruleSwatchColor,
   scheduleRedecorate,
   VALUELESS_OPS,
@@ -82,8 +84,15 @@ export class ConditionalFormatView extends ItemView {
     const rules = this.plugin.settings.formatRules;
     const card = root.createDiv({ cls: "bases-toolbox-cfcard" });
 
-    // header: swatch + enabled + reorder + delete
+    // header: grip + swatch + enabled + reorder + delete
     const head = card.createDiv({ cls: "bases-toolbox-cfcard-head" });
+    const grip = head.createSpan({ cls: "bases-toolbox-cf-grip", attr: { "aria-label": "Drag to reorder" } });
+    setIcon(grip, "grip-vertical");
+    installCfRowDrag(card, grip, index, rules.length, (from, to) => {
+      reorderRules(rules, from, to);
+      this.save();
+      this.render();
+    });
     const swatch = head.createDiv({ cls: "bases-toolbox-cf-swatch" });
     swatch.setCssStyles({ backgroundColor: ruleSwatchColor(rule) });
     const summary = head.createSpan({ cls: "bases-toolbox-cfcard-summary" });

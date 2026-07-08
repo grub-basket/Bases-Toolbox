@@ -20,7 +20,9 @@ import {
   RULE_COLORS,
   colorLabel,
   findDuplicateRule,
+  installCfRowDrag,
   installConditionalFormatting,
+  reorderRules,
   ruleSwatchColor,
   scheduleRedecorate,
   BaseScopeModal,
@@ -1026,6 +1028,14 @@ class BasesToolboxSettingTab extends PluginSettingTab {
   private renderRuleRow(list: HTMLElement, rule: FormatRule, index: number): void {
     const rules = this.plugin.settings.formatRules;
     const row = list.createDiv({ cls: "bases-toolbox-cf-rule" });
+
+    const grip = row.createSpan({ cls: "bases-toolbox-cf-grip", attr: { "aria-label": "Drag to reorder" } });
+    setIcon(grip, "grip-vertical");
+    installCfRowDrag(row, grip, index, rules.length, (from, to) => {
+      reorderRules(rules, from, to);
+      this.saveAndPaint();
+      this.display();
+    });
 
     const swatch = row.createDiv({ cls: "bases-toolbox-cf-swatch" });
     const paintSwatch = () => swatch.setCssStyles({ backgroundColor: ruleSwatchColor(rule) });
