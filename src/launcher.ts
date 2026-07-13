@@ -57,6 +57,7 @@ const TOOLS: ToolFeature[] = [
   { name: "Bulk edit base results", desc: "Edit properties across a base's rows", icon: "square-pen", command: "bulk-edit-base-results" },
   { name: "Zoom into cell", desc: "Big editor for the focused Bases cell", icon: "maximize-2", command: "zoom-into-cell" },
   { name: "Toggle base filters", desc: "Quickly enable/disable a base's filters", icon: "filter", command: "toggle-base-filters" },
+  { name: "Add formula column", desc: "Add or fix a base's formula (computed) column", icon: "function-square", command: "add-formula-column" },
 ];
 
 export class LauncherView extends ItemView {

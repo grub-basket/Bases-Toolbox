@@ -1,6 +1,6 @@
 {
   "name": "bases-toolbox",
-  "version": "0.1.41",
+  "version": "0.1.43",
   "private": true,
   "scripts": {
     "dev": "node esbuild.config.mjs",
@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.6",
     "@types/node": "^20.10.0",
     "esbuild": "^0.21.0",
     "obsidian": "latest",

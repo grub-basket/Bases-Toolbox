@@ -37,6 +37,7 @@ import { CsvExportModal, CsvExportView, VIEW_TYPE_CSV_EXPORT, openCsvExportView 
 import { installEmbedOptions } from "./embed-options";
 import { generateEmbedReference } from "./embed-reference";
 import { openFilterToggle } from "./filter-toggle";
+import { openFormulaColumn } from "./formula-column";
 import { ConditionalFormatView, VIEW_TYPE_CONDITIONAL_FORMAT, openConditionalFormatView } from "./conditional-format-view";
 import { LauncherView, VIEW_TYPE_LAUNCHER, openLauncher } from "./launcher";
 import { FormatDoctorView, VIEW_TYPE_FORMAT_DOCTOR, openFormatDoctor } from "./format-doctor";
@@ -257,6 +258,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "toggle-base-filters",
       name: "Toggle base filters",
       callback: () => openFilterToggle(this),
+    });
+
+    this.addCommand({
+      id: "add-formula-column",
+      name: "Add or fix a base formula column",
+      callback: () => openFormulaColumn(this),
     });
 
     this.addCommand({
@@ -941,6 +948,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           ["Bulk edit properties of base results", "Set, append to, remove from, or clear a property across every note the open base returns — in one action."],
           ["Zoom into focused cell", "Opens a large editor for the Bases cell you're on, for comfortable editing of long values."],
           ["Toggle base filters", "Temporarily disable (and later re-enable) a base's filters without editing the .base file."],
+          ["Add or fix a base formula column", "Add a computed (formula) column to a base by writing it into the .base file, and repair Obsidian's empty-formula glitch — a blank formula the Bases UI locks you out of editing. Never writes an empty formula."],
           ["Toggle number guard", "Stops number properties from changing when you accidentally press arrow keys or scroll over them."],
           ["Toggle digits-only typing", "On number properties, ignores keystrokes that aren't digits, so a stray letter can't sneak in."],
           ["Toggle multiline list cells", "In Bases tables, stacks a list property's values one per line instead of a single row of pills."],
@@ -950,7 +958,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       },
       {
         title: "Bases built-in properties (add these when the picker “forgets” them)",
-        note: "Obsidian's Bases property menu sometimes drops the built-in file attributes. They are NOT formulas — re-add one by its identifier: in a table view open the column/property menu and pick it under “File”, or edit the .base file's `order:` list and type the identifier. For a formatted or computed column (e.g. a readable date), make a formula instead — add a block like `formulas:` then `created: file.ctime`, and reference it as `formula.created`. The community plugin Formula Forge and Obsidian 1.9.5+'s built-in formula editor both help write those.",
+        note: "Obsidian's Bases property menu sometimes drops the built-in file attributes. They are NOT formulas — re-add one by its identifier: in a table view open the column/property menu and pick it under “File”, or edit the .base file's `order:` list and type the identifier. For a formatted or computed column (e.g. a readable date), make a formula instead — add a block like `formulas:` then `created: file.ctime`, and reference it as `formula.created`. Bases Toolbox's “Add or fix a base formula column” command writes these for you (and repairs the empty-formula glitch), and — while the base is open — embeds Obsidian's own formula editor for autocomplete + live validation. The Formula Forge community plugin is complementary — reusable global functions + rendering formulas in note bodies.",
         items: [
           ["file.name", "the note's name (without extension)"],
           ["file.ext", "file extension"],

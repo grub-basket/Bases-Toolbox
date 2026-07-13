@@ -2,6 +2,12 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.43
+- **Add formula column now embeds Obsidian's own formula editor.** While the base is open, the expression fields (both editing an existing formula and adding a new one) become Obsidian's native Bases formula editor — real autocomplete for functions and property/column names, plus inline syntax validation as you type. Falls back to a plain input if the base isn't open.
+
+## 0.1.42
+- **New — Add formula column:** add a computed (formula) column to a base without hand-editing YAML — a command + launcher tool that writes the `formulas:` entry into the `.base` file and adds the column to your chosen view(s). It also **repairs Obsidian's empty-formula glitch**: a formula created with a blank expression that the Bases UI locks you out of editing (and that survives reopening/restart) — you can now type an expression straight in and fix it, or remove it. It never writes an empty formula, so it can't create the glitch in the first place.
+
 ## 0.1.41
 - **Conditional formatting:** tidier rule-row layout — the up/down arrows are now stacked together on the left of each row, and the delete button sits at the far right.
 

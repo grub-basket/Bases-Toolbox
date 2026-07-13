@@ -1299,6 +1299,31 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   padding: 2px 10px;
   font-size: var(--font-ui-smaller);
 }
+/* Formula expression inputs: monospace + roomy, they hold code. */
+.bases-toolbox-formula-expr {
+  font-family: var(--font-monospace);
+  min-width: 16em;
+}
+/* Embedded CodeMirror formula editor (Obsidian's own formula language). Style it
+   to read like a single-line input inside the Setting control. */
+.bases-toolbox-formula-cm.cm-editor {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-form-field);
+  min-width: 18em;
+  max-width: 28em;
+  font-size: var(--font-ui-small);
+}
+.bases-toolbox-formula-cm.cm-editor.cm-focused {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 1px var(--interactive-accent);
+  outline: none;
+}
+.bases-toolbox-formula-cm .cm-content {
+  padding: 4px 6px;
+  font-family: var(--font-monospace);
+}
+.bases-toolbox-formula-cm .cm-scroller { overflow-x: auto; }
 .bases-toolbox-launcher-btn-icon { display: inline-flex; }
 .bases-toolbox-launcher-btn-icon svg { width: 14px; height: 14px; }
 
