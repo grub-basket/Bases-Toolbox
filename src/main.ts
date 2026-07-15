@@ -38,6 +38,13 @@ import { installEmbedOptions } from "./embed-options";
 import { generateEmbedReference } from "./embed-reference";
 import { openFilterToggle } from "./filter-toggle";
 import { openFormulaColumn } from "./formula-column";
+import {
+  ReadOnlyBasePicker,
+  applyReadOnly,
+  installReadOnly,
+  toggleActiveBaseReadOnly,
+  toggleAllBasesReadOnly,
+} from "./read-only";
 import { ConditionalFormatView, VIEW_TYPE_CONDITIONAL_FORMAT, openConditionalFormatView } from "./conditional-format-view";
 import { LauncherView, VIEW_TYPE_LAUNCHER, openLauncher } from "./launcher";
 import { FormatDoctorView, VIEW_TYPE_FORMAT_DOCTOR, openFormatDoctor } from "./format-doctor";
@@ -86,6 +93,7 @@ export default class BasesToolboxPlugin extends Plugin {
     installAllowedValuePicker(this);
     installForkSync(this);
     installCompanionAuto(this);
+    installReadOnly(this);
 
     const dirty = () => this.propertyCache.markDirty();
     this.registerEvent(this.app.metadataCache.on("changed", dirty));
@@ -264,6 +272,18 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "add-formula-column",
       name: "Add or fix a base formula column",
       callback: () => openFormulaColumn(this),
+    });
+
+    this.addCommand({
+      id: "toggle-base-readonly",
+      name: "Toggle read-only for this base",
+      callback: () => toggleActiveBaseReadOnly(this),
+    });
+
+    this.addCommand({
+      id: "toggle-all-bases-readonly",
+      name: "Toggle read-only for all bases",
+      callback: () => void toggleAllBasesReadOnly(this),
     });
 
     this.addCommand({
@@ -803,6 +823,63 @@ class BasesToolboxSettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl)
+      .setName("Read-only bases")
+      .setDesc("Lock bases so their cells can't be edited (guards against accidental edits/deletes). Links and the date-picker stay clickable.")
+      .setHeading();
+
+    new Setting(containerEl)
+      .setName("Make all bases read-only")
+      .setDesc("When on, every base is read-only. When off, only the bases listed below are.")
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.readOnlyAllBases).onChange(async (v) => {
+          this.plugin.settings.readOnlyAllBases = v;
+          await this.plugin.savePluginData();
+          applyReadOnly(this.plugin);
+          this.display();
+        })
+      );
+
+    new Setting(containerEl)
+      .setName("Also prevent adding rows")
+      .setDesc("On read-only bases, also hide the toolbar “New” button so rows can't be added. Off = read-only locks editing but rows can still be appended.")
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.readOnlyBlockNewRow).onChange(async (v) => {
+          this.plugin.settings.readOnlyBlockNewRow = v;
+          await this.plugin.savePluginData();
+          applyReadOnly(this.plugin);
+        })
+      );
+
+    if (!this.plugin.settings.readOnlyAllBases) {
+      const roList = this.plugin.settings.readOnlyBases;
+      new Setting(containerEl)
+        .setName("Individually read-only bases")
+        .setDesc(roList.length ? "" : "None yet \u2014 add one to lock just that base.")
+        .addButton((b) =>
+          b
+            .setButtonText("Add a base\u2026")
+            .onClick(() => new ReadOnlyBasePicker(this.plugin, () => this.display()).open())
+        );
+      for (const path of [...roList]) {
+        const exists = this.plugin.app.vault.getAbstractFileByPath(path) instanceof TFile;
+        new Setting(containerEl)
+          .setName(path)
+          .setDesc(exists ? "" : "\u26a0 this .base no longer exists")
+          .addExtraButton((b) =>
+            b
+              .setIcon("x")
+              .setTooltip("Make editable again (remove from read-only)")
+              .onClick(async () => {
+                this.plugin.settings.readOnlyBases = this.plugin.settings.readOnlyBases.filter((p) => p !== path);
+                await this.plugin.savePluginData();
+                applyReadOnly(this.plugin);
+                this.display();
+              })
+          );
+      }
+    }
+
+    new Setting(containerEl)
       .setName("Companion notes")
       .setDesc("Companions make non-Markdown files queryable in Bases. Run via the command \u201cCreate companion notes for non-Markdown files\u201d.")
       .setHeading();
@@ -948,6 +1025,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           ["Bulk edit properties of base results", "Set, append to, remove from, or clear a property across every note the open base returns — in one action."],
           ["Zoom into focused cell", "Opens a large editor for the Bases cell you're on, for comfortable editing of long values."],
           ["Toggle base filters", "Temporarily disable (and later re-enable) a base's filters without editing the .base file."],
+          ["Toggle read-only for this base / all bases", "Lock a base (or every base) so its cells can't be edited — guards against accidental edits and deletes. Links and the date-picker stay clickable. Manage the list under Settings → Read-only bases."],
           ["Add or fix a base formula column", "Add a computed (formula) column to a base by writing it into the .base file, and repair Obsidian's empty-formula glitch — a blank formula the Bases UI locks you out of editing. Never writes an empty formula."],
           ["Toggle number guard", "Stops number properties from changing when you accidentally press arrow keys or scroll over them."],
           ["Toggle digits-only typing", "On number properties, ignores keystrokes that aren't digits, so a stray letter can't sneak in."],

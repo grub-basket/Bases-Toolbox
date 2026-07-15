@@ -1299,6 +1299,24 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   padding: 2px 10px;
   font-size: var(--font-ui-smaller);
 }
+/* Read-only bases: disable editing in the row body while keeping links and the
+   date-picker clickable. Scoped to base views the plugin marked read-only (the
+   community CSS-snippet approach, applied per base). If Bases renames these
+   table classes in a future version, update them alongside conditional-format's
+   selectors — they share the same base-table DOM. */
+.bases-toolbox-readonly .bases-tbody {
+  pointer-events: none;
+}
+.bases-toolbox-readonly .bases-tbody
+  :is(.mod-date + .clickable-icon, .internal-link, .external-link) {
+  pointer-events: auto;
+}
+/* Optional (separate setting): also hide the toolbar "New" button so rows can't
+   be added on a read-only base. */
+.bases-toolbox-readonly-nonew .bases-toolbar-new-item-menu {
+  display: none;
+}
+
 /* Formula expression inputs: monospace + roomy, they hold code. */
 .bases-toolbox-formula-expr {
   font-family: var(--font-monospace);

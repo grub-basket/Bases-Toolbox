@@ -114,6 +114,15 @@ export interface BasesToolboxSettings {
   /** How many blank property rows a plain "New note with properties" starts
    * with (base-driven creates use the base's columns instead). */
   newNoteMinRows: number;
+  /** Read-only: when true, EVERY base is read-only (cells can't be edited). */
+  readOnlyAllBases: boolean;
+  /** Read-only: individual `.base` file paths made read-only (applies when
+   * readOnlyAllBases is off; when it's on, all bases are read-only regardless). */
+  readOnlyBases: string[];
+  /** Read-only refinement: also hide the toolbar "New" button on read-only
+   * bases, so rows can't be added either. Separate opt-in — some teams want
+   * append-only bases, others want a hard lock. */
+  readOnlyBlockNewRow: boolean;
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -143,6 +152,9 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   companionBaseExclusionApplied: false,
   favoriteFeatures: ["cmd:new-note-with-properties"],
   newNoteMinRows: 5,
+  readOnlyAllBases: false,
+  readOnlyBases: [],
+  readOnlyBlockNewRow: false,
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */

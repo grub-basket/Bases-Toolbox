@@ -2,6 +2,9 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.44
+- **New — Read-only bases.** Lock a base so its cells can't be edited (and rows can't be accidentally deleted), with links and the date-picker still clickable. A global "make all bases read-only" toggle, or a per-base list — both under **Settings → Read-only bases**, plus commands "Toggle read-only for this base" and "Toggle read-only for all bases" and a launcher tool. A separate opt-in, **"Also prevent adding rows,"** additionally hides the toolbar "New" button on read-only bases (some teams want append-only, others a hard lock). Built on the community read-only CSS approach, scoped per base and kept in sync as bases open.
+
 ## 0.1.43
 - **Add formula column now embeds Obsidian's own formula editor.** While the base is open, the expression fields (both editing an existing formula and adding a new one) become Obsidian's native Bases formula editor — real autocomplete for functions and property/column names, plus inline syntax validation as you type. Falls back to a plain input if the base isn't open.
 
