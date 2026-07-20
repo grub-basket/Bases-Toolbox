@@ -51,6 +51,18 @@ import { FormatDoctorView, VIEW_TYPE_FORMAT_DOCTOR, openFormatDoctor } from "./f
 import { PropertySuggestModal } from "./find-replace";
 import { FindReplaceView, VIEW_TYPE_FIND_REPLACE } from "./find-replace-view";
 import { undoLatest } from "./history";
+import {
+  HISTORY_DOMAINS,
+  HistoryChunkStore,
+  HistoryDomain,
+  JsonStore,
+  SETTINGS_BUCKETS,
+  SettingsBucket,
+  historyDomain,
+} from "./store";
+
+/** disabledFilters lives in its own file too (it is not a settings field). */
+const FILTERS_REL = "filters.json";
 import { HistoryView, VIEW_TYPE_HISTORY, openHistoryView } from "./history-view";
 import { InlineFieldMigratorModal } from "./inline-fields";
 import { DuplicateFinderModal, DuplicateFinderView, VIEW_TYPE_DUPLICATE_FINDER, openDuplicateFinderView, startMerge } from "./merge";
@@ -470,10 +482,51 @@ export default class BasesToolboxPlugin extends Plugin {
     await this.app.workspace.revealLeaf(leaf);
   }
 
+  /** Lazily-created per-domain history files (see src/store.ts). */
+  private historyStores = new Map<HistoryDomain, HistoryChunkStore>();
+
+  private historyStore(domain: HistoryDomain): HistoryChunkStore {
+    let s = this.historyStores.get(domain);
+    if (!s) {
+      s = new HistoryChunkStore(this, domain);
+      this.historyStores.set(domain, s);
+    }
+    return s;
+  }
+
+  /** Reads every domain file and merges them into one chronological list. */
+  private async loadHistory(): Promise<HistoryEntry[]> {
+    const all: HistoryEntry[] = [];
+    for (const d of HISTORY_DOMAINS) all.push(...(await this.historyStore(d).load()));
+    all.sort((a, b) => a.timestamp - b.timestamp);
+    return all;
+  }
+
+  /** Rewrites the given domains from the in-memory list (others untouched). */
+  private async saveHistoryDomains(domains: Iterable<HistoryDomain>): Promise<void> {
+    const buckets = new Map<HistoryDomain, HistoryEntry[]>();
+    for (const d of domains) buckets.set(d, []);
+    for (const e of this.history) {
+      const d = historyDomain(e.source);
+      buckets.get(d)?.push(e);
+    }
+    for (const [d, entries] of buckets) await this.historyStore(d).save(entries);
+  }
+
+  /** Persists every history domain. Used for reverts/clears that can span files. */
+  async saveHistory(): Promise<void> {
+    await this.saveHistoryDomains(HISTORY_DOMAINS);
+  }
+
   async addHistoryEntry(entry: HistoryEntry): Promise<void> {
+    const before = this.history.length;
     this.history.push(entry);
     this.trimHistory();
-    await this.savePluginData();
+    // A trim can drop entries from OTHER domains, so only the fast path (nothing
+    // dropped) may write a single file.
+    const trimmed = this.history.length !== before + 1;
+    if (trimmed) await this.saveHistory();
+    else await this.saveHistoryDomains([historyDomain(entry.source)]);
   }
 
   /** Drops the oldest entries when a cap is set. */
@@ -485,7 +538,7 @@ export default class BasesToolboxPlugin extends Plugin {
 
   async clearHistory(): Promise<void> {
     this.history = [];
-    await this.savePluginData();
+    await this.saveHistory();
   }
 
   private async loadPluginData(): Promise<void> {
@@ -493,10 +546,56 @@ export default class BasesToolboxPlugin extends Plugin {
       lastOperation?: HistoryEntry | null;
     };
     this.settings = { ...DEFAULT_SETTINGS, ...data.settings };
-    this.history = data.history ?? [];
     this.disabledFilters = data.disabledFilters ?? {};
-    // Migrate the pre-history single-undo slot.
-    if (data.lastOperation) this.history.push(data.lastOperation);
+
+    // History lives in per-domain files now. Load those first, then fold in any
+    // legacy in-data.json history (and the even older single-undo slot) and
+    // migrate it out — after backing data.json up, since this is the user's only
+    // undo record.
+    this.history = await this.loadHistory();
+    const legacy = [...(data.history ?? []), ...(data.lastOperation ? [data.lastOperation] : [])];
+    if (legacy.length) {
+      await this.backupLegacyData();
+      this.history = [...this.history, ...legacy].sort((a, b) => a.timestamp - b.timestamp);
+      await this.saveHistory(); // write the split files BEFORE dropping the old copy
+      await this.savePluginData(); // rewrites data.json without `history`
+      console.log(`[Bases Toolbox] Migrated ${legacy.length} history entries out of data.json.`);
+    }
+    // Settings buckets (CF rules, allowed values, forks, ignore lists, read-only)
+    // and disabled filters live in their own files. A bucket file WINS over the
+    // legacy copy in data.json; when it's absent but data.json still carries the
+    // fields, that's a pre-split install to migrate.
+    let migrateBuckets = false;
+    const legacySettings = (data.settings ?? {}) as Record<string, unknown>;
+    for (const b of SETTINGS_BUCKETS) {
+      const store = this.bucketStore(b.rel);
+      if (await store.exists()) {
+        const saved = await store.load();
+        for (const f of b.fields) {
+          if (f in saved && saved[f] !== undefined) {
+            (this.settings as unknown as Record<string, unknown>)[f] = saved[f];
+          }
+        }
+      } else if (b.fields.some((f) => legacySettings[f] !== undefined)) {
+        migrateBuckets = true;
+      }
+      this.bucketClean.set(b.key, JSON.stringify(this.bucketPayload(b)));
+    }
+    const filtersStore = this.bucketStore(FILTERS_REL);
+    if (await filtersStore.exists()) {
+      this.disabledFilters = (await filtersStore.load()) as unknown as Record<string, DisabledFilter[]>;
+    } else if (Object.keys(this.disabledFilters).length) {
+      migrateBuckets = true;
+    }
+    this.bucketClean.set(FILTERS_REL, JSON.stringify(this.disabledFilters));
+    if (migrateBuckets) {
+      await this.backupLegacyData();
+      // Force every bucket to write, then rewrite data.json without those fields.
+      this.bucketClean.clear();
+      await this.savePluginData();
+      console.log("[Bases Toolbox] Migrated settings buckets out of data.json.");
+    }
+
     // One-time: seed ".base" into the companion exclude list for existing users
     // (new installs already default to it). They can remove it afterwards — the
     // flag stops it coming back.
@@ -513,13 +612,73 @@ export default class BasesToolboxPlugin extends Plugin {
     }
   }
 
+  /** Lazily-created bucket files (CF rules, allowed values, forks, …). */
+  private bucketStores = new Map<string, JsonStore<Record<string, unknown>>>();
+  /** Last-written JSON per bucket, so unchanged buckets are skipped on save. */
+  private bucketClean = new Map<string, string>();
+
+  private bucketStore(rel: string): JsonStore<Record<string, unknown>> {
+    let s = this.bucketStores.get(rel);
+    if (!s) {
+      s = new JsonStore<Record<string, unknown>>(this, rel, () => ({}));
+      this.bucketStores.set(rel, s);
+    }
+    return s;
+  }
+
+  /** The slice of settings that a bucket owns. */
+  private bucketPayload(b: SettingsBucket): Record<string, unknown> {
+    const src = this.settings as unknown as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const f of b.fields) out[f] = src[f];
+    return out;
+  }
+
+  /**
+   * Writes data.json — core scalar settings ONLY. History lives in per-domain
+   * files, and the growth-prone settings (CF rules, allowed values, forks,
+   * ignore lists, read-only bases) plus disabled filters live in their own
+   * bucket files, each written only when its contents actually changed. So the
+   * ~50 callers of this (every settings toggle) stay valid but no longer rewrite
+   * the undo record or unrelated data.
+   */
   async savePluginData(): Promise<void> {
-    const data: PluginData = {
-      settings: this.settings,
-      history: this.history,
-      disabledFilters: this.disabledFilters,
-    };
-    await this.saveData(data);
+    const bucketFields = new Set(SETTINGS_BUCKETS.flatMap((b) => b.fields));
+    const core: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(this.settings as unknown as Record<string, unknown>)) {
+      if (!bucketFields.has(k)) core[k] = v;
+    }
+    await this.saveData({ settings: core } as unknown as PluginData);
+
+    for (const b of SETTINGS_BUCKETS) {
+      const payload = this.bucketPayload(b);
+      const json = JSON.stringify(payload);
+      if (this.bucketClean.get(b.key) === json) continue;
+      await this.bucketStore(b.rel).save(payload);
+      this.bucketClean.set(b.key, json);
+    }
+    const filtersJson = JSON.stringify(this.disabledFilters);
+    if (this.bucketClean.get(FILTERS_REL) !== filtersJson) {
+      await this.bucketStore(FILTERS_REL).save(
+        this.disabledFilters as unknown as Record<string, unknown>
+      );
+      this.bucketClean.set(FILTERS_REL, filtersJson);
+    }
+  }
+
+  /** One-time copy of the pre-split data.json, kept next to it (never deleted). */
+  private async backupLegacyData(): Promise<void> {
+    try {
+      const adapter = this.app.vault.adapter;
+      const src = `${this.manifest.dir}/data.json`;
+      if (!(await adapter.exists(src))) return;
+      const stamp = new Date().toISOString().slice(0, 10);
+      const dest = `${this.manifest.dir}/data.backup-pre-split-${stamp}.json`;
+      if (await adapter.exists(dest)) return; // already backed up today
+      await adapter.write(dest, await adapter.read(src));
+    } catch (e) {
+      console.error("[Bases Toolbox] Could not back up data.json before the history split.", e);
+    }
   }
 
   /**

@@ -2,6 +2,10 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## Unreleased
+- **Plugin data is no longer one big file.** Settings, conditional-formatting rules, allowed values, forks, ignore lists and the undo history now live in separate files under the plugin folder, so `data.json` stays small and changing a setting no longer rewrites your entire undo history. Your existing data is migrated automatically on first load, after a backup of the original `data.json` is written alongside it.
+- **Undo history is stored in chunks** (250 entries per file, per area — find & replace, merge, property index, and so on). History stays uncapped: nothing is ever discarded, but adding an entry only rewrites the newest chunk instead of the whole log. A file that can't be read is set aside rather than overwritten.
+
 ## 0.1.45
 - **Importer — paste a list, not just a table.** Records separated by blank lines are detected as a list, with each record's lines becoming columns you name in the mapping table (e.g. title/URL pairs copied from a browser tab-export extension become a 2-column import). A new **Input format** dropdown lets you force Auto / Table / List.
 - **Importer — URLs are no longer typed as links.** Obsidian's link property type only resolves internal `[[wikilinks]]`, so URL columns were producing broken links. URL columns now import as text; the link type is still auto-assigned to genuine internal-link columns.

@@ -86,7 +86,7 @@ async function revertSnapshots(
   }
   // Mark reverted only if every snapshot was restored (no conflicts/failures).
   if (report.fileMissing === 0) entry.revertedAt = Date.now();
-  await plugin.savePluginData();
+  await plugin.saveHistory();
   return report;
 }
 
@@ -144,7 +144,7 @@ export async function revertEntry(
   if (entry.source === "property index delete" && restoredDeletions.length) {
     await pruneDeletionAudit(plugin, entry.property, entry.timestamp, new Set(restoredDeletions));
   }
-  await plugin.savePluginData();
+  await plugin.saveHistory();
   return report;
 }
 

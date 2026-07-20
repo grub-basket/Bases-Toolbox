@@ -169,7 +169,13 @@ export interface DisabledFilter {
 
 export interface PluginData {
   settings: BasesToolboxSettings;
-  history: HistoryEntry[];
+  /**
+   * LEGACY. History now lives in per-domain files under `history/` (see
+   * src/store.ts) so data.json stays small and a settings toggle no longer
+   * rewrites every history entry. Kept optional so an old data.json still
+   * loads — it's migrated into the split files on first run, then dropped.
+   */
+  history?: HistoryEntry[];
   /** Disabled filters keyed by .base file path. */
   disabledFilters: Record<string, DisabledFilter[]>;
 }
