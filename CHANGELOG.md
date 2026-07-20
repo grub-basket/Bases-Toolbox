@@ -2,6 +2,12 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.45
+- **Importer — paste a list, not just a table.** Records separated by blank lines are detected as a list, with each record's lines becoming columns you name in the mapping table (e.g. title/URL pairs copied from a browser tab-export extension become a 2-column import). A new **Input format** dropdown lets you force Auto / Table / List.
+- **Importer — URLs are no longer typed as links.** Obsidian's link property type only resolves internal `[[wikilinks]]`, so URL columns were producing broken links. URL columns now import as text; the link type is still auto-assigned to genuine internal-link columns.
+- **Importer — set every column's type at once.** A "Set all columns to `<type>`" control, plus "Re-detect types" to restore the automatic detection (which also undoes a bulk change).
+- **Importer — progress and a way in.** Long imports now show a progress bar and a live "Importing X/N…" notice, the Import button is disabled while a run is in flight, and the completion notice has an **Open base** button.
+
 ## 0.1.44
 - **New — Read-only bases.** Lock a base so its cells can't be edited (and rows can't be accidentally deleted), with links and the date-picker still clickable. A global "make all bases read-only" toggle, or a per-base list — both under **Settings → Read-only bases**, plus commands "Toggle read-only for this base" and "Toggle read-only for all bases" and a launcher tool. A separate opt-in, **"Also prevent adding rows,"** additionally hides the toolbar "New" button on read-only bases (some teams want append-only, others a hard lock). Built on the community read-only CSS approach, scoped per base and kept in sync as bases open.
 

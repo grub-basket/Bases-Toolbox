@@ -88,6 +88,14 @@ export function toPropertyName(str: string): string {
 
 export function guessType(header: string, samples: string[]): CsvType {
   const h = header.toLowerCase();
+  const nonEmpty = samples.filter((v) => v.trim() !== "");
+  // External URLs must NOT become "link": Obsidian's link type only resolves
+  // internal [[wikilinks]], so `[[https://…]]` renders as a broken internal
+  // link. Keep URL columns as text — the URL stays intact and clickable in
+  // reading view. (This also drops the old "url" header → link mapping.)
+  const looksUrl =
+    nonEmpty.length > 0 && nonEmpty.every((v) => /^https?:\/\/\S+$/i.test(v.trim()));
+  if (looksUrl) return "text";
   if (h.includes("date") || h.includes("time")) return "date";
   if (
     h.includes("amount") ||
@@ -98,10 +106,43 @@ export function guessType(header: string, samples: string[]): CsvType {
     h.includes("acct")
   )
     return "number";
-  if (h.includes("link") || h.includes("url")) return "link";
-  const nonEmpty = samples.filter((v) => v !== "");
+  // "link" only for genuine internal-link columns (values are note names);
+  // url-valued columns already returned "text" above.
+  if (h.includes("link")) return "link";
   if (nonEmpty.length && nonEmpty.every((v) => !Number.isNaN(Number(v)))) return "number";
   return "text";
+}
+
+/**
+ * Parses a "list" paste into rows/columns: records are separated by one or more
+ * blank lines, and each record's non-empty lines become fields (columns) by
+ * position. Unlike CSV there's no header row — headers are synthetic ("Column
+ * 1..N") and every record is a data row. Column count is the most COMMON field
+ * count across records, so an occasional stray line doesn't spawn a phantom
+ * column; short records are padded, long ones truncated.
+ *
+ * Example (Chrome tab-export style): "Title\nhttps://…\n\nTitle2\nhttps://…"
+ * → 2 columns, one row per title/URL pair.
+ */
+export function parseList(text: string): { headers: string[]; rows: string[][] } {
+  const blocks = text
+    .split(/\r?\n[ \t]*\r?\n+/) // blank (or whitespace-only) line(s) separate records
+    .map((b) => b.split(/\r?\n/).map((l) => l.trim()).filter(Boolean))
+    .filter((b) => b.length > 0);
+  if (!blocks.length) return { headers: [], rows: [] };
+  const freq = new Map<number, number>();
+  for (const b of blocks) freq.set(b.length, (freq.get(b.length) ?? 0) + 1);
+  let cols = 1;
+  let best = 0;
+  for (const [n, count] of freq) {
+    if (count > best || (count === best && n > cols)) {
+      best = count;
+      cols = n;
+    }
+  }
+  const headers = Array.from({ length: cols }, (_, i) => `Column ${i + 1}`);
+  const rows = blocks.map((b) => Array.from({ length: cols }, (_, i) => b[i] ?? ""));
+  return { headers, rows };
 }
 
 const MONTHS: Record<string, number> = {

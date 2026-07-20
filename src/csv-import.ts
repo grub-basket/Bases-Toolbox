@@ -9,9 +9,12 @@ import {
   countAmbiguousDates,
   guessType,
   parseCSV,
+  parseList,
   sanitizeFilename,
   toPropertyName,
 } from "./csv-core";
+
+type InputFormat = "auto" | "table" | "list";
 
 interface ColumnConfig {
   header: string;
@@ -36,6 +39,7 @@ class CsvImportPanel {
   /** Column config survives data-row edits; only a header change rebuilds it. */
   private lastHeaderKey = "";
   private previewRow = 0;
+  private inputFormat: InputFormat = "auto";
 
   private taEl: HTMLTextAreaElement | null = null;
   private mappingEl: HTMLElement | null = null;
@@ -52,6 +56,7 @@ class CsvImportPanel {
   private refreshBaseHint: () => void = () => {};
   private selectAllEl: HTMLInputElement | null = null;
   private importBtn: ButtonComponent | null = null;
+  private progressEl: HTMLProgressElement | null = null;
   private running = false;
 
   constructor(plugin: BasesToolboxPlugin, onDone?: () => void) {
@@ -66,10 +71,27 @@ class CsvImportPanel {
   render(contentEl: HTMLElement): void {
     const ta = contentEl.createEl("textarea", {
       cls: "bases-toolbox-csv-input",
-      attr: { placeholder: "Paste CSV/TSV here, or drop a file below…" },
+      attr: { placeholder: "Paste a CSV/TSV table, or a list (records separated by blank lines), or drop a file below…" },
     });
     this.taEl = ta;
     ta.addEventListener("input", () => this.parse(ta.value));
+
+    new Setting(contentEl)
+      .setName("Input format")
+      .setDesc(
+        "Table = CSV/TSV with a header row. List = records separated by blank lines (each record's lines become columns you name below) — e.g. pasted title/URL pairs."
+      )
+      .addDropdown((dd) => {
+        dd.addOption("auto", "Auto-detect");
+        dd.addOption("table", "Table (CSV / TSV)");
+        dd.addOption("list", "List (blank-line records)");
+        dd.setValue(this.inputFormat);
+        dd.onChange((v) => {
+          this.inputFormat = v as InputFormat;
+          this.lastHeaderKey = ""; // force a column rebuild for the new format
+          if (this.taEl) this.parse(this.taEl.value);
+        });
+      });
 
     // A single drop zone that's also click-to-choose — the usual pattern.
     const drop = contentEl.createDiv({ cls: "bases-toolbox-csv-drop" });
@@ -195,6 +217,10 @@ class CsvImportPanel {
       b.setButtonText("Import").setCta().setDisabled(true).onClick(() => void this.doImport());
       this.importBtn = b;
     });
+
+    // Progress bar, shown only while an import runs.
+    this.progressEl = contentEl.createEl("progress", { cls: "bases-toolbox-csv-progress" });
+    this.progressEl.hide();
   }
 
   /** Loads a dropped/picked file into the textarea, rejecting binary spreadsheets. */
@@ -215,29 +241,56 @@ class CsvImportPanel {
     reader.readAsText(file);
   }
 
+  /** Whether to parse the current text as a blank-line list vs a CSV/TSV table. */
+  private useListFormat(trimmed: string): boolean {
+    if (this.inputFormat === "list") return true;
+    if (this.inputFormat === "table") return false;
+    // Auto: a list when the delimiter sniff finds no real table (single column)
+    // AND the text has blank-line-separated blocks.
+    const csvCols = parseCSV(trimmed)[0]?.length ?? 1;
+    return csvCols < 2 && /\r?\n[ \t]*\r?\n/.test(trimmed);
+  }
+
   private parse(text: string): void {
     const trimmed = text.trim();
     if (!trimmed) {
       this.lastHeaderKey = "";
-      this.setStatus("Waiting for CSV input…", false);
+      this.setStatus("Waiting for input…", false);
       return;
     }
-    const rows = parseCSV(trimmed);
-    if (rows.length < 2) {
-      this.lastHeaderKey = "";
-      this.setStatus("Need at least a header row and one data row.", false);
-      return;
+
+    const list = this.useListFormat(trimmed);
+    let headers: string[];
+    let rows: string[][];
+    if (list) {
+      ({ headers, rows } = parseList(trimmed));
+      if (!rows.length) {
+        this.lastHeaderKey = "";
+        this.setStatus("No list records found — separate records with a blank line.", false);
+        return;
+      }
+    } else {
+      const parsed = parseCSV(trimmed);
+      if (parsed.length < 2) {
+        this.lastHeaderKey = "";
+        this.setStatus("Need at least a header row and one data row.", false);
+        return;
+      }
+      headers = parsed[0];
+      rows = parsed.slice(1);
     }
-    this.headers = rows[0];
-    this.rows = rows.slice(1);
-    const headerKey = JSON.stringify(this.headers);
+
+    this.headers = headers;
+    this.rows = rows;
+    // Key includes the mode so flipping table↔list rebuilds the column config.
+    const headerKey = JSON.stringify([list, headers]);
     if (headerKey !== this.lastHeaderKey) {
       this.lastHeaderKey = headerKey;
-      this.columns = this.headers.map((h, i) => ({
+      this.columns = headers.map((h, i) => ({
         header: h,
         include: true,
         propName: toPropertyName(h),
-        type: guessType(h, this.rows.slice(0, 5).map((r) => r[i] ?? "")),
+        type: guessType(h, rows.slice(0, 5).map((r) => r[i] ?? "")),
       }));
       this.filenameCol = 0;
       this.renderMapping();
@@ -249,11 +302,13 @@ class CsvImportPanel {
       if (col.type !== "date") return total;
       return total + countAmbiguousDates(this.rows.map((r) => r[i] ?? ""));
     }, 0);
+    const ambiguousSuffix = ambiguous
+      ? ` ⚠ ${ambiguous} ambiguous date${ambiguous === 1 ? "" : "s"} (M/D vs D/M) will be read as US M/D/YYYY.`
+      : "";
     this.setStatus(
-      `${this.rows.length} row${this.rows.length === 1 ? "" : "s"} detected.` +
-        (ambiguous
-          ? ` ⚠ ${ambiguous} ambiguous date${ambiguous === 1 ? "" : "s"} (M/D vs D/M) will be read as US M/D/YYYY.`
-          : ""),
+      list
+        ? `${rows.length} record${rows.length === 1 ? "" : "s"} detected as a list (${headers.length} column${headers.length === 1 ? "" : "s"}). Name the columns below.${ambiguousSuffix}`
+        : `${rows.length} row${rows.length === 1 ? "" : "s"} detected.${ambiguousSuffix}`,
       true
     );
   }
@@ -282,6 +337,32 @@ class CsvImportPanel {
     const root = this.mappingEl;
     if (!root) return;
     root.empty();
+
+    // Bulk type controls: set every column to one type at once, or re-run the
+    // auto-detection (which doubles as "undo" a bulk override).
+    const bulk = root.createDiv({ cls: "bases-toolbox-csv-bulk" });
+    bulk.createSpan({ text: "Set all columns to:" });
+    const bulkSel = bulk.createEl("select");
+    bulkSel.createEl("option", { text: "(type…)", value: "" });
+    for (const t of CSV_TYPES) bulkSel.createEl("option", { text: t, value: t });
+    bulkSel.value = "";
+    bulkSel.addEventListener("change", () => {
+      if (!bulkSel.value) return;
+      const t = bulkSel.value as CsvType;
+      this.columns.forEach((c) => (c.type = t));
+      this.renderMapping();
+      this.renderPreview();
+    });
+    const redetect = bulk.createEl("button", { text: "Re-detect types" });
+    redetect.setAttribute("aria-label", "Re-run automatic type detection on every column");
+    redetect.addEventListener("click", () => {
+      this.columns.forEach((c, i) => {
+        c.type = guessType(c.header, this.rows.slice(0, 5).map((r) => r[i] ?? ""));
+      });
+      this.renderMapping();
+      this.renderPreview();
+    });
+
     const table = root.createEl("table", { cls: "bases-toolbox-csv-table" });
     const head = table.createEl("tr");
     const selectAllTh = head.createEl("th");
@@ -411,6 +492,19 @@ class CsvImportPanel {
       return;
     }
     this.running = true;
+    // Disable the button + show progress so a slow import can't be double-fired.
+    this.importBtn?.setDisabled(true);
+    const total = this.rows.length;
+    if (this.progressEl) {
+      this.progressEl.max = total;
+      this.progressEl.value = 0;
+      this.progressEl.show();
+    }
+    const progressNotice = new Notice(`[Bases Toolbox] Importing 0/${total}…`, 0);
+    const reportProgress = (done: number) => {
+      if (this.progressEl) this.progressEl.value = done;
+      progressNotice.setMessage(`[Bases Toolbox] Importing ${done}/${total}…`);
+    };
     try {
       const folder = normalizePath(this.folderEl?.value.trim() || "CSV Import");
       if (!(this.app.vault.getAbstractFileByPath(folder) instanceof TFolder)) {
@@ -459,15 +553,18 @@ class CsvImportPanel {
           await this.app.vault.create(path, content);
           created++;
         }
+        const done = idx + 1;
+        if (done === total || done % 10 === 0) reportProgress(done);
       }
 
       let baseNote = "";
+      let basePath = "";
       if (this.makeBase) {
         const folderName = folder.split("/").pop() ?? folder;
         // Blank name → default to the folder name. Sanitise either way so a typed
         // name can't smuggle in path separators or illegal characters.
         const baseName = sanitizeFilename(this.baseNameEl?.value.trim() || folderName) || folderName;
-        const basePath = `${folder}/${baseName}.base`;
+        basePath = `${folder}/${baseName}.base`;
         // Non-destructive: if a base with this name already exists in the folder,
         // reuse it (the imported notes join it via the folder filter) rather than
         // overwrite it or spawn a "-2" duplicate. Just report which happened.
@@ -486,18 +583,36 @@ class CsvImportPanel {
           baseNote = `, base "${baseName}"`;
         }
       }
-      new Notice(
+      progressNotice.hide();
+      const summary =
         `Imported ${created} note${created === 1 ? "" : "s"} into "${folder}"` +
-          (overwritten ? `, overwrote ${overwritten}` : "") +
-          (skipped ? `, skipped ${skipped}` : "") +
-          baseNote +
-          "."
-      );
+        (overwritten ? `, overwrote ${overwritten}` : "") +
+        (skipped ? `, skipped ${skipped}` : "") +
+        baseNote +
+        ".";
+      const baseFile = basePath ? this.app.vault.getAbstractFileByPath(basePath) : null;
+      if (baseFile instanceof TFile) {
+        // Persistent-ish notice with a jump-to button so you can open the base
+        // straight from the completion toast.
+        new Notice(
+          createFragment((f) => {
+            f.createSpan({ text: `[Bases Toolbox] ${summary} ` });
+            const btn = f.createEl("button", { cls: "bases-toolbox-notice-btn", text: "Open base" });
+            btn.addEventListener("click", () => void this.app.workspace.getLeaf(true).openFile(baseFile));
+          }),
+          15000
+        );
+      } else {
+        new Notice(`[Bases Toolbox] ${summary}`);
+      }
       this.onDone?.();
     } catch (e) {
-      new Notice(`Import failed: ${e instanceof Error ? e.message : e}`);
+      progressNotice.hide();
+      new Notice(`[Bases Toolbox] Import failed: ${e instanceof Error ? e.message : e}`);
     } finally {
       this.running = false;
+      this.importBtn?.setDisabled(false);
+      this.progressEl?.hide();
     }
   }
 }
