@@ -2,7 +2,7 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
-## Unreleased
+## 0.1.46
 - **Importer — update existing notes.** A new collision policy, **"Update the note — merge properties, keep the body,"** maps the imported columns onto existing notes instead of creating -2 duplicates or overwriting: re-import a sheet with new columns (same folder + base) and the new properties are merged into each matching note. Blank cells never clear an existing value, note bodies are untouched, the reused base gains the new columns automatically, and the whole run is undoable from the bulk file change history.
 - **Literal Enter (opt-in).** Stops the value-suggestion popup from replacing what you typed: with the popup open, Enter commits your exact text instead of the highlighted suggestion — unless you arrow-navigated to a suggestion first, which still accepts it. Applies to property fields and Bases cells. Enable under Settings → "Literal Enter".
 - **Plugin data is no longer one big file.** Settings, conditional-formatting rules, allowed values, forks, ignore lists and the undo history now live in separate files under the plugin folder, so `data.json` stays small and changing a setting no longer rewrites your entire undo history. Your existing data is migrated automatically on first load, after a backup of the original `data.json` is written alongside it.
