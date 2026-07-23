@@ -277,6 +277,7 @@ export const HISTORY_DOMAINS = [
   "rollup",
   "inline-fields",
   "metadata-stamp",
+  "import",
   "other",
 ] as const;
 
@@ -299,5 +300,6 @@ export function historyDomain(source?: string | null): HistoryDomain {
   if (s.includes("rollup")) return "rollup";
   if (s.includes("inline")) return "inline-fields";
   if (s.includes("metadata") || s.includes("stamp")) return "metadata-stamp";
+  if (s.includes("import")) return "import";
   return "other";
 }

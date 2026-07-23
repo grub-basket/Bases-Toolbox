@@ -1,6 +1,8 @@
-import { ButtonComponent, Modal, Notice, Setting, TFile, TFolder, normalizePath, stringifyYaml } from "obsidian";
+import { ButtonComponent, Modal, Notice, Setting, TFile, TFolder, normalizePath, parseYaml, stringifyYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { folderPaths } from "./csv-export";
+import { findKey } from "./scan";
+import { ChangeRecord } from "./types";
 import { ListInputSuggest } from "./suggest";
 import {
   CSV_TYPES,
@@ -23,7 +25,7 @@ interface ColumnConfig {
   type: CsvType;
 }
 
-type CollisionPolicy = "suffix" | "skip" | "overwrite";
+type CollisionPolicy = "suffix" | "skip" | "overwrite" | "update";
 
 /**
  * The CSV-import UI, rendered into any container (a modal or a workspace tab).
@@ -160,11 +162,12 @@ class CsvImportPanel {
 
     new Setting(contentEl)
       .setName("If a note already exists")
-      .setDesc("Collision policy against existing vault notes and duplicate rows.")
+      .setDesc("Collision policy against existing vault notes and duplicate rows. “Update” maps the imported columns onto the existing note\u2019s properties (blank cells never clear a value, the body is untouched) — re-import a sheet with new columns to enrich notes in place. Undoable from history.")
       .addDropdown((dd) => {
         dd.addOption("suffix", "Create with -2, -3 suffix");
         dd.addOption("skip", "Skip the row");
         dd.addOption("overwrite", "Overwrite the note");
+        dd.addOption("update", "Update the note — merge properties, keep the body");
         dd.setValue(this.collision);
         dd.onChange((v) => (this.collision = v as CollisionPolicy));
       });
@@ -422,6 +425,69 @@ class CsvImportPanel {
     this.updateSelectAll();
   }
 
+  /**
+   * Update-mode merge: maps the included columns onto an existing note's
+   * frontmatter. The body is never touched, a blank cell never clears an
+   * existing value, and every change is recorded so the whole import is
+   * revertible from history. Existing keys match case-insensitively (findKey),
+   * same as the rest of the plugin's frontmatter surgery.
+   */
+  private async mergeIntoExisting(file: TFile, row: string[]): Promise<ChangeRecord[]> {
+    const changes: ChangeRecord[] = [];
+    await this.app.fileManager.processFrontMatter(file, (fm) => {
+      for (const [i, col] of this.columns.entries()) {
+        if (!col.include || !col.propName) continue;
+        const value = cellToValue(row[i] ?? "", col.type);
+        if (value === null) continue; // blank cell → leave whatever is there
+        const key = findKey(fm, col.propName) ?? col.propName;
+        const cur = Object.prototype.hasOwnProperty.call(fm, key) ? fm[key] : undefined;
+        if (JSON.stringify(cur) === JSON.stringify(value)) continue; // already right
+        changes.push({
+          path: file.path,
+          property: col.propName,
+          oldValue: cur === undefined ? undefined : Array.isArray(cur) ? cur.slice() : cur,
+          newValue: Array.isArray(value) ? value.slice() : value,
+          ...(cur === undefined ? { created: true } : {}),
+        });
+        fm[key] = value;
+      }
+    });
+    return changes;
+  }
+
+  /**
+   * Update-mode base refresh: appends the included property columns to the
+   * reused base's views so newly-imported columns actually show. Only views
+   * with an explicit `order` are touched (fabricating one would hide the
+   * other columns), and both bare and `note.`-prefixed spellings are treated
+   * as already-present. Returns how many columns were added.
+   */
+  private async addColumnsToBase(basePath: string): Promise<number> {
+    const baseFile = this.app.vault.getAbstractFileByPath(basePath);
+    if (!(baseFile instanceof TFile)) return 0;
+    let added = 0;
+    try {
+      const doc = (parseYaml(await this.app.vault.read(baseFile)) ?? {}) as Record<string, unknown>;
+      const views = (Array.isArray(doc.views) ? doc.views : []) as Record<string, unknown>[];
+      const props = this.columns.filter((c) => c.include && c.propName).map((c) => c.propName);
+      const addedNames = new Set<string>();
+      for (const view of views) {
+        if (!Array.isArray(view.order)) continue;
+        const order = view.order as unknown[];
+        for (const p of props) {
+          if (order.includes(p) || order.includes(`note.${p}`)) continue;
+          order.push(p);
+          addedNames.add(p);
+        }
+      }
+      if (addedNames.size) await this.app.vault.modify(baseFile, stringifyYaml(doc));
+      added = addedNames.size;
+    } catch (e) {
+      console.error("[Bases Toolbox] Could not add imported columns to the base.", e);
+    }
+    return added;
+  }
+
   /** Builds one row's frontmatter object from the current column config. */
   private rowToFm(row: string[]): Record<string, unknown> {
     const fm: Record<string, unknown> = {};
@@ -518,6 +584,8 @@ class CsvImportPanel {
       let created = 0;
       let overwritten = 0;
       let skipped = 0;
+      let updated = 0;
+      const updateChanges: ChangeRecord[] = [];
       for (const [idx, row] of this.rows.entries()) {
         const base = sanitizeFilename(row[this.filenameCol] ?? `note-${idx + 1}`);
         let name = base;
@@ -530,8 +598,25 @@ class CsvImportPanel {
             skipped++;
             continue;
           }
+          if (this.collision === "update") {
+            // Map the imported columns onto the existing note's properties —
+            // the enrich/re-import path. Body untouched; falls through to a
+            // normal create when the row has no existing note yet.
+            const existing = this.app.vault.getAbstractFileByPath(`${folder}/${name}.md`);
+            if (existing instanceof TFile) {
+              const rowChanges = await this.mergeIntoExisting(existing, row);
+              if (rowChanges.length) {
+                updateChanges.push(...rowChanges);
+                updated++;
+              }
+              usedNames.add(name);
+              const doneU = idx + 1;
+              if (doneU === total || doneU % 10 === 0) reportProgress(doneU);
+              continue;
+            }
+          }
           if (this.collision === "overwrite") existingHit = true;
-          else {
+          else if (this.collision !== "update") {
             let n = 2;
             while (taken(`${base}-${n}`)) n++;
             name = `${base}-${n}`;
@@ -569,7 +654,12 @@ class CsvImportPanel {
         // reuse it (the imported notes join it via the folder filter) rather than
         // overwrite it or spawn a "-2" duplicate. Just report which happened.
         if (this.app.vault.getAbstractFileByPath(basePath)) {
-          baseNote = `, base "${baseName}" already existed`;
+          // Update mode: the whole point is re-importing new columns onto an
+          // existing folder+base, so surface those columns in the base too.
+          const added = this.collision === "update" ? await this.addColumnsToBase(basePath) : 0;
+          baseNote = added
+            ? `, base "${baseName}" gained ${added} column${added === 1 ? "" : "s"}`
+            : `, base "${baseName}" already existed`;
         } else {
           const order = [
             "file.name",
@@ -583,9 +673,21 @@ class CsvImportPanel {
           baseNote = `, base "${baseName}"`;
         }
       }
+      // Updates are undoable in one step from the bulk file change history.
+      if (updateChanges.length) {
+        await this.plugin.addHistoryEntry({
+          property: "CSV update",
+          find: null,
+          replace: `merged imported columns into ${updated} note${updated === 1 ? "" : "s"}`,
+          timestamp: Date.now(),
+          changes: updateChanges,
+          source: "csv import update",
+        });
+      }
       progressNotice.hide();
       const summary =
         `Imported ${created} note${created === 1 ? "" : "s"} into "${folder}"` +
+        (updated ? `, updated ${updated} existing` : "") +
         (overwritten ? `, overwrote ${overwritten}` : "") +
         (skipped ? `, skipped ${skipped}` : "") +
         baseNote +
