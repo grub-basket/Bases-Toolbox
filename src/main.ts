@@ -67,6 +67,7 @@ import { HistoryView, VIEW_TYPE_HISTORY, openHistoryView } from "./history-view"
 import { InlineFieldMigratorModal } from "./inline-fields";
 import { DuplicateFinderModal, DuplicateFinderView, VIEW_TYPE_DUPLICATE_FINDER, openDuplicateFinderView, startMerge } from "./merge";
 import { installNumberGuard } from "./number-guard";
+import { installLiteralEnter } from "./literal-enter";
 import { PropertyIndexView, VIEW_TYPE_PROPERTY_INDEX } from "./property-index";
 import {
   ForkPropertyPicker,
@@ -99,6 +100,7 @@ export default class BasesToolboxPlugin extends Plugin {
     await this.loadPluginData();
 
     installNumberGuard(this);
+    installLiteralEnter(this);
     installEmbedOptions(this);
     installCellZoomTracking(this);
     installConditionalFormatting(this);
@@ -750,6 +752,18 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Literal Enter (don't let suggestions steal your input)")
+      .setDesc(
+        "When the value-suggestion popup is open, Enter commits exactly what you typed instead of the highlighted suggestion. Picking a suggestion with the arrow keys first still works. Applies to property fields and Bases cells."
+      )
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.literalEnter).onChange(async (v) => {
+          this.plugin.settings.literalEnter = v;
+          await this.plugin.savePluginData();
+        })
+      );
+
+    new Setting(containerEl)
       .setName("Multiline list cells")
       .setDesc(
         "In Bases table views, show list-property values stacked one per line instead of a single row of pills. Long lists scroll inside the cell — pair with the Bases row height option for taller rows."
@@ -1187,6 +1201,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           ["Toggle read-only for this base / all bases", "Lock a base (or every base) so its cells can't be edited — guards against accidental edits and deletes. Links and the date-picker stay clickable. Manage the list under Settings → Read-only bases."],
           ["Add or fix a base formula column", "Add a computed (formula) column to a base by writing it into the .base file, and repair Obsidian's empty-formula glitch — a blank formula the Bases UI locks you out of editing. Never writes an empty formula."],
           ["Toggle number guard", "Stops number properties from changing when you accidentally press arrow keys or scroll over them."],
+          ["Literal Enter", "Stops the value-suggestion popup from replacing what you typed: Enter commits your exact text unless you arrow-navigated to a suggestion first. Enable under Settings → Literal Enter."],
           ["Toggle digits-only typing", "On number properties, ignores keystrokes that aren't digits, so a stray letter can't sneak in."],
           ["Toggle multiline list cells", "In Bases tables, stacks a list property's values one per line instead of a single row of pills."],
           ["Open Bases Toolbox launcher / property index / settings", "Shortcuts that open the launcher, the property index, or these settings."],

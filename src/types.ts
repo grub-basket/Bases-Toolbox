@@ -123,6 +123,10 @@ export interface BasesToolboxSettings {
    * bases, so rows can't be added either. Separate opt-in — some teams want
    * append-only bases, others want a hard lock. */
   readOnlyBlockNewRow: boolean;
+  /** Literal Enter: with the value-suggestion popup open, Enter commits exactly
+   * what was typed instead of the highlighted suggestion — unless the user
+   * arrow-navigated to a suggestion first (deliberate pick still works). */
+  literalEnter: boolean;
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -155,6 +159,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   readOnlyAllBases: false,
   readOnlyBases: [],
   readOnlyBlockNewRow: false,
+  literalEnter: false,
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */
