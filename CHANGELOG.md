@@ -2,6 +2,9 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.49
+- **New — Audit aliased internal links.** A command/tool ("Audit aliased internal links in properties") that scans every note's frontmatter for internal links written with an alias (`[[Note|Shown As]]`), grouped by the note they point to. It flags any target shown more than one way — different aliases, or aliased in some values and plain in others — since those read as different values in Bases and are the ones worth standardizing. Read-only: it surfaces them (with links to each occurrence); it doesn't change anything.
+
 ## 0.1.48
 - **Importer — never lose an in-progress import.** As you paste and set up an import, the pasted data and the whole mapping (folder, types, renamed columns, options) are saved to a draft automatically. If Obsidian closes or crashes, a notice on next launch flags the recoverable import, and reopening the importer shows a **Restore** bar to bring it all back (with a confirm if you've already started a new import, so nothing is clobbered). The draft survives a full restart and clears itself once an import succeeds.
 

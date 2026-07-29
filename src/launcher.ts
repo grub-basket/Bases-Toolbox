@@ -47,6 +47,7 @@ const VIEWS: ViewFeature[] = [
 const TOOLS: ToolFeature[] = [
   { name: "Convert / fork a property", desc: "Normalize dates, (un)wrap wikilinks", icon: "git-fork", command: "fork-property" },
   { name: "Audit pinned allowed values", desc: "Find values outside an allowed list", icon: "pin", command: "audit-allowed-values" },
+  { name: "Audit aliased links", desc: "Find property links with aliases to standardize", icon: "link", command: "audit-aliased-links" },
   { name: "Compute rollup", desc: "Aggregate linked notes into a property", icon: "sigma", command: "compute-rollup" },
   { name: "Migrate inline fields", desc: "Convert “key:: value” to frontmatter", icon: "list-plus", command: "migrate-inline-fields" },
   { name: "Merge note into another", desc: "Combine two notes + their properties", icon: "merge", command: "merge-note" },

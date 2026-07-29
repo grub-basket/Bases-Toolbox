@@ -38,6 +38,7 @@ import { installEmbedOptions } from "./embed-options";
 import { generateEmbedReference } from "./embed-reference";
 import { openFilterToggle } from "./filter-toggle";
 import { openFormulaColumn } from "./formula-column";
+import { AliasedLinkAuditModal } from "./link-alias-audit";
 import {
   ReadOnlyBasePicker,
   applyReadOnly,
@@ -189,6 +190,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "format-doctor",
       name: "Property format doctor",
       callback: () => void openFormatDoctor(this),
+    });
+
+    this.addCommand({
+      id: "audit-aliased-links",
+      name: "Audit aliased internal links in properties",
+      callback: () => new AliasedLinkAuditModal(this).open(),
     });
 
     this.addCommand({
@@ -1214,6 +1221,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           ["Export base results as CSV", "Exports the rows the open base currently shows to a CSV file."],
           ["Bulk edit properties of base results", "Set, append to, remove from, or clear a property across every note the open base returns — in one action."],
           ["Zoom into focused cell", "Opens a large editor for the Bases cell you're on, for comfortable editing of long values."],
+          ["Audit aliased internal links in properties", "Finds property values whose internal links use aliases ([[Note|Alias]]) and groups them by target, flagging any note that's shown more than one way (different aliases, or aliased in some values and plain in others) — the ones worth standardizing. Read-only."],
           ["Toggle base filters", "Temporarily disable (and later re-enable) a base's filters without editing the .base file."],
           ["Toggle read-only for this base / all bases", "Lock a base (or every base) so its cells can't be edited — guards against accidental edits and deletes. Links and the date-picker stay clickable. Manage the list under Settings → Read-only bases."],
           ["Add or fix a base formula column", "Add a computed (formula) column to a base by writing it into the .base file, and repair Obsidian's empty-formula glitch — a blank formula the Bases UI locks you out of editing. Never writes an empty formula."],

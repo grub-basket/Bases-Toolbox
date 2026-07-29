@@ -1317,6 +1317,30 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   display: none;
 }
 
+/* Aliased-link audit. */
+.bases-toolbox-alias-modal { width: min(760px, 90vw); }
+.bases-toolbox-alias-group {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-2-3) var(--size-4-2);
+  margin: var(--size-2-3) 0;
+}
+.bases-toolbox-alias-head {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  margin-bottom: var(--size-2-2);
+}
+.bases-toolbox-alias-warn { display: inline-flex; color: var(--text-warning); }
+.bases-toolbox-alias-warn svg { width: 15px; height: 15px; }
+.bases-toolbox-alias-target { font-weight: var(--font-semibold); font-family: var(--font-monospace); }
+.bases-toolbox-alias-form {
+  padding: var(--size-2-1) 0 var(--size-2-1) var(--size-4-2);
+  border-top: 1px solid var(--background-modifier-border);
+}
+.bases-toolbox-alias-formname { font-size: var(--font-ui-small); }
+.bases-toolbox-alias-occs { display: flex; flex-direction: column; padding-left: var(--size-4-3); }
+
 /* CSV importer: restore-unfinished-import bar. */
 .bases-toolbox-import-restore {
   display: flex;
