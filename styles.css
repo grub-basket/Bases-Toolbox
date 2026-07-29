@@ -1329,8 +1329,33 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   width: 100%;
   margin-top: var(--size-2-2);
 }
+/* Icon dropdown for choosing a property type (native <option> can't hold SVGs). */
+.bases-toolbox-csv-type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2-1);
+  padding: 2px var(--size-2-2);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-form-field);
+  cursor: pointer;
+  font-size: var(--font-ui-small);
+  white-space: nowrap;
+}
+.bases-toolbox-csv-type:hover { border-color: var(--interactive-accent); }
+.bases-toolbox-csv-type-icon,
+.bases-toolbox-csv-type-chev { display: inline-flex; color: var(--text-muted); }
+.bases-toolbox-csv-type-icon svg { width: 15px; height: 15px; }
+.bases-toolbox-csv-type-chev svg { width: 13px; height: 13px; }
+.bases-toolbox-csv-type-label { text-transform: capitalize; }
+/* Notice action button: sits on its own line, flush left, with clear breathing
+   room above it separating it from the message text. (Notification styling
+   convention for this plugin — buttons are a distinct block, not inline with
+   the sentence.) */
 .bases-toolbox-notice-btn {
-  margin-left: var(--size-2-2);
+  display: block;
+  margin-top: var(--size-4-4);
+  margin-left: 0;
 }
 
 /* Formula expression inputs: monospace + roomy, they hold code. */

@@ -86,30 +86,73 @@ export function toPropertyName(str: string): string {
   );
 }
 
+/**
+ * Cleans a pasted cell: strips zero-width characters and the BOM, turns
+ * non-breaking spaces into ordinary spaces, and trims. Spreadsheet copies
+ * (especially from Excel) routinely carry these, and a stray U+00A0 or U+200B is
+ * exactly what makes a column of dates fail to detect and refuse to normalize.
+ */
+export function cleanCell(raw: string): string {
+  return raw
+    .replace(/[\u200B-\u200D\uFEFF]/g, "") // zero-width space/joiners + BOM
+    .replace(/\u00A0/g, " ") // non-breaking space -> normal space
+    .trim();
+}
+
+/** A strict, non-identifier number: plain or thousands-grouped, no leading zero
+ * (0.x is fine), not so long it loses precision. Rejects "A123", "1e5", "007",
+ * "12-34" — the alphanumeric IDs and codes that must stay text. */
+function isPlainNumber(v: string): boolean {
+  if (!/^-?(\d{1,3}(,\d{3})+|\d+)(\.\d+)?$/.test(v)) return false;
+  const digits = v.replace(/[^\d]/g, "");
+  if (digits.length > 15) return false; // beyond safe integer precision → keep as text
+  const intPart = v.replace(/^-/, "").replace(/,/g, "").split(".")[0];
+  if (intPart.length > 1 && intPart.startsWith("0")) return false; // "007", zip codes
+  return true;
+}
+
+/** True when the value parses as a real calendar date — NOT a bare integer,
+ * which normalizeDate would (mis)read as an Excel serial. */
+function looksLikeDate(v: string): boolean {
+  if (/^\d+$/.test(v)) return false;
+  return /^\d{4}-\d{2}-\d{2}/.test(normalizeDate(v));
+}
+
 export function guessType(header: string, samples: string[]): CsvType {
   const h = header.toLowerCase();
-  const nonEmpty = samples.filter((v) => v.trim() !== "");
+  const nonEmpty = samples.map(cleanCell).filter((v) => v !== "");
+
   // External URLs must NOT become "link": Obsidian's link type only resolves
   // internal [[wikilinks]], so `[[https://…]]` renders as a broken internal
-  // link. Keep URL columns as text — the URL stays intact and clickable in
-  // reading view. (This also drops the old "url" header → link mapping.)
-  const looksUrl =
-    nonEmpty.length > 0 && nonEmpty.every((v) => /^https?:\/\/\S+$/i.test(v.trim()));
-  if (looksUrl) return "text";
+  // link. Keep URL columns as text — the URL stays intact in reading view.
+  if (nonEmpty.length > 0 && nonEmpty.every((v) => /^https?:\/\/\S+$/i.test(v))) return "text";
+
+  // Identifier-ish headers stay TEXT even when values look numeric — IDs, codes,
+  // zips and phone numbers lose leading zeros / precision as numbers.
+  if (/\b(id|code|sku|isbn|upc|zip|postal|phone|serial|barcode|ref|reference)\b/.test(h))
+    return "text";
+
+  // Value-based date detection (header-independent) so an "Effective"/"Due"
+  // column of real dates is caught, not just ones literally named "date".
+  if (nonEmpty.length > 0 && nonEmpty.every(looksLikeDate)) return "date";
   if (h.includes("date") || h.includes("time")) return "date";
+
   if (
     h.includes("amount") ||
     h.includes("balance") ||
     h.includes("total") ||
-    h.includes("number") ||
-    h.includes("num") ||
-    h.includes("acct")
+    h.includes("price") ||
+    h.includes("qty") ||
+    h.includes("quantity") ||
+    h.includes("count")
   )
     return "number";
   // "link" only for genuine internal-link columns (values are note names);
   // url-valued columns already returned "text" above.
   if (h.includes("link")) return "link";
-  if (nonEmpty.length && nonEmpty.every((v) => !Number.isNaN(Number(v)))) return "number";
+  // Numeric ONLY when every value is a clean, non-identifier number — so
+  // alphanumeric IDs ("A1234"), codes and leading-zero values stay text.
+  if (nonEmpty.length > 0 && nonEmpty.every(isPlainNumber)) return "number";
   return "text";
 }
 
@@ -193,12 +236,14 @@ export function normalizeDate(val: string): string {
 
 /** Converts one CSV cell to a frontmatter value for the chosen type. */
 export function cellToValue(raw: string, type: CsvType): unknown {
-  const val = raw.trim();
+  // Clean first: strip the invisible characters spreadsheet copies carry, so a
+  // pasted date/number isn't left unparseable by a hidden U+00A0 / U+200B.
+  const val = cleanCell(raw);
   if (val === "") return null;
   switch (type) {
     case "number": {
-      const n = Number(val);
-      return Number.isNaN(n) ? val : n;
+      const parsed = Number(val.replace(/,/g, "")); // tolerate thousands separators
+      return Number.isNaN(parsed) ? val : parsed;
     }
     case "boolean":
       return ["true", "1", "yes"].includes(val.toLowerCase());
