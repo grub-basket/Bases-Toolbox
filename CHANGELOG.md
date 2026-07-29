@@ -2,6 +2,9 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.48
+- **Importer — never lose an in-progress import.** As you paste and set up an import, the pasted data and the whole mapping (folder, types, renamed columns, options) are saved to a draft automatically. If Obsidian closes or crashes, a notice on next launch flags the recoverable import, and reopening the importer shows a **Restore** bar to bring it all back (with a confirm if you've already started a new import, so nothing is clobbered). The draft survives a full restart and clears itself once an import succeeds.
+
 ## 0.1.47
 - **Importer — much faster for big imports.** New notes are now written to disk in one fast burst (a bounded worker pool, on desktop) instead of one-at-a-time through Obsidian's slower indexed-create path, after resolving all filenames up front so suffixing stays correct. Obsidian then indexes the notes in the background, so a large base fills in over a few moments rather than blocking the whole time. The import auto-opens the base it creates, and big imports keep a persistent notice up (with the action button restyled onto its own line) explaining the base is still filling in. On mobile it falls back to the standard create path.
 - **Importer — better type detection + type icons.** Pasted cells are cleaned of invisible characters (zero-width spaces, non-breaking spaces, BOM) that spreadsheets carry, so a column of dates from Excel is actually recognized as dates and normalized. Dates are now detected by their values, not just the column name. Columns of IDs/codes with letters, or with leading zeros (like `007`), stay text instead of being turned into numbers. The type dropdown for each column now shows an icon per type.

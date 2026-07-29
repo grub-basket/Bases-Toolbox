@@ -1317,6 +1317,20 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   display: none;
 }
 
+/* CSV importer: restore-unfinished-import bar. */
+.bases-toolbox-import-restore {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  flex-wrap: wrap;
+  padding: var(--size-2-3) var(--size-4-2);
+  margin-bottom: var(--size-4-2);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+  font-size: var(--font-ui-small);
+}
+
 /* CSV importer: bulk type controls + import progress bar. */
 .bases-toolbox-csv-bulk {
   display: flex;

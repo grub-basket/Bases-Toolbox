@@ -1,9 +1,11 @@
-import { ButtonComponent, FileSystemAdapter, Menu, Modal, Notice, Platform, Setting, TFile, TFolder, normalizePath, parseYaml, setIcon, stringifyYaml } from "obsidian";
+import { ButtonComponent, Debouncer, DropdownComponent, FileSystemAdapter, Menu, Modal, Notice, Platform, Setting, TFile, TFolder, ToggleComponent, debounce, normalizePath, parseYaml, setIcon, stringifyYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { folderPaths } from "./csv-export";
 import { findKey } from "./scan";
 import { ChangeRecord } from "./types";
 import { ListInputSuggest } from "./suggest";
+import { JsonStore } from "./store";
+import { ConfirmModal } from "./property-delete";
 import {
   CSV_TYPES,
   CsvType,
@@ -38,6 +40,25 @@ interface ColumnConfig {
 type CollisionPolicy = "suffix" | "skip" | "overwrite" | "update";
 
 /**
+ * An in-progress import saved to disk so a crash / accidental close / mid-import
+ * error doesn't lose the pasted data AND the whole column mapping — the actual
+ * work. Cleared on a successful import; offered back on reopen.
+ */
+interface ImportDraft {
+  text: string;
+  folder: string;
+  template: string;
+  collision: CollisionPolicy;
+  makeBase: boolean;
+  baseName: string;
+  omitEmpty: boolean;
+  inputFormat: InputFormat;
+  filenameCol: number;
+  columns: ColumnConfig[];
+  savedAt: number;
+}
+
+/**
  * The CSV-import UI, rendered into any container (a modal or a workspace tab).
  * `onDone` fires after a successful import — the modal closes; the tab stays.
  */
@@ -70,10 +91,127 @@ class CsvImportPanel {
   private importBtn: ButtonComponent | null = null;
   private progressEl: HTMLProgressElement | null = null;
   private running = false;
+  // Component refs kept so a restored draft can update the visible controls.
+  private collisionDd: DropdownComponent | null = null;
+  private formatDd: DropdownComponent | null = null;
+  private makeBaseToggle: ToggleComponent | null = null;
+  private omitToggle: ToggleComponent | null = null;
+  private restoreBarEl: HTMLElement | null = null;
+  /** Suppresses draft autosave while a restore is being applied. */
+  private restoring = false;
+  private draftStore: JsonStore<Partial<ImportDraft>>;
+  private scheduleDraftSave: Debouncer<[], void>;
 
   constructor(plugin: BasesToolboxPlugin, onDone?: () => void) {
     this.plugin = plugin;
     this.onDone = onDone;
+    this.draftStore = new JsonStore<Partial<ImportDraft>>(plugin, "import-drafts/last.json", () => ({}));
+    this.scheduleDraftSave = debounce(() => void this.saveDraftNow(), 800, false);
+  }
+
+  /** Captures the current form state into the draft file. */
+  private async saveDraftNow(): Promise<void> {
+    if (this.restoring) return;
+    const text = this.taEl?.value ?? "";
+    if (!text.trim()) return; // nothing worth saving
+    const draft: ImportDraft = {
+      text,
+      folder: this.folderEl?.value ?? "",
+      template: this.templateEl?.value ?? "",
+      collision: this.collision,
+      makeBase: this.makeBase,
+      baseName: this.baseNameEl?.value ?? "",
+      omitEmpty: this.omitEmpty,
+      inputFormat: this.inputFormat,
+      filenameCol: this.filenameCol,
+      columns: this.columns,
+      savedAt: Date.now(),
+    };
+    await this.draftStore.save(draft);
+  }
+
+  private async clearDraft(): Promise<void> {
+    this.scheduleDraftSave.cancel(); // drop any queued save so it can't resurrect the draft
+    await this.draftStore.save({});
+  }
+
+  /** If a saved draft exists, shows a restore bar above the form. */
+  private async offerRestore(container: HTMLElement): Promise<void> {
+    const draft = await this.draftStore.load();
+    if (!draft.text || !draft.text.trim()) return;
+    if (this.taEl?.value.trim()) return; // user already typing — don't nag
+    this.restoreBarEl?.remove();
+    const bar = container.createDiv({ cls: "bases-toolbox-import-restore" });
+    this.restoreBarEl = bar;
+    const rows = (draft.text.match(/\n/g)?.length ?? 0) + 1;
+    const when = draft.savedAt ? new Date(draft.savedAt).toLocaleString() : "earlier";
+    bar.createSpan({ text: `Unfinished import from ${when} (~${rows} lines). ` });
+    const restore = bar.createEl("button", { cls: "mod-cta", text: "Restore" });
+    restore.addEventListener("click", () => this.restoreDraft(draft as ImportDraft));
+    const dismiss = bar.createEl("button", { text: "Discard" });
+    dismiss.addEventListener("click", () => void (async () => {
+      await this.draftStore.save({});
+      bar.remove();
+    })());
+  }
+
+  /**
+   * Restore, but never silently clobber work in progress. If the importer
+   * already has (different) content — e.g. the user ignored the bar and started
+   * a new/retried import — confirm before replacing it. When the field is empty
+   * (the common "just reopened" case) it applies straight away.
+   */
+  private restoreDraft(d: ImportDraft): void {
+    const current = this.taEl?.value.trim() ?? "";
+    if (current && current !== d.text.trim()) {
+      new ConfirmModal(this.plugin, {
+        title: "Replace the current import?",
+        body: "You've already started an import here. Restoring the saved draft will replace what's in the importer now.",
+        confirmText: "Replace with saved draft",
+        danger: true,
+        onConfirm: () => this.applyDraft(d),
+      }).open();
+      return;
+    }
+    this.applyDraft(d);
+  }
+
+  /** Applies a saved draft back into the live form. */
+  private applyDraft(d: ImportDraft): void {
+    this.restoring = true;
+    try {
+      if (this.taEl) this.taEl.value = d.text;
+      if (this.folderEl) this.folderEl.value = d.folder;
+      if (this.templateEl) this.templateEl.value = d.template;
+      if (this.baseNameEl) this.baseNameEl.value = d.baseName;
+      this.collision = d.collision;
+      this.collisionDd?.setValue(d.collision);
+      this.inputFormat = d.inputFormat;
+      this.formatDd?.setValue(d.inputFormat);
+      this.makeBase = d.makeBase;
+      this.makeBaseToggle?.setValue(d.makeBase);
+      this.baseNameSetting?.settingEl.toggle(d.makeBase);
+      this.omitEmpty = d.omitEmpty;
+      this.omitToggle?.setValue(d.omitEmpty);
+      this.lastHeaderKey = ""; // force a column rebuild for this text
+      this.parse(d.text);
+      // Overlay the saved column mapping onto the freshly-parsed columns when the
+      // shape matches (same headers), so renamed props / chosen types come back.
+      if (
+        d.columns.length === this.columns.length &&
+        d.columns.every((c, i) => c.header === this.columns[i].header)
+      ) {
+        this.columns = d.columns;
+        this.filenameCol = Math.min(d.filenameCol, this.columns.length - 1);
+        this.renderMapping();
+        this.renderPreview();
+      }
+      this.refreshBaseHint();
+      this.restoreBarEl?.remove();
+      this.restoreBarEl = null;
+    } finally {
+      this.restoring = false;
+    }
   }
 
   private get app() {
@@ -88,12 +226,21 @@ class CsvImportPanel {
     this.taEl = ta;
     ta.addEventListener("input", () => this.parse(ta.value));
 
+    // Autosave the whole form (input text + mapping config) so a crash / close
+    // doesn't lose the work. One listener on the container catches every text
+    // input, select and checkbox; parse()/renderMapping cover the rest.
+    contentEl.addEventListener("input", () => this.scheduleDraftSave());
+    contentEl.addEventListener("change", () => this.scheduleDraftSave());
+    // Offer to restore a previous unfinished import (async — inserts a bar).
+    void this.offerRestore(contentEl);
+
     new Setting(contentEl)
       .setName("Input format")
       .setDesc(
         "Table = CSV/TSV with a header row. List = records separated by blank lines (each record's lines become columns you name below) — e.g. pasted title/URL pairs."
       )
       .addDropdown((dd) => {
+        this.formatDd = dd;
         dd.addOption("auto", "Auto-detect");
         dd.addOption("table", "Table (CSV / TSV)");
         dd.addOption("list", "List (blank-line records)");
@@ -168,12 +315,16 @@ class CsvImportPanel {
     new Setting(contentEl)
       .setName("Omit empty values")
       .setDesc("Blank cells leave the property out of that note entirely.")
-      .addToggle((t) => t.setValue(this.omitEmpty).onChange((v) => (this.omitEmpty = v)));
+      .addToggle((t) => {
+        this.omitToggle = t;
+        t.setValue(this.omitEmpty).onChange((v) => (this.omitEmpty = v));
+      });
 
     new Setting(contentEl)
       .setName("If a note already exists")
       .setDesc("Collision policy against existing vault notes and duplicate rows. “Update” maps the imported columns onto the existing note\u2019s properties (blank cells never clear a value, the body is untouched) — re-import a sheet with new columns to enrich notes in place. Undoable from history.")
       .addDropdown((dd) => {
+        this.collisionDd = dd;
         dd.addOption("suffix", "Create with -2, -3 suffix");
         dd.addOption("skip", "Skip the row");
         dd.addOption("overwrite", "Overwrite the note");
@@ -185,14 +336,15 @@ class CsvImportPanel {
     new Setting(contentEl)
       .setName("Create a .base file")
       .setDesc("Adds a table view over the imported folder with the included columns.")
-      .addToggle((t) =>
+      .addToggle((t) => {
+        this.makeBaseToggle = t;
         t.setValue(this.makeBase).onChange((v) => {
           this.makeBase = v;
           // Only offer the base-name field when a base will actually be created.
           this.baseNameSetting?.settingEl.toggle(v);
           this.refreshBaseHint();
-        })
-      );
+        });
+      });
 
     this.baseNameSetting = new Setting(contentEl)
       .setName("Base file name")
@@ -324,6 +476,7 @@ class CsvImportPanel {
         : `${rows.length} row${rows.length === 1 ? "" : "s"} detected.${ambiguousSuffix}`,
       true
     );
+    this.scheduleDraftSave();
   }
 
   private setStatus(msg: string, ready: boolean): void {
@@ -425,6 +578,7 @@ class CsvImportPanel {
       });
     });
     this.updateSelectAll();
+    this.scheduleDraftSave();
   }
 
   /**
@@ -849,6 +1003,7 @@ class CsvImportPanel {
       } else {
         new Notice(`[Bases Toolbox] ${summaryFull}`, persistent ? 0 : undefined);
       }
+      void this.clearDraft(); // import succeeded — the draft is no longer needed
       this.onDone?.();
     } catch (e) {
       progressNotice.hide();
@@ -862,6 +1017,20 @@ class CsvImportPanel {
 }
 
 export { CsvImportPanel };
+
+/**
+ * Peeks at the saved import draft (without opening the importer) so the plugin
+ * can proactively flag a recoverable import on startup. Returns null when there
+ * is nothing worth recovering.
+ */
+export async function importDraftInfo(
+  plugin: BasesToolboxPlugin
+): Promise<{ rows: number; savedAt: number } | null> {
+  const store = new JsonStore<Partial<ImportDraft>>(plugin, "import-drafts/last.json", () => ({}));
+  const draft = await store.load();
+  if (!draft.text || !draft.text.trim()) return null;
+  return { rows: (draft.text.match(/\n/g)?.length ?? 0) + 1, savedAt: draft.savedAt ?? 0 };
+}
 
 /** CSV import as a dialog — thin wrapper over the shared panel. */
 export class CsvImportModal extends Modal {

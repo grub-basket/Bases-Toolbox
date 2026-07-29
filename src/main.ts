@@ -30,7 +30,7 @@ import {
 } from "./conditional-format";
 import { attachPropertySuggest, attachValueSuggest } from "./suggest";
 import { exportBaseCsv } from "./csv-export";
-import { CsvImportModal } from "./csv-import";
+import { CsvImportModal, importDraftInfo } from "./csv-import";
 import { CsvImportView, VIEW_TYPE_CSV_IMPORT, openCsvImportView } from "./csv-import-view";
 import { PropertiesModal, createNoteWithProperties, editActiveNoteProperties } from "./properties-modal";
 import { CsvExportModal, CsvExportView, VIEW_TYPE_CSV_EXPORT, openCsvExportView } from "./csv-export-view";
@@ -118,6 +118,23 @@ export default class BasesToolboxPlugin extends Plugin {
     // with a one-click path to the audit. Re-checked as the vault changes.
     const checkPins = debounce(() => this.refreshPinViolationNotice(), 1500, false);
     this.app.workspace.onLayoutReady(() => this.refreshPinViolationNotice());
+    // Proactively flag an unfinished CSV import left over from a previous session
+    // (crash / close), so the user knows it's recoverable without reopening the
+    // importer. Persistent notice with a one-click way in.
+    this.app.workspace.onLayoutReady(() => {
+      void importDraftInfo(this).then((info) => {
+        if (!info) return;
+        const when = info.savedAt ? ` from ${new Date(info.savedAt).toLocaleString()}` : "";
+        new Notice(
+          createFragment((f) => {
+            f.createSpan({ text: `[Bases Toolbox] You have an unfinished CSV import${when} (~${info.rows} lines). ` });
+            const btn = f.createEl("button", { cls: "bases-toolbox-notice-btn", text: "Open importer to restore" });
+            btn.addEventListener("click", () => void openCsvImportView(this));
+          }),
+          0
+        );
+      });
+    });
     this.registerEvent(this.app.metadataCache.on("resolved", () => checkPins()));
 
     // Right-click a note → edit its properties in the roomy form.
