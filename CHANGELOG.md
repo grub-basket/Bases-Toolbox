@@ -2,6 +2,9 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.51
+- **Store-guideline cleanup.** Removed two informational `console.log` migration messages, switched cross-window-unsafe `instanceof HTMLInputElement` checks to Obsidian's `.instanceOf()`, and used `createDiv()` in place of `createEl("div")` — all to satisfy the community-plugin review guidelines. The **Open settings** and **Open launcher** commands no longer repeat "Bases Toolbox" in their names (Obsidian already shows the plugin name next to each command).
+
 ## 0.1.50
 - **Duplicate finder — scope the scan by folder.** Replaced the single exclude-folders box with two progressively-growing lists: **Only these folders** (lock the scan to specific folders — leave empty for the whole vault) and **Exclude folders** (skip specific folders; exclude wins over include). Both work at once, and each folder row has a **subfolders** toggle so it can reach into subfolders or stay to that folder's top level only. Your old exclude-folder list is carried over automatically (each kept as "with subfolders").
 - **Duplicate finder — filter the results by folder.** After a scan, a row of folder chips shows every folder the duplicates were found in (with a count); click one to temporarily hide its groups so you can focus your merges on the folders you care about. A group stays visible as long as one of its notes is in a folder that isn't hidden. The filter resets on each new scan.

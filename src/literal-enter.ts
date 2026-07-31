@@ -34,14 +34,14 @@ type Tagged = KeyboardEvent & { [SYNTHETIC]?: boolean };
 function guardedEditable(target: EventTarget | null): HTMLElement | null {
   if (!(target instanceof HTMLElement)) return null;
   const editable =
-    target instanceof HTMLInputElement || target.isContentEditable ? target : null;
+    target.instanceOf(HTMLInputElement) || target.isContentEditable ? target : null;
   if (!editable) return null;
   const scope = editable.closest('.metadata-property, [class^="bases-"], [class*=" bases-"]');
   return scope ? editable : null;
 }
 
 function typedText(el: HTMLElement): string {
-  return (el instanceof HTMLInputElement ? el.value : el.textContent ?? "").trim();
+  return (el.instanceOf(HTMLInputElement) ? el.value : el.textContent ?? "").trim();
 }
 
 function visibleSuggestionPopup(): HTMLElement | null {

@@ -353,7 +353,7 @@ export default class BasesToolboxPlugin extends Plugin {
 
     this.addCommand({
       id: "open-settings",
-      name: "Open Bases Toolbox settings",
+      name: "Open settings",
       callback: () => this.openSettingsSection(),
     });
 
@@ -382,7 +382,7 @@ export default class BasesToolboxPlugin extends Plugin {
 
     this.addCommand({
       id: "open-launcher",
-      name: "Open Bases Toolbox launcher",
+      name: "Open launcher",
       callback: () => void openLauncher(this),
     });
 
@@ -595,7 +595,6 @@ export default class BasesToolboxPlugin extends Plugin {
       this.history = [...this.history, ...legacy].sort((a, b) => a.timestamp - b.timestamp);
       await this.saveHistory(); // write the split files BEFORE dropping the old copy
       await this.savePluginData(); // rewrites data.json without `history`
-      console.log(`[Bases Toolbox] Migrated ${legacy.length} history entries out of data.json.`);
     }
     // Settings buckets (CF rules, allowed values, forks, ignore lists, read-only)
     // and disabled filters live in their own files. A bucket file WINS over the
@@ -629,7 +628,6 @@ export default class BasesToolboxPlugin extends Plugin {
       // Force every bucket to write, then rewrite data.json without those fields.
       this.bucketClean.clear();
       await this.savePluginData();
-      console.log("[Bases Toolbox] Migrated settings buckets out of data.json.");
     }
 
     // One-time: seed ".base" into the companion exclude list for existing users
@@ -1277,8 +1275,8 @@ class BasesToolboxSettingTab extends PluginSettingTab {
     ];
 
     for (const g of groups) {
-      details.createEl("div", { cls: "bases-toolbox-ref-group", text: g.title });
-      if (g.note) details.createEl("div", { cls: "bases-toolbox-ref-note", text: g.note });
+      details.createDiv({ cls: "bases-toolbox-ref-group", text: g.title });
+      if (g.note) details.createDiv({ cls: "bases-toolbox-ref-note", text: g.note });
       const list = details.createDiv({ cls: "bases-toolbox-ref-list" });
       for (const [term, desc] of g.items) {
         const item = list.createDiv({ cls: "bases-toolbox-ref-item" });
