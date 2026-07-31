@@ -1,7 +1,7 @@
 import { FuzzySuggestModal, ItemView, Modal, Notice, Setting, TFile, WorkspaceLeaf, normalizePath, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { findKey, isUnsafeKey, valueToDisplay } from "./scan";
-import { BasesToolboxSettings, FileSnapshot } from "./types";
+import { BasesToolboxSettings, FileSnapshot, FolderScope } from "./types";
 import { installMainTabAction, installSidebarAction, openFileFromView } from "./view-refresh";
 import { FolderPathSuggest, attachPropertySuggest } from "./suggest";
 
@@ -516,9 +516,22 @@ function isDateOrNumericName(basename: string): boolean {
   return /^[\d\s\-_.]+$/.test(s) && (s.match(/\d/g)?.length ?? 0) >= 3;
 }
 
-/** Is `path` inside one of the excluded folders (or exactly one)? */
-function inExcludedFolder(path: string, folders: string[]): boolean {
-  return folders.some((f) => f && (path === f || path.startsWith(`${f}/`)));
+/** Direct parent folder of a vault path ("" for a top-level file). */
+function parentFolder(path: string): string {
+  const i = path.lastIndexOf("/");
+  return i < 0 ? "" : path.slice(0, i);
+}
+
+/** Does `path` fall inside a single folder scope, honouring its depth? */
+function inScope(path: string, scope: FolderScope): boolean {
+  return scope.recursive
+    ? path === scope.path || path.startsWith(`${scope.path}/`)
+    : parentFolder(path) === scope.path;
+}
+
+/** Does `path` fall inside ANY of the (non-blank) folder scopes? */
+function inAnyScope(path: string, scopes: FolderScope[]): boolean {
+  return scopes.some((s) => s.path && inScope(path, s));
 }
 
 /**
@@ -538,6 +551,10 @@ class DuplicateFinderPanel {
   private scanned = false;
   /** Ignored tab active: show the groups the user has set aside. */
   private showIgnored = false;
+  /** Post-scan results filter: folders the user has temporarily hidden from the
+   * results (transient — reset on each scan). A group stays visible while any of
+   * its members is in a folder that isn't hidden. */
+  private hiddenResultFolders = new Set<string>();
 
   constructor(plugin: BasesToolboxPlugin, openFile: (file: TFile) => void) {
     this.plugin = plugin;
@@ -584,6 +601,72 @@ class DuplicateFinderPanel {
     this.renderResults();
   }
 
+  /**
+   * A progressively-growing list of folder scopes (used for both the "Only
+   * these folders" lock-on and the "Exclude folders" list). Each row is a
+   * folder-path input + a "subfolders" toggle + a remove button; an "Add
+   * folder" button appends a blank row. Mutates `scopes` in place and persists.
+   */
+  private renderFolderScopeSection(
+    parent: HTMLElement,
+    name: string,
+    desc: string,
+    scopes: FolderScope[]
+  ): void {
+    const heading = new Setting(parent).setName(name).setDesc(desc).setHeading();
+    heading.addButton((b) =>
+      b
+        .setButtonText("Add folder")
+        .onClick(() => {
+          scopes.push({ path: "", recursive: true });
+          void this.plugin.savePluginData();
+          renderRows();
+        })
+    );
+
+    const rowsEl = parent.createDiv();
+    const renderRows = () => {
+      rowsEl.empty();
+      scopes.forEach((scope, i) => {
+        const row = new Setting(rowsEl);
+        row.controlEl.addClass("bases-toolbox-fr-folder-row");
+        row.addText((t) => {
+          t.setPlaceholder("Folder path (e.g. Projects/Active)");
+          t.setValue(scope.path);
+          new FolderPathSuggest(this.plugin, t.inputEl, false);
+          const commit = () => {
+            const raw = t.inputEl.value.trim();
+            scope.path = raw ? normalizePath(raw) : "";
+            void this.plugin.savePluginData();
+          };
+          t.inputEl.addEventListener("change", commit);
+          t.inputEl.addEventListener("blur", commit);
+        });
+        row.addToggle((tg) =>
+          tg
+            .setTooltip("Include subfolders")
+            .setValue(scope.recursive)
+            .onChange((v) => {
+              scope.recursive = v;
+              void this.plugin.savePluginData();
+            })
+        );
+        row.controlEl.createSpan({ cls: "bases-toolbox-fr-folder-lbl", text: "subfolders" });
+        row.addExtraButton((btn) =>
+          btn
+            .setIcon("trash-2")
+            .setTooltip("Remove")
+            .onClick(() => {
+              scopes.splice(i, 1);
+              void this.plugin.savePluginData();
+              renderRows();
+            })
+        );
+      });
+    };
+    renderRows();
+  }
+
   render(contentEl: HTMLElement): void {
     new Setting(contentEl)
       .setName("Similar file names")
@@ -621,21 +704,19 @@ class DuplicateFinderPanel {
         });
       });
 
-    new Setting(contentEl)
-      .setName("Exclude folders")
-      .setDesc("Comma-separated folder paths to skip entirely (e.g. Daily Notes, Journal).")
-      .addText((t) => {
-        t.setPlaceholder("Daily Notes, Journal");
-        t.setValue(this.plugin.settings.dupExcludeFolders.join(", "));
-        new FolderPathSuggest(this.plugin, t.inputEl, true);
-        t.inputEl.addEventListener("change", () => {
-          this.plugin.settings.dupExcludeFolders = t.inputEl.value
-            .split(",")
-            .map((s) => normalizePath(s.trim()))
-            .filter(Boolean);
-          void this.plugin.savePluginData();
-        });
-      });
+    this.renderFolderScopeSection(
+      contentEl,
+      "Only these folders",
+      "Lock the scan to these folders (leave empty to scan the whole vault). Toggle whether each reaches into subfolders.",
+      this.plugin.settings.dupIncludeFolders
+    );
+
+    this.renderFolderScopeSection(
+      contentEl,
+      "Exclude folders",
+      "Folders to skip entirely (e.g. Daily Notes, Journal). Wins over “Only these folders”. Toggle whether each reaches into subfolders.",
+      this.plugin.settings.dupExcludeFolders
+    );
 
     new Setting(contentEl)
       .setName("Same value of property")
@@ -672,12 +753,16 @@ class DuplicateFinderPanel {
       groups.set(key, g);
     };
 
-    const excludeFolders = this.plugin.settings.dupExcludeFolders;
+    const includeFolders = this.plugin.settings.dupIncludeFolders.filter((s) => s.path);
+    const excludeFolders = this.plugin.settings.dupExcludeFolders.filter((s) => s.path);
     const skipDateLike = this.plugin.settings.dupSkipDateLikeNames;
     const files = this.app.vault.getMarkdownFiles();
     const bodies = new Map<TFile, string>();
     for (const file of files) {
-      if (excludeFolders.length && inExcludedFolder(file.path, excludeFolders)) continue;
+      // Lock-on: with any include scopes set, a file must fall inside one.
+      if (includeFolders.length && !inAnyScope(file.path, includeFolders)) continue;
+      // Exclude always wins over include.
+      if (excludeFolders.length && inAnyScope(file.path, excludeFolders)) continue;
       if (this.byName && !(skipDateLike && isDateOrNumericName(file.basename)))
         add(`name:${normalizeName(file.basename)}`, file);
       if (prop) {
@@ -715,6 +800,7 @@ class DuplicateFinderPanel {
     }
 
     this.dupGroups = [...groups.entries()].filter(([, g]) => g.length > 1);
+    this.hiddenResultFolders.clear();
     this.scanned = true;
     this.renderResults();
   }
@@ -773,7 +859,52 @@ class DuplicateFinderPanel {
           }; the rest merge into it (conflicts keep the kept note's values). “Ignore” hides a group until its membership changes.`,
     });
 
-    for (const [key, group] of groups) this.renderGroup(root, key, group, this.showIgnored);
+    // Post-scan folder filter: enumerate the folders these groups' notes live
+    // in, so the user can temporarily hide some and focus changes on the rest.
+    const folderCounts = new Map<string, number>();
+    for (const [, group] of groups) {
+      const seen = new Set<string>();
+      for (const f of group) {
+        const dir = parentFolder(f.path) || "/";
+        if (!seen.has(dir)) {
+          seen.add(dir);
+          folderCounts.set(dir, (folderCounts.get(dir) ?? 0) + 1);
+        }
+      }
+    }
+    if (folderCounts.size > 1) {
+      const bar = root.createDiv({ cls: "bases-toolbox-fr-folderfilter" });
+      bar.createSpan({ cls: "bases-toolbox-fr-folderfilter-lbl", text: "Folders:" });
+      const dirs = [...folderCounts.keys()].sort((a, b) => a.localeCompare(b));
+      for (const dir of dirs) {
+        const chip = bar.createSpan({ cls: "bases-toolbox-fr-folderchip" });
+        const hidden = this.hiddenResultFolders.has(dir);
+        if (hidden) chip.addClass("is-off");
+        chip.setText(`${dir === "/" ? "(vault root)" : dir} (${folderCounts.get(dir)})`);
+        chip.addEventListener("click", () => {
+          if (this.hiddenResultFolders.has(dir)) this.hiddenResultFolders.delete(dir);
+          else this.hiddenResultFolders.add(dir);
+          this.renderResults();
+        });
+      }
+    }
+
+    // A group survives the filter while any member sits in a non-hidden folder.
+    const visible = this.hiddenResultFolders.size
+      ? groups.filter(([, g]) =>
+          g.some((f) => !this.hiddenResultFolders.has(parentFolder(f.path) || "/"))
+        )
+      : groups;
+
+    if (!visible.length) {
+      root.createDiv({
+        cls: "bases-toolbox-fr-info",
+        text: "Every group is in a hidden folder — click a folder above to bring it back.",
+      });
+      return;
+    }
+
+    for (const [key, group] of visible) this.renderGroup(root, key, group, this.showIgnored);
   }
 
   private renderGroup(root: HTMLElement, key: string, group: TFile[], isIgnored: boolean): void {

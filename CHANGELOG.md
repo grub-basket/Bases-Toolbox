@@ -2,6 +2,11 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.50
+- **Duplicate finder — scope the scan by folder.** Replaced the single exclude-folders box with two progressively-growing lists: **Only these folders** (lock the scan to specific folders — leave empty for the whole vault) and **Exclude folders** (skip specific folders; exclude wins over include). Both work at once, and each folder row has a **subfolders** toggle so it can reach into subfolders or stay to that folder's top level only. Your old exclude-folder list is carried over automatically (each kept as "with subfolders").
+- **Duplicate finder — filter the results by folder.** After a scan, a row of folder chips shows every folder the duplicates were found in (with a count); click one to temporarily hide its groups so you can focus your merges on the folders you care about. A group stays visible as long as one of its notes is in a folder that isn't hidden. The filter resets on each new scan.
+- **Importer — big imports now show up reliably.** After the fast burst-write, the importer now forces Obsidian to register the new notes immediately instead of waiting on the OS file-watcher, which could lag and leave a big import showing only *some* of its rows in the base until you nudged the folder. All rows now appear as soon as the import finishes (their cell values fill in a moment later as metadata parses).
+
 ## 0.1.49
 - **New — Audit aliased internal links.** A command/tool ("Audit aliased internal links in properties") that scans every note's frontmatter for internal links written with an alias (`[[Note|Shown As]]`), grouped by the note they point to. It flags any target shown more than one way — different aliases, or aliased in some values and plain in others — since those read as different values in Bases and are the ones worth standardizing. Read-only: it surfaces them (with links to each occurrence); it doesn't change anything.
 

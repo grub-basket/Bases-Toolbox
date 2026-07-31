@@ -694,13 +694,40 @@ class CsvImportPanel {
    * between each batch, the watcher grabs the main thread to index, and the
    * speedup vanishes.
    */
-  private rawWriter(): ((absPath: string, data: string) => Promise<void>) | null {
+  private rawWriter(): {
+    write: (absPath: string, data: string) => Promise<void>;
+    reconcile: ((vaultPath: string) => Promise<void>) | null;
+  } | null {
     if (!Platform.isDesktopApp) return null;
-    if (!(this.app.vault.adapter instanceof FileSystemAdapter)) return null;
+    const adapter = this.app.vault.adapter;
+    if (!(adapter instanceof FileSystemAdapter)) return null;
     const req = (window as unknown as { require?: (m: string) => unknown }).require;
-    const fs = req?.("fs") as { promises?: { writeFile?: (p: string, d: string) => Promise<void> } } | undefined;
+    const fs = req?.("fs") as
+      | {
+          promises?: { writeFile?: (p: string, d: string) => Promise<void> };
+          statSync?: (p: string) => unknown;
+        }
+      | undefined;
     const writeFile = fs?.promises?.writeFile;
-    return writeFile ? (absPath, data) => writeFile(absPath, data) : null;
+    if (!writeFile) return null;
+    // reconcileFileCreation is what Obsidian's own file watcher calls to register
+    // a new file. Calling it ourselves forces reliable, immediate indexing —
+    // otherwise the raw writes rely on the OS watcher, which lags and can stall
+    // at a PARTIAL result (files present on disk but missing from the base).
+    // Undocumented internal, so feature-detected; if absent we fall back to the
+    // watcher (the previous behaviour).
+    const rec = (adapter as unknown as {
+      reconcileFileCreation?: (real: string, vault: string, stat: unknown) => Promise<void>;
+    }).reconcileFileCreation;
+    const statSync = fs?.statSync;
+    const reconcile =
+      rec && statSync
+        ? async (vaultPath: string) => {
+            const full = adapter.getFullPath(vaultPath);
+            await rec.call(adapter, full, vaultPath, statSync(full));
+          }
+        : null;
+    return { write: (absPath, data) => writeFile(absPath, data), reconcile };
   }
 
   /** Builds one row's frontmatter object from the current column config. */
@@ -886,9 +913,9 @@ class CsvImportPanel {
       const createJobs = jobs.filter(
         (j): j is Extract<typeof j, { kind: "create" }> => j.kind === "create"
       );
-      const rawWrite = this.rawWriter();
+      const raw = this.rawWriter();
       const adapter = this.app.vault.adapter;
-      if (rawWrite && adapter instanceof FileSystemAdapter) {
+      if (raw && adapter instanceof FileSystemAdapter) {
         // Raw-write NEW files with a bounded WORKER POOL — the key to the speedup.
         // A chunked `await Promise.all(batch)` fully drains the microtask queue
         // between batches, which lets Obsidian's file watcher (a macrotask) run
@@ -896,19 +923,37 @@ class CsvImportPanel {
         // made the "fast" path slow. A worker pool keeps writes continuously in
         // flight so the microtask queue never empties, starving the watcher until
         // every file is on disk (measured: 3000 files in ~0.4s vs ~8s chunked).
-        // Indexing then happens in the background while the base fills in. No
-        // progress bumps mid-pool for the same reason (a DOM touch yields too).
-        deferredIndex = createJobs.length > 0;
+        // No progress bumps mid-pool for the same reason (a DOM touch yields too).
         let next = 0;
         const worker = async () => {
           while (next < createJobs.length) {
             const job = createJobs[next++];
-            await rawWrite(adapter.getFullPath(job.path), job.content);
+            await raw.write(adapter.getFullPath(job.path), job.content);
             created++;
           }
         };
         const RAW_POOL = 128; // in-flight writes: fast, bounded well under FD limits
         await Promise.all(Array.from({ length: Math.min(RAW_POOL, createJobs.length) }, worker));
+
+        // Now force RELIABLE indexing. The OS watcher lags and can stall at a
+        // partial result (files on disk but missing from the base); calling
+        // reconcileFileCreation ourselves registers every file immediately
+        // (~1ms each, measured). Progress bumps are fine here — we WANT the
+        // indexing to run. Frontmatter values still parse async afterward, so
+        // rows appear right away and cells fill in a moment later.
+        if (raw.reconcile) {
+          for (let i = 0; i < createJobs.length; i++) {
+            try {
+              await raw.reconcile(createJobs[i].path);
+            } catch {
+              /* one file failing to reconcile just leaves it to the watcher */
+            }
+            if ((i + 1) % 200 === 0) reportProgress(done + i + 1);
+          }
+          deferredIndex = false; // reconciled ourselves — no lingering index lag
+        } else {
+          deferredIndex = createJobs.length > 0; // no reconcile API → watcher (laggy)
+        }
         bump(createJobs.length);
       } else {
         // Mobile / no adapter: vault.create indexes inline, so this can't burst —

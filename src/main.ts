@@ -574,6 +574,16 @@ export default class BasesToolboxPlugin extends Plugin {
     this.settings = { ...DEFAULT_SETTINGS, ...data.settings };
     this.disabledFilters = data.disabledFilters ?? {};
 
+    // Migrate the duplicate-finder exclude list from its old string[] shape to
+    // FolderScope[]. Old entries excluded a folder AND its subfolders, so
+    // recursive:true preserves behaviour.
+    const exFolders = this.settings.dupExcludeFolders as unknown[];
+    if (Array.isArray(exFolders) && exFolders.some((e) => typeof e === "string")) {
+      this.settings.dupExcludeFolders = exFolders.map((e) =>
+        typeof e === "string" ? { path: e, recursive: true } : (e as { path: string; recursive: boolean })
+      );
+    }
+
     // History lives in per-domain files now. Load those first, then fold in any
     // legacy in-data.json history (and the even older single-undo slot) and
     // migrate it out — after backing data.json up, since this is the user's only

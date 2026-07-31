@@ -673,6 +673,47 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   margin-bottom: var(--size-4-2);
 }
 
+/* Duplicate finder — per-folder scope rows (include / exclude lists). */
+.bases-toolbox-fr-folder-row {
+  gap: var(--size-4-2);
+}
+.bases-toolbox-fr-folder-row input[type="text"] {
+  flex: 1;
+  min-width: 8em;
+}
+.bases-toolbox-fr-folder-lbl {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+/* Duplicate finder — post-scan results folder filter chips. */
+.bases-toolbox-fr-folderfilter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--size-4-2);
+  margin-bottom: var(--size-4-3);
+}
+.bases-toolbox-fr-folderfilter-lbl {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+.bases-toolbox-fr-folderchip {
+  cursor: pointer;
+  padding: 2px var(--size-4-2);
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  border: 1px solid var(--background-modifier-border);
+  user-select: none;
+}
+.bases-toolbox-fr-folderchip.is-off {
+  opacity: 0.5;
+  text-decoration: line-through;
+  background: transparent;
+}
+
 .bases-toolbox-fr-warning {
   color: var(--text-warning);
   font-size: var(--font-ui-small);

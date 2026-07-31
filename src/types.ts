@@ -46,6 +46,13 @@ export interface HistoryEntry {
   fileSnapshots?: FileSnapshot[];
 }
 
+/** A folder in a duplicate-finder scope, with whether it reaches into subfolders. */
+export interface FolderScope {
+  path: string;
+  /** true = the folder AND all its subfolders; false = only its direct files. */
+  recursive: boolean;
+}
+
 export interface BasesToolboxSettings {
   /** Swallow ArrowUp/ArrowDown and scroll-wheel spin on number property inputs. */
   blockArrowAndWheel: boolean;
@@ -95,8 +102,13 @@ export interface BasesToolboxSettings {
    * so the group re-flags for review.
    */
   ignoredDuplicateGroups: string[];
-  /** Duplicate finder: folders to skip entirely when scanning (e.g. daily notes). */
-  dupExcludeFolders: string[];
+  /** Duplicate finder: LOCK the scan to these folders (empty = whole vault).
+   * Each folder scans its subfolders too, or just its top level, per `recursive`. */
+  dupIncludeFolders: FolderScope[];
+  /** Duplicate finder: folders to skip when scanning (e.g. daily notes). Each
+   * excludes its subfolders too, or just its top level, per `recursive`.
+   * MIGRATED from the old `string[]` shape (each string → {path, recursive:true}). */
+  dupExcludeFolders: FolderScope[];
   /** Duplicate finder: don't name-group date-like / purely numeric basenames
    * (kills the "every daily note is a duplicate" false positives). */
   dupSkipDateLikeNames: boolean;
@@ -148,6 +160,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   companionAuto: false,
   ignoredFormatIssues: [],
   ignoredDuplicateGroups: [],
+  dupIncludeFolders: [],
   dupExcludeFolders: [],
   dupSkipDateLikeNames: true,
   dupKeepPolicy: "none",
