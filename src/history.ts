@@ -1,8 +1,8 @@
-import { Notice, TFile, TFolder } from "obsidian";
+import { Notice, TFile, TFolder, parseYaml, stringifyYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { pruneDeletionAudit } from "./property-delete";
 import { findKey } from "./scan";
-import { ChangeRecord, HistoryEntry } from "./types";
+import { ChangeRecord, HistoryEntry, ViewOpUndo } from "./types";
 
 export type SkipReason = "edited since" | "property missing" | "file missing" | "path reused";
 
@@ -90,11 +90,118 @@ async function revertSnapshots(
   return report;
 }
 
+type ViewNode = Record<string, unknown> & { name?: unknown };
+
+const viewNameOf = (v: ViewNode): string => (typeof v.name === "string" ? v.name : "");
+
+/**
+ * Undo ONE base-view operation by applying its inverse to the file as it is
+ * now, so later changes to the same base survive. Refuses (rather than
+ * guesses) when the view it needs has been renamed or removed since — the
+ * same "don't clobber newer work" stance as the property-level revert.
+ */
+async function revertViewOp(
+  plugin: BasesToolboxPlugin,
+  entry: HistoryEntry,
+  undo: ViewOpUndo
+): Promise<RevertReport> {
+  const report: RevertReport = {
+    restored: 0,
+    propertyMissing: 0,
+    valueChanged: 0,
+    fileMissing: 0,
+    skipped: [],
+  };
+  const skip = (reason: SkipReason): RevertReport => {
+    if (reason === "file missing") report.fileMissing++;
+    else report.valueChanged++;
+    report.skipped.push({ path: undo.path, property: "(view)", reason });
+    return report;
+  };
+
+  const file = plugin.app.vault.getAbstractFileByPath(undo.path);
+  if (!(file instanceof TFile)) return skip("file missing");
+
+  const raw = await plugin.app.vault.read(file);
+  let doc: Record<string, unknown>;
+  try {
+    doc = (parseYaml(raw) ?? {}) as Record<string, unknown>;
+  } catch {
+    return skip("file missing"); // unparseable now — don't overwrite it
+  }
+  const views: ViewNode[] = Array.isArray(doc.views) ? (doc.views as ViewNode[]) : [];
+
+  /** Locate a view by name, preferring the remembered index when it matches. */
+  const locate = (name: string, index?: number): number => {
+    if (index !== undefined && views[index] && viewNameOf(views[index]) === name) return index;
+    return views.findIndex((v) => viewNameOf(v) === name);
+  };
+
+  switch (undo.op) {
+    case "rename": {
+      const i = locate(undo.currentName ?? "", undo.index);
+      if (i < 0) return skip("edited since"); // renamed again / deleted since
+      // Don't collide with a view that now holds the old name.
+      if (views.some((v, j) => j !== i && viewNameOf(v) === undo.previousName)) {
+        return skip("edited since");
+      }
+      views[i].name = undo.previousName;
+      break;
+    }
+    case "remove": {
+      const i = locate(undo.name ?? "", undo.index);
+      if (i < 0) return skip("edited since"); // already gone / renamed
+      views.splice(i, 1);
+      break;
+    }
+    case "insert": {
+      if (!undo.node) return skip("edited since");
+      const node = { ...undo.node } as ViewNode;
+      // If its name was taken in the meantime, don't clobber — suffix it.
+      const taken = new Set(views.map(viewNameOf));
+      let name = viewNameOf(node);
+      if (name && taken.has(name)) {
+        let n = 2;
+        let candidate = `${name} restored`;
+        while (taken.has(candidate)) candidate = `${name} restored ${n++}`;
+        node.name = candidate;
+        name = candidate;
+      }
+      const at = Math.min(Math.max(undo.index ?? views.length, 0), views.length);
+      views.splice(at, 0, node);
+      break;
+    }
+    case "move": {
+      const from = undo.fromIndex ?? -1;
+      const to = undo.toIndex ?? -1;
+      if (from < 0 || from >= views.length || to < 0 || to >= views.length) {
+        return skip("edited since");
+      }
+      // Only move it back if the view still at `from` is the one we moved.
+      if (undo.name && viewNameOf(views[from]) !== undo.name) return skip("edited since");
+      const [moved] = views.splice(from, 1);
+      views.splice(to, 0, moved);
+      break;
+    }
+  }
+
+  doc.views = views;
+  await plugin.app.vault.modify(file, stringifyYaml(doc));
+  report.restored = 1;
+  entry.revertedAt = Date.now();
+  await plugin.saveHistory();
+  return report;
+}
+
 export async function revertEntry(
   plugin: BasesToolboxPlugin,
   entry: HistoryEntry,
   opts: RevertOptions = {}
 ): Promise<RevertReport> {
+  // Surgical view undo wins over the whole-file snapshot: it leaves later
+  // changes to the same base alone. Pre-0.1.53 entries have no viewUndo and
+  // still fall back to the snapshot restore below.
+  if (entry.viewUndo) return revertViewOp(plugin, entry, entry.viewUndo);
   if (entry.fileSnapshots?.length) return revertSnapshots(plugin, entry);
   const report: RevertReport = { restored: 0, propertyMissing: 0, valueChanged: 0, fileMissing: 0, skipped: [] };
   // Paths whose deleted-property change we actually restored — used to prune the

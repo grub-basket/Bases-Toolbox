@@ -85,6 +85,9 @@ export class HistoryView extends ItemView {
    * "force" is on (otherwise drifted notes are skipped, not clobbered). */
   private riskWarning(entry: HistoryEntry): string | null {
     if (entry.revertedAt) return null; // nothing left to revert
+    // A view op undoes just itself, so it carries no whole-file risk even
+    // though it also stores a snapshot.
+    if (entry.viewUndo) return null;
     if (entry.fileSnapshots?.length) return "reverting overwrites edits made since this change";
     if (this.force) return "force is on — reverting overwrites notes you edited since";
     return null;
@@ -122,6 +125,12 @@ export class HistoryView extends ItemView {
     }
 
     if (!this.expanded.has(entry)) return;
+
+    // A base-view op knows its own inverse, so it undoes just itself.
+    if (entry.viewUndo) {
+      this.renderViewEntry(box, entry);
+      return;
+    }
 
     // Merge entries restore whole-file snapshots — render those + an all-or-
     // nothing revert (a partial merge-revert would be incoherent).
@@ -219,6 +228,47 @@ export class HistoryView extends ItemView {
         text: "“Edited since” means the property was changed again after this operation, so it was left alone to protect that newer edit. Open a file to review it — or tick “Also revert notes I've edited since the change” above and revert again to overwrite them.",
       });
     }
+  }
+
+  /** A base-view operation: undone surgically by applying its inverse to the
+   * base as it is now, so later view changes to the same base are left alone. */
+  private renderViewEntry(box: HTMLElement, entry: HistoryEntry): void {
+    const undo = entry.viewUndo;
+    if (!undo) return;
+
+    const list = box.createDiv({ cls: "bases-toolbox-frv-list" });
+    const row = list.createDiv({ cls: "bases-toolbox-frv-row" });
+    const file = this.app.vault.getAbstractFileByPath(undo.path);
+    const link = row.createSpan({ cls: "bases-toolbox-frv-path", text: undo.path });
+    link.addEventListener("click", () => {
+      if (file instanceof TFile) void openFileFromView(this, file);
+      else void this.app.workspace.openLinkText(undo.path, "", true);
+    });
+    const what: Record<string, string> = {
+      rename: `will rename “${undo.currentName}” back to “${undo.previousName}”`,
+      remove: `will remove the view “${undo.name}” again`,
+      insert: `will restore the view “${typeof undo.node?.name === "string" ? undo.node.name : "?"}” with its settings`,
+      move: "will move the view back to where it was",
+    };
+    row.createSpan({ cls: "bases-toolbox-frv-diff", text: what[undo.op] ?? "" });
+
+    if (entry.revertedAt) {
+      this.renderSkipped(box, entry);
+      return;
+    }
+    box.createDiv({
+      cls: "bases-toolbox-fr-info",
+      text: "Undoes only this change — any later changes to this base stay as they are. If the view has been renamed or removed since, it's skipped rather than guessed at.",
+    });
+    const btn = box.createEl("button", { text: "Undo this change" });
+    btn.addEventListener("click", () => void (async () => {
+      btn.disabled = true;
+      const report = await revertEntry(this.plugin, entry);
+      this.lastReport.set(entry, report);
+      reportNotice(entry, report);
+      this.render();
+    })());
+    this.renderSkipped(box, entry);
   }
 
   /** Snapshot-based entry (note merges, base view edits): list the affected

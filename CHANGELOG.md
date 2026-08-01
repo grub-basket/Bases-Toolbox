@@ -2,6 +2,9 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.53
+- **View changes now undo surgically.** Previously, undoing a view change restored the whole `.base` file to how it was at that moment — so undoing an *older* change also wiped any newer ones. Each view operation now stores its own inverse (a rename undoes to a rename, a duplicate to a removal, a delete puts the exact view back with all its settings, a reorder moves it back) and applies it to the base as it is *now*, leaving later changes untouched. If the view has been renamed or removed since, the undo is skipped and reported rather than guessed at — and the entry stays available to retry. Existing history entries from 0.1.52 keep working via the old whole-file restore.
+
 ## 0.1.52
 - **New — View manager.** One dialog for all of a base's views, replacing Obsidian's four-levels-deep flow (view menu → edit arrow → three-dot menu → Duplicate → name it). Every view is listed in switcher order: **rename in place**, **duplicate** (copies the whole view — columns, sort, filters, card size and all), **reorder** with up/down, **make default** (the view a base opens on), **show** a view in the open tab, **add** a new one, and **delete** with a confirmation. Open it from the new **button next to the base's view switcher**, the command **"Manage views for this base"**, or the launcher. Every change is revertible from the bulk file change history. Duplicate names are auto-suffixed (Bases identifies views by name), and renaming or deleting the view you're currently looking at re-points the open tab so it never lands on a view that no longer exists.
 - **Bulk file change history** now describes whole-file changes generically instead of assuming every one is a note merge ("Revert this change" rather than "Revert merge" for base edits).

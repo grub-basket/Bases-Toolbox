@@ -13,6 +13,7 @@ import {
 import type BasesToolboxPlugin from "./main";
 import { activeBaseView } from "./base-detect";
 import { ConfirmModal } from "./property-delete";
+import type { ViewOpUndo } from "./types";
 
 /**
  * Manage a base's VIEWS from one modal — rename, duplicate, reorder, set the
@@ -139,7 +140,8 @@ async function rewriteViews(
   plugin: BasesToolboxPlugin,
   file: TFile,
   label: string,
-  mutate: (views: ViewNode[], doc: Record<string, unknown>) => boolean
+  /** Mutates the array, and returns the inverse to record (or null to abort). */
+  mutate: (views: ViewNode[], doc: Record<string, unknown>) => ViewOpUndo | null
 ): Promise<boolean> {
   const before = await plugin.app.vault.read(file);
   const doc = parseDoc(before);
@@ -148,7 +150,8 @@ async function rewriteViews(
     return false;
   }
   const views = viewsOf(doc);
-  if (!mutate(views, doc)) return false;
+  const undo = mutate(views, doc);
+  if (!undo) return false;
   doc.views = views;
   await plugin.app.vault.modify(file, stringifyYaml(doc));
   await plugin.addHistoryEntry({
@@ -158,6 +161,9 @@ async function rewriteViews(
     timestamp: Date.now(),
     changes: [],
     source: "view manager",
+    // Both: `viewUndo` drives a surgical revert; the snapshot stays as a
+    // whole-file safety net (a `.base` is tiny) and for older readers.
+    viewUndo: undo,
     fileSnapshots: [{ path: file.path, content: before, kind: "modified" }],
   });
   return true;
@@ -474,11 +480,17 @@ export class ViewManagerModal extends Modal {
     const ok = await rewriteViews(this.plugin, this.file, `Renamed view “${from}”`, (views) => {
       const target = views[index];
       // Position AND name must still match — the file may have changed under us.
-      if (!target || nameOf(target) !== from) return false;
+      if (!target || nameOf(target) !== from) return null;
       const taken = new Set(views.filter((_, i) => i !== index).map(nameOf));
       final = uniqueName(to, taken);
       target.name = final;
-      return true;
+      return {
+        path: this.file.path,
+        op: "rename",
+        currentName: final,
+        previousName: from,
+        index,
+      };
     });
     this.busy = false;
     if (!ok) {
@@ -495,12 +507,12 @@ export class ViewManagerModal extends Modal {
     const label = nameOf(this.viewAt(index)) || "view";
     const ok = await rewriteViews(this.plugin, this.file, `Duplicated view “${label}”`, (views) => {
       const src = views[index];
-      if (!src) return false;
+      if (!src) return null;
       const copy = cloneView(src);
       created = uniqueName(nameOf(src) || "View", new Set(views.map(nameOf)));
       copy.name = created;
       views.splice(index + 1, 0, copy); // sits right after the one it came from
-      return true;
+      return { path: this.file.path, op: "remove", name: created, index: index + 1 };
     });
     if (ok) new Notice(`Created “${created}”.`);
     void this.render();
@@ -509,10 +521,17 @@ export class ViewManagerModal extends Modal {
   private async move(index: number, delta: number): Promise<void> {
     const to = index + delta;
     await rewriteViews(this.plugin, this.file, "Reordered views", (views) => {
-      if (index < 0 || index >= views.length || to < 0 || to >= views.length) return false;
+      if (index < 0 || index >= views.length || to < 0 || to >= views.length) return null;
       const [moved] = views.splice(index, 1);
       views.splice(to, 0, moved);
-      return true;
+      // Undo = move it from where it landed back to where it started.
+      return {
+        path: this.file.path,
+        op: "move",
+        name: nameOf(moved),
+        fromIndex: to,
+        toIndex: index,
+      };
     });
     void this.render();
   }
@@ -535,11 +554,13 @@ export class ViewManagerModal extends Modal {
     let removedName = "";
     let fallback: string | null = null;
     const ok = await rewriteViews(this.plugin, this.file, `Deleted view “${label}”`, (views) => {
-      if (index < 0 || index >= views.length) return false;
+      if (index < 0 || index >= views.length) return null;
       removedName = nameOf(views[index]);
+      // Keep the whole node so undo restores every setting it carried.
+      const node = cloneView(views[index]);
       views.splice(index, 1);
       fallback = views.length ? nameOf(views[Math.min(index, views.length - 1)]) : null;
-      return true;
+      return { path: this.file.path, op: "insert", node, index };
     });
     if (ok) {
       // A tab still showing the deleted view has to go somewhere.
@@ -554,13 +575,12 @@ export class ViewManagerModal extends Modal {
   private async addView(): Promise<void> {
     let created = "";
     const type = this.newType;
-    const ok = await rewriteViews(this.plugin, this.file, "Added a view", (views, doc) => {
+    const ok = await rewriteViews(this.plugin, this.file, "Added a view", (views) => {
       created = uniqueName(this.newName.trim() || "New view", new Set(views.map(nameOf)));
       // Only `type` + `name` — deliberately no `order`, so Bases picks the
       // default columns instead of us fabricating a list that hides the rest.
       views.push({ type, name: created });
-      if (!Array.isArray(doc.views)) doc.views = views;
-      return true;
+      return { path: this.file.path, op: "remove", name: created, index: views.length - 1 };
     });
     if (ok) {
       this.newName = "";

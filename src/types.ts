@@ -27,6 +27,33 @@ export interface FileSnapshot {
   kind: "modified" | "removed";
 }
 
+/**
+ * How to undo ONE base-view operation surgically — by applying the inverse to
+ * the file as it is NOW, instead of restoring a whole-file snapshot (which
+ * would also wipe any later changes to the same base).
+ *
+ * `op` is the action to PERFORM in order to undo, not the action that was done:
+ * undoing a rename is another rename, undoing a duplicate is a remove, and
+ * undoing a delete is an insert.
+ */
+export interface ViewOpUndo {
+  /** The `.base` file the operation touched. */
+  path: string;
+  op: "rename" | "remove" | "insert" | "move";
+  /** rename: what the view is called now, and the name to put back. */
+  currentName?: string;
+  previousName?: string;
+  /** remove (undo of an add/duplicate): which view to take out again. */
+  name?: string;
+  /** remove/insert: where it sat, used to disambiguate same-named views. */
+  index?: number;
+  /** insert (undo of a delete): the whole view node to put back. */
+  node?: Record<string, unknown>;
+  /** move: put the view back by moving it from `fromIndex` to `toIndex`. */
+  fromIndex?: number;
+  toIndex?: number;
+}
+
 export interface HistoryEntry {
   property: string;
   /** Display string of the value that was matched, or null for "all values". */
@@ -44,6 +71,12 @@ export interface HistoryEntry {
    * of walking `changes` (which is empty for such entries).
    */
   fileSnapshots?: FileSnapshot[];
+  /**
+   * Surgical undo for a base-view operation. Preferred over `fileSnapshots`
+   * when present: it leaves later changes to the same base intact. Entries
+   * written before 0.1.53 only have the snapshot, so revert falls back to that.
+   */
+  viewUndo?: ViewOpUndo;
 }
 
 /** A folder in a duplicate-finder scope, with whether it reaches into subfolders. */
