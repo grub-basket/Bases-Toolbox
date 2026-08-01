@@ -673,6 +673,47 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   margin-bottom: var(--size-4-2);
 }
 
+/* View manager — one row per view (name + badges + actions). */
+.bases-toolbox-vm-list {
+  margin-bottom: var(--size-4-3);
+}
+.bases-toolbox-vm-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-4-2) 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.bases-toolbox-vm-row:last-child {
+  border-bottom: none;
+}
+.bases-toolbox-vm-name {
+  flex: 1;
+  min-width: 6em;
+}
+.bases-toolbox-vm-badges {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  white-space: nowrap;
+}
+.bases-toolbox-vm-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  flex-shrink: 0;
+}
+/* The extra-button wrapper adds its own margins; keep the row tight. */
+.bases-toolbox-vm-actions .clickable-icon {
+  margin: 0;
+}
+
+/* View manager — toolbar button, sits after the base's view switcher. */
+.bases-toolbar-item.bases-toolbox-vm-toolbar-btn {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
 /* Duplicate finder — per-folder scope rows (include / exclude lists). */
 .bases-toolbox-fr-folder-row {
   gap: var(--size-4-2);

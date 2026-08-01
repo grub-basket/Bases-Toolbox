@@ -72,7 +72,7 @@ export class HistoryView extends ItemView {
     forceLabel.createSpan({ text: " Also revert notes I've edited since the change" });
     root.createDiv({
       cls: "bases-toolbox-fr-info bases-toolbox-frv-force-help",
-      text: "By default, reverting skips any note you edited again after the change (marked “edited since”), so it never overwrites your newer work. Turn this on to revert those too. Note merges always revert as a whole and ignore this setting.",
+      text: "By default, reverting skips any note you edited again after the change (marked “edited since”), so it never overwrites your newer work. Turn this on to revert those too. Whole-file changes (note merges, base view edits) always revert as a whole and ignore this setting.",
     });
 
     for (const entry of [...this.plugin.history].reverse()) {
@@ -85,7 +85,7 @@ export class HistoryView extends ItemView {
    * "force" is on (otherwise drifted notes are skipped, not clobbered). */
   private riskWarning(entry: HistoryEntry): string | null {
     if (entry.revertedAt) return null; // nothing left to revert
-    if (entry.fileSnapshots?.length) return "reverting overwrites edits made after the merge";
+    if (entry.fileSnapshots?.length) return "reverting overwrites edits made since this change";
     if (this.force) return "force is on — reverting overwrites notes you edited since";
     return null;
   }
@@ -126,7 +126,7 @@ export class HistoryView extends ItemView {
     // Merge entries restore whole-file snapshots — render those + an all-or-
     // nothing revert (a partial merge-revert would be incoherent).
     if (entry.fileSnapshots?.length) {
-      this.renderMergeEntry(box, entry);
+      this.renderSnapshotEntry(box, entry);
       return;
     }
 
@@ -221,9 +221,11 @@ export class HistoryView extends ItemView {
     }
   }
 
-  /** Snapshot-based merge entry: list the affected notes and a single armed
-   * "Revert merge" button that restores everything to the pre-merge state. */
-  private renderMergeEntry(box: HTMLElement, entry: HistoryEntry): void {
+  /** Snapshot-based entry (note merges, base view edits): list the affected
+   * files and a single armed button that restores all of them wholesale. The
+   * wording adapts — a merge also recreates trashed source notes, whereas a
+   * base edit just restores the one `.base` file. */
+  private renderSnapshotEntry(box: HTMLElement, entry: HistoryEntry): void {
     const list = box.createDiv({ cls: "bases-toolbox-frv-list" });
     for (const snap of entry.fileSnapshots ?? []) {
       const row = list.createDiv({ cls: "bases-toolbox-frv-row" });
@@ -243,16 +245,19 @@ export class HistoryView extends ItemView {
       this.renderSkipped(box, entry);
       return;
     }
+    const isMerge = entry.fileSnapshots?.some((s) => s.kind === "removed") ?? false;
     box.createDiv({
       cls: "bases-toolbox-fr-info",
-      text: "Reverting restores every note above to its pre-merge state and recreates the trashed sources. Any edits made since the merge are overwritten.",
+      text: isMerge
+        ? "Reverting restores every note above to its pre-merge state and recreates the trashed sources. Any edits made since the merge are overwritten."
+        : "Reverting restores every file above to exactly how it was before this change. Any edits made to them since are overwritten.",
     });
-    const btn = box.createEl("button", { text: "Revert merge" });
+    const btn = box.createEl("button", { text: isMerge ? "Revert merge" : "Revert this change" });
     let armed = false;
     btn.addEventListener("click", () => void (async () => {
       if (!armed) {
         armed = true;
-        btn.setText("Click again to confirm reverting this merge");
+        btn.setText("Click again to confirm");
         btn.addClass("mod-warning");
         return;
       }

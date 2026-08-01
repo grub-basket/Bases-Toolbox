@@ -46,6 +46,7 @@ import {
   toggleActiveBaseReadOnly,
   toggleAllBasesReadOnly,
 } from "./read-only";
+import { installViewManagerButton, openViewManager } from "./view-manager";
 import { ConditionalFormatView, VIEW_TYPE_CONDITIONAL_FORMAT, openConditionalFormatView } from "./conditional-format-view";
 import { LauncherView, VIEW_TYPE_LAUNCHER, openLauncher } from "./launcher";
 import { FormatDoctorView, VIEW_TYPE_FORMAT_DOCTOR, openFormatDoctor } from "./format-doctor";
@@ -109,6 +110,7 @@ export default class BasesToolboxPlugin extends Plugin {
     installForkSync(this);
     installCompanionAuto(this);
     installReadOnly(this);
+    installViewManagerButton(this);
 
     const dirty = () => this.propertyCache.markDirty();
     this.registerEvent(this.app.metadataCache.on("changed", dirty));
@@ -248,13 +250,13 @@ export default class BasesToolboxPlugin extends Plugin {
 
     this.addCommand({
       id: "import-csv",
-      name: "Import CSV as notes (dialog)",
+      name: "Run importer on CSV file (dialog)",
       callback: () => new CsvImportModal(this).open(),
     });
 
     this.addCommand({
       id: "open-csv-import",
-      name: "Import CSV as notes (tab)",
+      name: "Run importer on CSV file (tab)",
       callback: () => void openCsvImportView(this),
     });
 
@@ -310,6 +312,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "add-formula-column",
       name: "Add or fix a base formula column",
       callback: () => openFormulaColumn(this),
+    });
+
+    this.addCommand({
+      id: "manage-base-views",
+      name: "Manage views for this base",
+      callback: () => openViewManager(this),
     });
 
     this.addCommand({

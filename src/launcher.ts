@@ -58,6 +58,7 @@ const TOOLS: ToolFeature[] = [
   { name: "Bulk edit base results", desc: "Edit properties across a base's rows", icon: "square-pen", command: "bulk-edit-base-results" },
   { name: "Zoom into cell", desc: "Big editor for the focused Bases cell", icon: "maximize-2", command: "zoom-into-cell" },
   { name: "Toggle base filters", desc: "Quickly enable/disable a base's filters", icon: "filter", command: "toggle-base-filters" },
+  { name: "Manage base views", desc: "Rename, duplicate, reorder & delete a base's views", icon: "settings-2", command: "manage-base-views" },
   { name: "Add formula column", desc: "Add or fix a base's formula (computed) column", icon: "function-square", command: "add-formula-column" },
   { name: "Toggle base read-only", desc: "Lock this base so its cells can't be edited", icon: "lock", command: "toggle-base-readonly" },
 ];

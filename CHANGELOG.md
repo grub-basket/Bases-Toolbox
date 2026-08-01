@@ -2,6 +2,10 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.52
+- **New — View manager.** One dialog for all of a base's views, replacing Obsidian's four-levels-deep flow (view menu → edit arrow → three-dot menu → Duplicate → name it). Every view is listed in switcher order: **rename in place**, **duplicate** (copies the whole view — columns, sort, filters, card size and all), **reorder** with up/down, **make default** (the view a base opens on), **show** a view in the open tab, **add** a new one, and **delete** with a confirmation. Open it from the new **button next to the base's view switcher**, the command **"Manage views for this base"**, or the launcher. Every change is revertible from the bulk file change history. Duplicate names are auto-suffixed (Bases identifies views by name), and renaming or deleting the view you're currently looking at re-points the open tab so it never lands on a view that no longer exists.
+- **Bulk file change history** now describes whole-file changes generically instead of assuming every one is a note merge ("Revert this change" rather than "Revert merge" for base edits).
+
 ## 0.1.51
 - **Store-guideline cleanup.** Removed two informational `console.log` migration messages, switched cross-window-unsafe `instanceof HTMLInputElement` checks to Obsidian's `.instanceOf()`, and used `createDiv()` in place of `createEl("div")` — all to satisfy the community-plugin review guidelines. The **Open settings** and **Open launcher** commands no longer repeat "Bases Toolbox" in their names (Obsidian already shows the plugin name next to each command).
 
