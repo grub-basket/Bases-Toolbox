@@ -35,9 +35,36 @@ interface ColumnConfig {
   include: boolean;
   propName: string;
   type: CsvType;
+  /** Update-mode conflict override for this column (undefined = follow the
+   * global "when a property already has a different value" choice). */
+  conflict?: "imported" | "existing";
 }
 
 type CollisionPolicy = "suffix" | "skip" | "overwrite" | "update";
+
+/** Update mode: what happens when a property already holds a DIFFERENT value. */
+type UpdateConflict = "imported" | "existing";
+
+/**
+ * A saved importer setup — everything except the pasted data — so a recurring
+ * import (a provider roster re-imported every month) is one pick instead of
+ * redoing the whole mapping. Column settings are matched to the current sheet
+ * BY HEADER, and the filename column is remembered by header too, so a
+ * re-exported sheet whose column order shifted still lines up.
+ */
+export interface ImportPreset {
+  name: string;
+  folder: string;
+  template: string;
+  collision: CollisionPolicy;
+  updateConflict: UpdateConflict;
+  makeBase: boolean;
+  baseName: string;
+  omitEmpty: boolean;
+  inputFormat: InputFormat;
+  filenameHeader: string;
+  columns: ColumnConfig[];
+}
 
 /**
  * An in-progress import saved to disk so a crash / accidental close / mid-import
@@ -56,6 +83,9 @@ interface ImportDraft {
   filenameCol: number;
   columns: ColumnConfig[];
   savedAt: number;
+  updateConflict?: UpdateConflict;
+  /** Row indices deselected in the row picker. */
+  excludedRows?: number[];
 }
 
 /**
@@ -82,6 +112,22 @@ class CsvImportPanel {
   private templateEl: HTMLTextAreaElement | null = null;
   private omitEmpty = false;
   private collision: CollisionPolicy = "suffix";
+  private updateConflict: UpdateConflict = "imported";
+  private conflictSetting: Setting | null = null;
+  private conflictDd: DropdownComponent | null = null;
+  /** Row indices deselected in the row picker (reset when the data changes). */
+  private excludedRows = new Set<number>();
+  private rowsEl: HTMLElement | null = null;
+  private rowSearch = "";
+  private rowsOpen = true;
+  /** Signature of the text at the last parse — ANY change invalidates the row
+   * selection (indices only mean anything against the exact pasted data; a
+   * stale deselection silently thinning a fresh paste is worse than re-ticking). */
+  private lastRowSig = "";
+  /** Preset chosen before any data was pasted — applied at first parse. */
+  private pendingPreset: ImportPreset | null = null;
+  private presetNameEl: HTMLInputElement | null = null;
+  private presetDd: DropdownComponent | null = null;
   private makeBase = true;
   private baseNameEl: HTMLInputElement | null = null;
   private baseNameSetting: Setting | null = null;
@@ -126,6 +172,8 @@ class CsvImportPanel {
       filenameCol: this.filenameCol,
       columns: this.columns,
       savedAt: Date.now(),
+      updateConflict: this.updateConflict,
+      excludedRows: [...this.excludedRows],
     };
     await this.draftStore.save(draft);
   }
@@ -186,6 +234,9 @@ class CsvImportPanel {
       if (this.baseNameEl) this.baseNameEl.value = d.baseName;
       this.collision = d.collision;
       this.collisionDd?.setValue(d.collision);
+      this.updateConflict = d.updateConflict ?? "imported";
+      this.conflictDd?.setValue(this.updateConflict);
+      this.conflictSetting?.settingEl.toggle(d.collision === "update");
       this.inputFormat = d.inputFormat;
       this.formatDd?.setValue(d.inputFormat);
       this.makeBase = d.makeBase;
@@ -206,6 +257,10 @@ class CsvImportPanel {
         this.renderMapping();
         this.renderPreview();
       }
+      // Row selection comes back too — parse() cleared it (row indices are
+      // only meaningful against this exact text, which the draft carries).
+      this.excludedRows = new Set((d.excludedRows ?? []).filter((i) => i < this.rows.length));
+      this.renderRows();
       this.refreshBaseHint();
       this.restoreBarEl?.remove();
       this.restoreBarEl = null;
@@ -219,6 +274,7 @@ class CsvImportPanel {
   }
 
   render(contentEl: HTMLElement): void {
+    this.renderPresetBar(contentEl);
     const ta = contentEl.createEl("textarea", {
       cls: "bases-toolbox-csv-input",
       attr: { placeholder: "Paste a CSV/TSV table, or a list (records separated by blank lines), or drop a file below…" },
@@ -282,6 +338,7 @@ class CsvImportPanel {
 
     this.statusEl = contentEl.createDiv({ cls: "bases-toolbox-fr-info", text: "Waiting for CSV input…" });
     this.mappingEl = contentEl.createDiv();
+    this.rowsEl = contentEl.createDiv();
     this.previewEl = contentEl.createDiv();
 
     new Setting(contentEl)
@@ -330,8 +387,27 @@ class CsvImportPanel {
         dd.addOption("overwrite", "Overwrite the note");
         dd.addOption("update", "Update the note — merge properties, keep the body");
         dd.setValue(this.collision);
-        dd.onChange((v) => (this.collision = v as CollisionPolicy));
+        dd.onChange((v) => {
+          this.collision = v as CollisionPolicy;
+          this.conflictSetting?.settingEl.toggle(v === "update");
+          this.renderMapping(); // shows/hides the per-column conflict control
+          this.renderRows(); // the status chips describe the policy
+        });
       });
+
+    this.conflictSetting = new Setting(contentEl)
+      .setName("When a property already has a different value")
+      .setDesc(
+        "Update mode only. “Imported wins” replaces it with the sheet's value; “keep existing” only fills properties that are missing or empty — so a hand-corrected field survives the next roster import. Override per column in the table above."
+      )
+      .addDropdown((dd) => {
+        this.conflictDd = dd;
+        dd.addOption("imported", "Imported value wins");
+        dd.addOption("existing", "Keep existing — only fill empty");
+        dd.setValue(this.updateConflict);
+        dd.onChange((v) => (this.updateConflict = v as UpdateConflict));
+      });
+    this.conflictSetting.settingEl.toggle(this.collision === "update");
 
     new Setting(contentEl)
       .setName("Create a .base file")
@@ -376,6 +452,7 @@ class CsvImportPanel {
     };
     this.baseNameEl?.addEventListener("input", this.refreshBaseHint);
     this.folderEl?.addEventListener("input", this.refreshBaseHint);
+    this.folderEl?.addEventListener("input", () => this.renderRows());
     this.refreshBaseHint();
 
     new Setting(contentEl).addButton((b) => {
@@ -459,8 +536,22 @@ class CsvImportPanel {
       }));
       this.filenameCol = 0;
       this.renderMapping();
+      // A preset picked before any data was pasted applies now, onto the
+      // freshly-built columns.
+      if (this.pendingPreset) {
+        const p = this.pendingPreset;
+        this.pendingPreset = null;
+        this.applyPresetMapping(p);
+      }
+    }
+    // Row indices only mean anything against the text they were picked on —
+    // any text change (even same-count re-pastes) resets the selection.
+    if (trimmed !== this.lastRowSig) {
+      this.lastRowSig = trimmed;
+      this.excludedRows.clear();
     }
     this.previewRow = Math.min(this.previewRow, this.rows.length - 1);
+    this.renderRows();
     this.renderPreview();
 
     const ambiguous = this.columns.reduce((total, col, i) => {
@@ -535,7 +626,9 @@ class CsvImportPanel {
       this.renderMapping();
       this.renderPreview();
     });
-    for (const h of ["CSV column", "Property", "Type", "Filename"]) head.createEl("th", { text: h });
+    const headings = ["CSV column", "Property", "Type", "Filename"];
+    if (this.collision === "update") headings.push("On conflict");
+    for (const h of headings) head.createEl("th", { text: h });
 
     this.columns.forEach((col, i) => {
       const tr = table.createEl("tr");
@@ -575,7 +668,25 @@ class CsvImportPanel {
       radio.addEventListener("change", () => {
         this.filenameCol = i;
         this.renderPreview();
+        this.renderRows(); // row names come from this column
       });
+      if (this.collision === "update") {
+        const sel = tr.createEl("td").createEl("select", { cls: "dropdown" });
+        const opts: [string, string][] = [
+          ["", "(global)"],
+          ["imported", "imported wins"],
+          ["existing", "keep existing"],
+        ];
+        for (const [v, label] of opts) {
+          const o = sel.createEl("option", { text: label });
+          o.value = v;
+        }
+        sel.value = col.conflict ?? "";
+        sel.setAttribute("aria-label", "Conflict override for this column");
+        sel.addEventListener("change", () => {
+          col.conflict = (sel.value || undefined) as ColumnConfig["conflict"];
+        });
+      }
     });
     this.updateSelectAll();
     this.scheduleDraftSave();
@@ -598,6 +709,12 @@ class CsvImportPanel {
         const key = findKey(fm, col.propName) ?? col.propName;
         const cur = Object.prototype.hasOwnProperty.call(fm, key) ? fm[key] : undefined;
         if (JSON.stringify(cur) === JSON.stringify(value)) continue; // already right
+        // Conflict policy: with "keep existing" (globally or per column), a
+        // property that already holds a real value is left alone — only
+        // missing/empty ones fill in.
+        const empty =
+          cur === undefined || cur === null || cur === "" || (Array.isArray(cur) && cur.length === 0);
+        if ((col.conflict ?? this.updateConflict) === "existing" && !empty) continue;
         changes.push({
           path: file.path,
           property: col.propName,
@@ -751,6 +868,293 @@ class CsvImportPanel {
     });
   }
 
+  /* ---------- presets (recurring imports) ---------- */
+
+  /**
+   * Preset picker: the whole importer setup (folder, mapping, policies — not
+   * the pasted data) saved under a name and reapplied in one pick. Built for
+   * the "same provider roster every month" routine.
+   */
+  private renderPresetBar(contentEl: HTMLElement): void {
+    const s = new Setting(contentEl)
+      .setName("Preset")
+      .setDesc(
+        "Save this setup (folder, column mapping, policies) under a name — e.g. one per provider — and reapply it next time. Columns match by header, so a re-exported sheet lines up even if its column order changed."
+      );
+    s.addDropdown((dd) => {
+      this.presetDd = dd;
+      this.refreshPresetDd("");
+      dd.onChange((name) => {
+        const p = this.plugin.settings.importPresets.find((x) => x.name === name);
+        if (p) this.applyPreset(p);
+      });
+    });
+    s.addText((t) => {
+      t.setPlaceholder("Name (e.g. Acme roster)");
+      this.presetNameEl = t.inputEl;
+    });
+    s.addButton((b) =>
+      b
+        .setButtonText("Save")
+        .setTooltip("Save the current setup under this name (a same-named preset is replaced)")
+        .onClick(() => void this.savePreset())
+    );
+    s.addExtraButton((b) =>
+      b.setIcon("trash-2").setTooltip("Delete the selected preset").onClick(() => this.deletePreset())
+    );
+  }
+
+  /** Rebuild the preset dropdown's options and select `selected`. */
+  private refreshPresetDd(selected: string): void {
+    const dd = this.presetDd;
+    if (!dd) return;
+    dd.selectEl.empty();
+    const presets = this.plugin.settings.importPresets;
+    dd.addOption("", presets.length ? "Apply a preset…" : "No presets saved yet");
+    for (const p of presets) dd.addOption(p.name, p.name);
+    dd.setValue(selected);
+  }
+
+  private async savePreset(): Promise<void> {
+    // Name from the field, falling back to the selected preset (= update it).
+    const name = this.presetNameEl?.value.trim() || this.presetDd?.getValue() || "";
+    if (!name) {
+      new Notice("Give the preset a name first.");
+      return;
+    }
+    const preset: ImportPreset = {
+      name,
+      folder: this.folderEl?.value ?? "",
+      template: this.templateEl?.value ?? "",
+      collision: this.collision,
+      updateConflict: this.updateConflict,
+      makeBase: this.makeBase,
+      baseName: this.baseNameEl?.value ?? "",
+      omitEmpty: this.omitEmpty,
+      inputFormat: this.inputFormat,
+      filenameHeader: this.headers[this.filenameCol] ?? "",
+      // Deep-copied so later edits in this session don't mutate the saved copy.
+      columns: this.columns.map((c) => ({ ...c })),
+    };
+    const list = this.plugin.settings.importPresets;
+    const i = list.findIndex((x) => x.name === name);
+    if (i >= 0) list[i] = preset;
+    else list.push(preset);
+    await this.plugin.savePluginData();
+    this.refreshPresetDd(name);
+    new Notice(`Preset “${name}” ${i >= 0 ? "updated" : "saved"}.`);
+  }
+
+  /** Apply a preset's scalars now; the column mapping applies when data exists
+   * (or is queued for the first parse when the importer is still empty). */
+  private applyPreset(p: ImportPreset): void {
+    if (this.folderEl) this.folderEl.value = p.folder;
+    if (this.templateEl) this.templateEl.value = p.template;
+    if (this.baseNameEl) this.baseNameEl.value = p.baseName;
+    this.collision = p.collision;
+    this.collisionDd?.setValue(p.collision);
+    this.updateConflict = p.updateConflict;
+    this.conflictDd?.setValue(p.updateConflict);
+    this.conflictSetting?.settingEl.toggle(p.collision === "update");
+    this.makeBase = p.makeBase;
+    this.makeBaseToggle?.setValue(p.makeBase);
+    this.baseNameSetting?.settingEl.toggle(p.makeBase);
+    this.omitEmpty = p.omitEmpty;
+    this.omitToggle?.setValue(p.omitEmpty);
+    this.inputFormat = p.inputFormat;
+    this.formatDd?.setValue(p.inputFormat);
+    if (this.presetNameEl) this.presetNameEl.value = p.name;
+    this.refreshBaseHint();
+    if (this.headers.length) {
+      this.applyPresetMapping(p);
+      this.renderRows(); // chips reflect the preset's folder + policy
+    } else {
+      this.pendingPreset = p;
+      new Notice(`Preset “${p.name}” applied — paste the sheet and the column mapping follows.`);
+    }
+  }
+
+  /** Overlay a preset's per-column settings onto the current sheet, by header. */
+  private applyPresetMapping(p: ImportPreset): void {
+    const norm = (h: string) => h.trim().toLowerCase();
+    for (const col of this.columns) {
+      const pc = p.columns.find((x) => norm(x.header) === norm(col.header));
+      if (!pc) continue;
+      col.include = pc.include;
+      col.propName = pc.propName;
+      col.type = pc.type;
+      col.conflict = pc.conflict;
+    }
+    const fi = this.headers.findIndex((h) => norm(h) === norm(p.filenameHeader));
+    if (fi >= 0) this.filenameCol = fi;
+    this.renderMapping();
+    this.renderPreview();
+    // Surface drift between the saved sheet and this one — the roster changed.
+    const missing = p.columns.filter(
+      (x) => x.include && !this.headers.some((h) => norm(h) === norm(x.header))
+    );
+    const extra = this.headers.filter((h) => !p.columns.some((x) => norm(x.header) === norm(h)));
+    const parts: string[] = [];
+    if (missing.length) parts.push(`saved columns not in this sheet: ${missing.map((x) => x.header).join(", ")}`);
+    if (extra.length) parts.push(`new columns not in the preset: ${extra.join(", ")}`);
+    new Notice(
+      `Preset “${p.name}” applied.${parts.length ? ` Heads-up — ${parts.join("; ")}.` : ""}`,
+      parts.length ? 10000 : 4000
+    );
+  }
+
+  private deletePreset(): void {
+    const name = this.presetDd?.getValue() ?? "";
+    if (!name) {
+      new Notice("Pick the preset to delete from the dropdown first.");
+      return;
+    }
+    new ConfirmModal(this.plugin, {
+      title: `Delete preset “${name}”?`,
+      body: "Only the saved setup is deleted — nothing in your vault changes.",
+      confirmText: "Delete preset",
+      danger: true,
+      onConfirm: () => void (async () => {
+        const list = this.plugin.settings.importPresets;
+        const i = list.findIndex((x) => x.name === name);
+        if (i >= 0) list.splice(i, 1);
+        await this.plugin.savePluginData();
+        this.refreshPresetDd("");
+        new Notice(`Preset “${name}” deleted.`);
+      })(),
+    }).open();
+  }
+
+  /* ---------- row picker ---------- */
+
+  /** Row indices matching the current row-filter text (all rows when blank). */
+  private matchingRowIndices(): number[] {
+    const q = this.rowSearch.trim().toLowerCase();
+    const out: number[] = [];
+    this.rows.forEach((row, i) => {
+      if (!q || row.some((cell) => cell.toLowerCase().includes(q))) out.push(i);
+    });
+    return out;
+  }
+
+  /**
+   * The row picker: choose exactly which rows import. Collapsible (a 12k-row
+   * sheet shouldn't dominate the form), searchable (the filter matches any
+   * cell), with All/None/Invert acting on the FILTERED set — so "filter to one
+   * provider, None, clear filter" style slicing works. Each row carries a chip
+   * saying what the import will do to it (new / update / overwrite / skip /
+   * suffix) against the current target folder.
+   */
+  private renderRows(): void {
+    const root = this.rowsEl;
+    if (!root) return;
+    root.empty();
+    if (!this.rows.length) return;
+    const total = this.rows.length;
+    const selected = total - [...this.excludedRows].filter((i) => i < total).length;
+
+    const details = root.createEl("details", { cls: "bases-toolbox-csv-rows" });
+    details.open = this.rowsOpen;
+    details.addEventListener("toggle", () => (this.rowsOpen = details.open));
+    const summary = details.createEl("summary", { cls: "bases-toolbox-csv-rows-summary" });
+    summary.createSpan({
+      text:
+        selected === total
+          ? `Rows to import: all ${total}`
+          : `Rows to import: ${selected} of ${total} selected`,
+    });
+
+    const bar = details.createDiv({ cls: "bases-toolbox-csv-rows-bar" });
+    const matches = () => this.matchingRowIndices();
+    const filtered = () => this.rowSearch.trim() !== "";
+    const btn = (label: string, fn: () => void, aria: string) => {
+      const b = bar.createEl("button", { text: label });
+      b.setAttribute("aria-label", aria);
+      b.addEventListener("click", () => {
+        fn();
+        this.scheduleDraftSave();
+        this.renderRows();
+      });
+    };
+    btn("All", () => matches().forEach((i) => this.excludedRows.delete(i)),
+      "Select every row the filter matches");
+    btn("None", () => matches().forEach((i) => this.excludedRows.add(i)),
+      "Deselect every row the filter matches");
+    btn("Invert", () => matches().forEach((i) => {
+        if (this.excludedRows.has(i)) this.excludedRows.delete(i);
+        else this.excludedRows.add(i);
+      }),
+      "Invert the selection of the rows the filter matches");
+    const search = bar.createEl("input", {
+      type: "search",
+      attr: { placeholder: "Filter rows (matches any cell)…", "aria-label": "Filter rows" },
+    });
+    search.value = this.rowSearch;
+    search.addEventListener("input", () => {
+      this.rowSearch = search.value;
+      this.renderRows();
+      // Re-focus: the rebuild replaced the input mid-typing.
+      const el = root.querySelector<HTMLInputElement>("input[type=search]");
+      el?.focus();
+      el?.setSelectionRange(el.value.length, el.value.length);
+    });
+    if (filtered()) {
+      bar.createSpan({
+        cls: "bases-toolbox-fr-info",
+        text: "All / None / Invert act on the filtered rows.",
+      });
+    }
+
+    const listEl = details.createDiv({ cls: "bases-toolbox-csv-rowlist" });
+    const folder = normalizePath(this.folderEl?.value.trim() || "CSV Import");
+    const CHIP: Record<CollisionPolicy, string> = {
+      suffix: "exists → “-2” copy",
+      skip: "exists → skipped",
+      overwrite: "exists → overwrite",
+      update: "exists → update",
+    };
+    const idxs = matches();
+    const CAP = 300;
+    for (const i of idxs.slice(0, CAP)) {
+      const row = this.rows[i];
+      const line = listEl.createDiv({ cls: "bases-toolbox-csv-rowline" });
+      const cb = line.createEl("input", { type: "checkbox" });
+      cb.checked = !this.excludedRows.has(i);
+      cb.addEventListener("change", () => {
+        if (cb.checked) this.excludedRows.delete(i);
+        else this.excludedRows.add(i);
+        this.scheduleDraftSave();
+        // Update only the summary count — rebuilding 300 rows per tick is rude.
+        const sel = total - [...this.excludedRows].filter((x) => x < total).length;
+        summary.setText(
+          sel === total ? `Rows to import: all ${total}` : `Rows to import: ${sel} of ${total} selected`
+        );
+      });
+      const name = sanitizeFilename(row[this.filenameCol] ?? `note-${i + 1}`);
+      line.createSpan({ cls: "bases-toolbox-csv-rowname", text: name });
+      const cells = this.columns
+        .map((c, ci) => (c.include && ci !== this.filenameCol ? (row[ci] ?? "").trim() : ""))
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(" · ");
+      line.createSpan({ cls: "bases-toolbox-csv-rowcells", text: cells.slice(0, 80) });
+      const exists = this.app.vault.getAbstractFileByPath(`${folder}/${name}.md`) instanceof TFile;
+      line.createSpan({
+        cls: `bases-toolbox-csv-rowchip ${exists ? "is-existing" : "is-new"}`,
+        text: exists ? CHIP[this.collision] : "new",
+      });
+    }
+    if (idxs.length > CAP) {
+      listEl.createDiv({
+        cls: "bases-toolbox-fr-info",
+        text: `Showing the first ${CAP} of ${idxs.length} matching rows — All/None/Invert still act on all ${idxs.length}; narrow the filter to see the rest.`,
+      });
+    }
+    if (!idxs.length) {
+      listEl.createDiv({ cls: "bases-toolbox-fr-info", text: "No rows match the filter." });
+    }
+  }
+
   private renderPreview(): void {
     const root = this.previewEl;
     if (!root || !this.rows.length) return;
@@ -799,6 +1203,10 @@ class CsvImportPanel {
       new Notice("Include at least one column first.");
       return;
     }
+    if (this.rows.length && this.rows.every((_, i) => this.excludedRows.has(i))) {
+      new Notice("Every row is deselected — tick at least one row to import.");
+      return;
+    }
     this.running = true;
     // Disable the button + show progress so a slow import can't be double-fired.
     this.importBtn?.setDisabled(true);
@@ -830,7 +1238,9 @@ class CsvImportPanel {
       const usedNames = new Set<string>();
       const jobs: Job[] = [];
       let skipped = 0;
+      const deselected = [...this.excludedRows].filter((i) => i < this.rows.length).length;
       for (const [idx, row] of this.rows.entries()) {
+        if (this.excludedRows.has(idx)) continue; // left out in the row picker
         const base = sanitizeFilename(row[this.filenameCol] ?? `note-${idx + 1}`);
         let name = base;
         const taken = (n: string) =>
@@ -1015,6 +1425,7 @@ class CsvImportPanel {
         (updated ? `, updated ${updated} existing` : "") +
         (overwritten ? `, overwrote ${overwritten}` : "") +
         (skipped ? `, skipped ${skipped}` : "") +
+        (deselected ? `, ${deselected} deselected` : "") +
         baseNote +
         ".";
       // When new notes were raw-written, Obsidian still has to index them (that's

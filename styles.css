@@ -714,6 +714,71 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   cursor: pointer;
 }
 
+/* Column manager — one row per column (id + kind + actions). */
+.bases-toolbox-cm-search {
+  width: 100%;
+  margin-bottom: var(--size-4-2);
+}
+.bases-toolbox-cm-list {
+  margin-bottom: var(--size-4-3);
+}
+.bases-toolbox-cm-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-4-1) 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.bases-toolbox-cm-row:last-child {
+  border-bottom: none;
+}
+.bases-toolbox-cm-name {
+  flex: 1;
+  min-width: 6em;
+  overflow-wrap: anywhere;
+}
+.bases-toolbox-cm-badges {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  white-space: nowrap;
+}
+.bases-toolbox-cm-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  flex-shrink: 0;
+}
+.bases-toolbox-cm-actions .clickable-icon {
+  margin: 0;
+}
+.bases-toolbox-cm-implicit {
+  color: var(--text-warning);
+}
+
+/* Column manager — toolbar button, sits after the view manager's button. */
+.bases-toolbar-item.bases-toolbox-cm-toolbar-btn {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+/* "Jump to column" flash — brief highlight so the eye lands after the scroll.
+   Theme vars only, so it reads in both light and dark. */
+.bases-toolbox-cm-flash {
+  animation: bases-toolbox-cm-flash 1.2s ease-out;
+}
+@keyframes bases-toolbox-cm-flash {
+  0%,
+  60% {
+    background-color: var(--text-selection);
+    box-shadow: inset 0 -2px 0 var(--interactive-accent);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
 /* Duplicate finder — per-folder scope rows (include / exclude lists). */
 .bases-toolbox-fr-folder-row {
   gap: var(--size-4-2);
@@ -1523,4 +1588,130 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
    input from shrinking below its content width — the real cause of overflow. */
 .bases-toolbar-filter-menu .filter-row > * {
   min-width: 0;
+}
+
+/* CSV importer — row picker (choose exactly which rows import). */
+.bases-toolbox-csv-rows {
+  margin: var(--size-4-2) 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-1) var(--size-4-2);
+}
+.bases-toolbox-csv-rows-summary {
+  cursor: pointer;
+  font-weight: var(--font-semibold);
+}
+.bases-toolbox-csv-rows-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-3);
+  margin: var(--size-4-1) 0;
+  flex-wrap: wrap;
+}
+.bases-toolbox-csv-rows-bar input[type="search"] {
+  flex: 1;
+  min-width: 10em;
+}
+.bases-toolbox-csv-rowlist {
+  max-height: 320px;
+  overflow-y: auto;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.bases-toolbox-csv-rowline {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-3);
+  padding: 2px 0;
+  border-bottom: 1px solid var(--background-modifier-border-hover);
+  font-size: var(--font-ui-small);
+}
+.bases-toolbox-csv-rowline:last-child {
+  border-bottom: none;
+}
+.bases-toolbox-csv-rowname {
+  font-weight: var(--font-semibold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 14em;
+}
+.bases-toolbox-csv-rowcells {
+  flex: 1;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bases-toolbox-csv-rowchip {
+  font-size: var(--font-ui-smaller);
+  border-radius: var(--radius-s);
+  padding: 0 6px;
+  white-space: nowrap;
+}
+.bases-toolbox-csv-rowchip.is-new {
+  color: var(--text-success);
+  background: var(--background-modifier-success);
+}
+.bases-toolbox-csv-rowchip.is-existing {
+  color: var(--text-warning);
+  background: var(--background-modifier-error-hover);
+}
+
+/* Duplicate finder — collapsible scan options. */
+.bases-toolbox-dup-options {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-1) var(--size-4-2);
+  margin-bottom: var(--size-4-2);
+}
+.bases-toolbox-dup-options > summary {
+  cursor: pointer;
+  font-weight: var(--font-semibold);
+}
+
+/* Duplicate finder — per-member merge checkbox. */
+.bases-toolbox-dup-mergecb {
+  margin: 0;
+}
+
+/* Duplicate finder — bulk merge across visible groups. */
+.bases-toolbox-dup-bulk {
+  margin: var(--size-4-2) 0;
+}
+
+/* Duplicate finder — body diff. */
+.bases-toolbox-dup-diff {
+  margin-top: var(--size-4-1);
+}
+.bases-toolbox-dup-diff > summary {
+  cursor: pointer;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+.bases-toolbox-dup-difflines {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  margin-top: var(--size-2-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.bases-toolbox-dup-diffline {
+  padding: 0 var(--size-2-2);
+}
+.bases-toolbox-dup-diffline.bt-diff-del {
+  background: var(--background-modifier-error-hover);
+  color: var(--text-error);
+}
+.bases-toolbox-dup-diffline.bt-diff-add {
+  background: var(--background-modifier-success);
+  color: var(--text-success);
+}
+.bases-toolbox-dup-diffgap {
+  padding: 0 var(--size-2-2);
+  color: var(--text-faint);
+  font-style: italic;
 }

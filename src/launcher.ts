@@ -59,6 +59,9 @@ const TOOLS: ToolFeature[] = [
   { name: "Zoom into cell", desc: "Big editor for the focused Bases cell", icon: "maximize-2", command: "zoom-into-cell" },
   { name: "Toggle base filters", desc: "Quickly enable/disable a base's filters", icon: "filter", command: "toggle-base-filters" },
   { name: "Manage base views", desc: "Rename, duplicate, reorder & delete a base's views", icon: "settings-2", command: "manage-base-views" },
+  { name: "Exclude skipped extensions", desc: "Filter files like .edtz out of a base (uses your skip list)", icon: "file-x", command: "exclude-skipped-extensions" },
+  { name: "New grid", desc: "Open an editable grid over a folder (needs GridSense)", icon: "grid-3x3", command: "new-grid" },
+  { name: "Manage base columns", desc: "Hide, reveal, reorder & jump to a view's columns", icon: "columns-3", command: "manage-base-columns" },
   { name: "Add formula column", desc: "Add or fix a base's formula (computed) column", icon: "function-square", command: "add-formula-column" },
   { name: "Toggle base read-only", desc: "Lock this base so its cells can't be edited", icon: "lock", command: "toggle-base-readonly" },
 ];

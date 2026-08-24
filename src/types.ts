@@ -39,7 +39,7 @@ export interface FileSnapshot {
 export interface ViewOpUndo {
   /** The `.base` file the operation touched. */
   path: string;
-  op: "rename" | "remove" | "insert" | "move";
+  op: "rename" | "remove" | "insert" | "move" | "order";
   /** rename: what the view is called now, and the name to put back. */
   currentName?: string;
   previousName?: string;
@@ -52,6 +52,20 @@ export interface ViewOpUndo {
   /** move: put the view back by moving it from `fromIndex` to `toIndex`. */
   fromIndex?: number;
   toIndex?: number;
+  /** order (column manager): which view's column list was rewritten. */
+  viewName?: string;
+  /**
+   * order: the `order:` array to put back — or `null` when the view had NO
+   * explicit order and the operation materialised one, in which case the undo
+   * deletes the key again so Bases resumes picking the columns itself.
+   */
+  previousOrder?: string[] | null;
+  /**
+   * order: the list the operation wrote. Revert refuses if the view's order
+   * no longer matches this — same "don't clobber newer work" stance as the
+   * property-level revert.
+   */
+  expectedOrder?: string[];
 }
 
 export interface HistoryEntry {
@@ -172,6 +186,18 @@ export interface BasesToolboxSettings {
    * what was typed instead of the highlighted suggestion — unless the user
    * arrow-navigated to a suggestion first (deliberate pick still works). */
   literalEnter: boolean;
+  /** Clicking a Stashpad note's link in a base opens it in the Stashpad view
+   * instead of the markdown editor. Off by default — silently redirecting link
+   * clicks is surprising unless you asked for it. */
+  stashpadLinks: boolean;
+  /** Extensions to exclude when the "exclude skipped extensions" command runs
+   * on a base (comma/space/newline-separated, dots optional). Nothing happens
+   * automatically — the command appends `file.ext != "<ext>"` to the base's
+   * top-level filter. Seeded with Stashpad's encrypted-note extension. */
+  skipExtensions: string;
+  /** Saved CSV-importer setups (folder, mapping, policies) by name — for
+   * recurring imports like a provider roster re-imported every month. */
+  importPresets: import("./csv-import").ImportPreset[];
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -206,6 +232,9 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   readOnlyBases: [],
   readOnlyBlockNewRow: false,
   literalEnter: false,
+  stashpadLinks: false,
+  skipExtensions: "edtz",
+  importPresets: [],
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */

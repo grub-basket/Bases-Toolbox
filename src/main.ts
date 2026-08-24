@@ -47,6 +47,10 @@ import {
   toggleAllBasesReadOnly,
 } from "./read-only";
 import { installViewManagerButton, openViewManager } from "./view-manager";
+import { installColumnManagerButton, openColumnManager } from "./column-manager";
+import { openNewGrid } from "./gridsense";
+import { installStashpadLinks, warnIfStashpadMissing } from "./stashpad-links";
+import { excludeSkippedExtensions } from "./skip-extensions";
 import { ConditionalFormatView, VIEW_TYPE_CONDITIONAL_FORMAT, openConditionalFormatView } from "./conditional-format-view";
 import { LauncherView, VIEW_TYPE_LAUNCHER, openLauncher } from "./launcher";
 import { FormatDoctorView, VIEW_TYPE_FORMAT_DOCTOR, openFormatDoctor } from "./format-doctor";
@@ -111,6 +115,8 @@ export default class BasesToolboxPlugin extends Plugin {
     installCompanionAuto(this);
     installReadOnly(this);
     installViewManagerButton(this);
+    installColumnManagerButton(this);
+    installStashpadLinks(this);
 
     const dirty = () => this.propertyCache.markDirty();
     this.registerEvent(this.app.metadataCache.on("changed", dirty));
@@ -318,6 +324,24 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "manage-base-views",
       name: "Manage views for this base",
       callback: () => openViewManager(this),
+    });
+
+    this.addCommand({
+      id: "manage-base-columns",
+      name: "Manage columns for this base",
+      callback: () => openColumnManager(this),
+    });
+
+    this.addCommand({
+      id: "new-grid",
+      name: "New grid (GridSense)",
+      callback: () => openNewGrid(this.app),
+    });
+
+    this.addCommand({
+      id: "exclude-skipped-extensions",
+      name: "Exclude skipped file extensions from this base",
+      callback: () => excludeSkippedExtensions(this),
     });
 
     this.addCommand({
@@ -804,6 +828,35 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Open Stashpad notes in Stashpad")
+      .setDesc(
+        "In a base, clicking a note that lives in a Stashpad folder opens it in the Stashpad view instead of the markdown editor, so you keep its parent/children context. Cmd/Ctrl-click and middle-click open it in a new tab, still in Stashpad. Notes outside Stashpad — and Stashpad folder files that aren't notes, like authors — open normally. Needs the Stashpad plugin."
+      )
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.stashpadLinks).onChange(async (v) => {
+          this.plugin.settings.stashpadLinks = v;
+          await this.plugin.savePluginData();
+          // Turning it on with Stashpad absent is silently a no-op otherwise.
+          if (v) warnIfStashpadMissing(this.plugin.app);
+        })
+      );
+
+    new Setting(containerEl)
+      .setName("Always skip file extensions")
+      .setDesc(
+        "Extensions the “Exclude skipped file extensions from this base” command removes from a base (comma or space separated — the dot is optional). Nothing changes on its own: run the command on a base and it appends a filter so files with these extensions stop appearing in every view. Revertible from history."
+      )
+      .addText((t) =>
+        t
+          .setPlaceholder("edtz, png, pdf")
+          .setValue(this.plugin.settings.skipExtensions)
+          .onChange(async (v) => {
+            this.plugin.settings.skipExtensions = v;
+            await this.plugin.savePluginData();
+          })
+      );
+
+    new Setting(containerEl)
       .setName("Multiline list cells")
       .setDesc(
         "In Bases table views, show list-property values stacked one per line instead of a single row of pills. Long lists scroll inside the cell — pair with the Bases row height option for taller rows."
@@ -1230,15 +1283,20 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           ["Compute rollup into property", "For each note in the open base, gathers the notes linked to it (incoming or outgoing) and aggregates them — count of linked notes, or sum / average / min / max of a number property on them — writing the result into a property you name. E.g. give every Project a “task-count” of the Tasks that link to it, or a “total-hours”. One-shot and revertible; re-run to refresh."],
           ["Migrate inline fields to properties", "Converts inline “key:: value” fields written in a note's body into real frontmatter properties that Bases can use."],
           ["Merge current note into another", "Combines the current note — its body and its properties — into another note you pick, then tidies up (re-points links, trashes the source). Recorded to History, so the whole merge can be reverted."],
-          ["Find duplicate notes", "Finds notes that are near-duplicates of each other (by a heuristic you can tune) so you can merge them. Pick which note to keep; the rest merge into it with their bodies combined in creation-date order. Each merge is revertible from History."],
+          ["Find duplicate notes", "Finds notes that are near-duplicates (similar names, same property value, or identical bodies; scope the scan to folders, or exclude some) so you can merge them. Each group shows size / property count / dates per note, a BODY DIFF against the kept note, and a per-note tick so part of a group can be left out of the merge. A keep-policy (oldest/newest/longest) pre-selects the survivor, and with one set, “Merge all visible groups” clears a whole scan in one go. Every merge — bulk included — is individually revertible from History."],
           ["Create companion notes for non-Markdown files", "Bases can only query Markdown notes. This creates a small Markdown “companion” beside a PDF/image/etc. that mirrors the file's metadata as properties, so those files appear in Bases."],
           ["Stamp file metadata into note properties", "Writes the file's created/modified dates into frontmatter so they're durable (survive sync/export) and usable in Bases."],
-          ["Import CSV as notes", "Turns each row of a CSV into a note, with the columns becoming frontmatter properties."],
+          ["Import CSV as notes", "Turns each row of a CSV into a note, with the columns becoming frontmatter properties. Built for recurring imports: a ROW PICKER chooses exactly which rows import (filterable, with chips showing what each row will do — new / update / overwrite / skip), PRESETS save the whole setup (folder, column mapping, policies) under a name so re-importing the same provider's sheet is one pick (columns match by header, so a re-exported sheet lines up even if its column order changed), and in update mode a CONFLICT policy decides whether the sheet's value or the note's existing value wins — globally or per column — so hand-corrected fields survive the next import."],
           ["Export base results as CSV", "Exports the rows the open base currently shows to a CSV file."],
           ["Bulk edit properties of base results", "Set, append to, remove from, or clear a property across every note the open base returns — in one action."],
           ["Zoom into focused cell", "Opens a large editor for the Bases cell you're on, for comfortable editing of long values."],
           ["Audit aliased internal links in properties", "Finds property values whose internal links use aliases ([[Note|Alias]]) and groups them by target, flagging any note that's shown more than one way (different aliases, or aliased in some values and plain in others) — the ones worth standardizing. Read-only."],
           ["Toggle base filters", "Temporarily disable (and later re-enable) a base's filters without editing the .base file."],
+          ["Open Stashpad notes in Stashpad", "A setting, not a command. With it on, clicking a note in a base that lives in a Stashpad folder opens it in the Stashpad view (keeping its place in the tree) rather than the plain editor; Cmd/Ctrl-click and middle-click do the same in a new tab. Only notes with a Stashpad id are redirected, so author files and anything outside a Stashpad folder open as usual. Off by default; needs the Stashpad plugin."],
+          ["Exclude skipped file extensions from this base", "Appends an exclusion to the base's top-level filter so files with the extensions in your skip list (Settings → Always skip file extensions — .edtz by default) stop showing up as rows in every view. Idempotent (running it again won't duplicate), and if the base uses an “or” filter it's wrapped in an “and” so the exclusion still holds. Revertible from the bulk file change history."],
+          ["New grid (GridSense)", "Opens an editable, Excel-style grid over a folder's notes, using the separate GridSense plugin — pick the folder and it opens. If GridSense isn't installed (or is switched off), this tells you so rather than doing nothing; nothing else in Bases Toolbox depends on it."],
+          ["Manage views for this base", "One dialog for all of a base's views instead of Obsidian's four-levels-deep menu: rename in place, duplicate (the whole view — columns, sort, filters and all), reorder, set the default, show one, add, and delete. Also on a button next to the base's view switcher."],
+          ["Manage columns for this base", "Hide and reveal a view's columns, reorder them, and jump to one that's scrolled off-screen. The reveal list is built from the properties this base's notes actually use (plus its formulas), so you can switch on a property that isn't a column yet. “Group” re-sorts so your own properties lead instead of the file ones. Also on a button next to the base's view switcher. Note: a view with no explicit column list gets one written the first time you change something here — after that, new properties no longer appear on their own; reveal them from this dialog."],
           ["Toggle read-only for this base / all bases", "Lock a base (or every base) so its cells can't be edited — guards against accidental edits and deletes. Links and the date-picker stay clickable. Manage the list under Settings → Read-only bases."],
           ["Add or fix a base formula column", "Add a computed (formula) column to a base by writing it into the .base file, and repair Obsidian's empty-formula glitch — a blank formula the Bases UI locks you out of editing. Never writes an empty formula."],
           ["Toggle number guard", "Stops number properties from changing when you accidentally press arrow keys or scroll over them."],

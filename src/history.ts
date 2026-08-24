@@ -183,6 +183,30 @@ async function revertViewOp(
       views.splice(to, 0, moved);
       break;
     }
+    case "order": {
+      // Column-manager undo: restore ONE view's column list. Refuses when the
+      // view is gone, or when its order has been changed again since — putting
+      // the old list back would silently discard those later columns.
+      const i = views.findIndex((v) => viewNameOf(v) === (undo.viewName ?? ""));
+      if (i < 0) return skip("edited since");
+      const current = views[i].order;
+      const currentList = Array.isArray(current)
+        ? (current as unknown[]).map((x) => String(x))
+        : null;
+      const expected = undo.expectedOrder ?? [];
+      if (
+        !currentList ||
+        currentList.length !== expected.length ||
+        currentList.some((c, k) => c !== expected[k])
+      ) {
+        return skip("edited since");
+      }
+      // A null previousOrder means WE created the key — take it back out so the
+      // view returns to Bases' automatic column selection.
+      if (Array.isArray(undo.previousOrder)) views[i].order = [...undo.previousOrder];
+      else delete views[i].order;
+      break;
+    }
   }
 
   doc.views = views;
@@ -256,7 +280,27 @@ export async function revertEntry(
 }
 
 export function reportNotice(entry: HistoryEntry, r: RevertReport): void {
+  // Base view/column operations carry a whole-file snapshot too, but they're
+  // not merges — report them by their own label instead of "restored N notes".
+  if (entry.viewUndo) {
+    new Notice(
+      r.restored
+        ? `Reverted: ${entry.property}.`
+        : `Couldn't revert “${entry.property}” — that base has changed since.`
+    );
+    return;
+  }
   if (entry.fileSnapshots?.length) {
+    // Only actual note merges are worded as merges; other whole-file snapshot
+    // ops (e.g. the skip-extensions base filter) get a generic, accurate label.
+    if (entry.source !== "merge") {
+      new Notice(
+        r.restored
+          ? `Reverted: ${entry.property}.`
+          : `Couldn't revert “${entry.property}” — the file has changed since.`
+      );
+      return;
+    }
     const total = entry.fileSnapshots.length;
     new Notice(
       `Reverted merge: restored ${r.restored} of ${total} note${total === 1 ? "" : "s"}` +

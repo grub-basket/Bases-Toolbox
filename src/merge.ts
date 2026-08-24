@@ -534,6 +534,101 @@ function inAnyScope(path: string, scopes: FolderScope[]): boolean {
   return scopes.some((s) => s.path && inScope(path, s));
 }
 
+/* ---------- body diff (for the duplicate preview) ---------- */
+
+type DiffRow = { kind: "same" | "add" | "del"; text: string };
+
+/** Classic LCS line diff. Callers cap input size — it's O(n·m). */
+function diffLines(a: string[], b: string[]): DiffRow[] {
+  const n = a.length;
+  const m = b.length;
+  const dp: Uint16Array[] = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const out: DiffRow[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      out.push({ kind: "same", text: a[i] });
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      out.push({ kind: "del", text: a[i] });
+      i++;
+    } else {
+      out.push({ kind: "add", text: b[j] });
+      j++;
+    }
+  }
+  while (i < n) out.push({ kind: "del", text: a[i++] });
+  while (j < m) out.push({ kind: "add", text: b[j++] });
+  return out;
+}
+
+/**
+ * Renders a compact line diff of two note bodies — long unchanged runs
+ * collapse to two lines of context, so what actually differs stands out.
+ * "−" lines exist only in the kept note, "+" only in the other one. Purely
+ * informational: merging CONCATENATES bodies, it doesn't combine lines.
+ */
+function renderBodyDiff(
+  parent: HTMLElement,
+  aName: string,
+  aBody: string,
+  bName: string,
+  bBody: string
+): void {
+  const A = aBody.split("\n");
+  const B = bBody.split("\n");
+  const box = parent.createDiv({ cls: "bases-toolbox-dup-diffbody" });
+  if (A.length > 800 || B.length > 800) {
+    box.createDiv({
+      cls: "bases-toolbox-fr-info",
+      text: "These bodies are too long to diff here — open the notes side by side instead.",
+    });
+    return;
+  }
+  const rows = diffLines(A, B);
+  if (rows.every((r) => r.kind === "same")) {
+    box.createDiv({ cls: "bases-toolbox-fr-info", text: "The bodies differ only in whitespace." });
+    return;
+  }
+  box.createDiv({
+    cls: "bases-toolbox-fr-info",
+    text: `− only in “${aName}” (kept) · + only in “${bName}”`,
+  });
+  const out = box.createDiv({ cls: "bases-toolbox-dup-difflines" });
+  const emit = (r: DiffRow): void => {
+    const mark = r.kind === "add" ? "+ " : r.kind === "del" ? "− " : "  ";
+    out.createDiv({ cls: `bases-toolbox-dup-diffline bt-diff-${r.kind}`, text: mark + r.text });
+  };
+  let i = 0;
+  while (i < rows.length) {
+    if (rows[i].kind !== "same") {
+      emit(rows[i]);
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < rows.length && rows[j].kind === "same") j++;
+    const run = j - i;
+    if (run <= 5) {
+      for (let k = i; k < j; k++) emit(rows[k]);
+    } else {
+      emit(rows[i]);
+      emit(rows[i + 1]);
+      out.createDiv({ cls: "bases-toolbox-dup-diffgap", text: `⋯ ${run - 4} unchanged lines` });
+      emit(rows[j - 2]);
+      emit(rows[j - 1]);
+    }
+    i = j;
+  }
+}
+
 /**
  * Shared duplicate-finder UI (scan controls + grouped results). Rendered into
  * either a modal or a workspace tab; the only difference is `openFile`, which
@@ -555,6 +650,8 @@ class DuplicateFinderPanel {
    * results (transient — reset on each scan). A group stays visible while any of
    * its members is in a folder that isn't hidden. */
   private hiddenResultFolders = new Set<string>();
+  /** The collapsible scan-options block — auto-folds after a scan. */
+  private optionsEl: HTMLDetailsElement | null = null;
 
   constructor(plugin: BasesToolboxPlugin, openFile: (file: TFile) => void) {
     this.plugin = plugin;
@@ -668,12 +765,19 @@ class DuplicateFinderPanel {
   }
 
   render(contentEl: HTMLElement): void {
-    new Setting(contentEl)
+    // Every scan control lives in one collapsible block, folded automatically
+    // after a scan — so the results are the page, not the last stop after a
+    // wall of settings. The summary reopens it.
+    this.optionsEl = contentEl.createEl("details", { cls: "bases-toolbox-dup-options" });
+    this.optionsEl.open = true;
+    this.optionsEl.createEl("summary", { text: "Scan options" });
+    const opts = this.optionsEl.createDiv();
+    new Setting(opts)
       .setName("Similar file names")
       .setDesc('Ignores case, punctuation, and trailing "copy"/number suffixes.')
       .addToggle((t) => t.setValue(this.byName).onChange((v) => (this.byName = v)));
 
-    new Setting(contentEl)
+    new Setting(opts)
       .setName("Ignore date-like & numeric names")
       .setDesc(
         "Don't flag daily notes / numbered notes (e.g. 2026-07-01, 42) as name duplicates. Recommended on."
@@ -685,7 +789,7 @@ class DuplicateFinderPanel {
         })
       );
 
-    new Setting(contentEl)
+    new Setting(opts)
       .setName("Default note to keep")
       .setDesc(
         "Pre-select which note in each group survives the merge. You can still change the pick per group. Oldest/newest by creation date; longest by file size."
@@ -705,20 +809,20 @@ class DuplicateFinderPanel {
       });
 
     this.renderFolderScopeSection(
-      contentEl,
+      opts,
       "Only these folders",
       "Lock the scan to these folders (leave empty to scan the whole vault). Toggle whether each reaches into subfolders.",
       this.plugin.settings.dupIncludeFolders
     );
 
     this.renderFolderScopeSection(
-      contentEl,
+      opts,
       "Exclude folders",
       "Folders to skip entirely (e.g. Daily Notes, Journal). Wins over “Only these folders”. Toggle whether each reaches into subfolders.",
       this.plugin.settings.dupExcludeFolders
     );
 
-    new Setting(contentEl)
+    new Setting(opts)
       .setName("Same value of property")
       .setDesc("Notes sharing a value of this property group as duplicates. Leave empty to skip.")
       .addText((t) => {
@@ -727,7 +831,7 @@ class DuplicateFinderPanel {
         attachPropertySuggest(this.plugin, t.inputEl);
       });
 
-    new Setting(contentEl)
+    new Setting(opts)
       .setName("Identical body")
       .setDesc("Compares note bodies (frontmatter excluded). Reads every file — slower in big vaults.")
       .addToggle((t) => t.setValue(this.byBody).onChange((v) => (this.byBody = v)));
@@ -802,6 +906,8 @@ class DuplicateFinderPanel {
     this.dupGroups = [...groups.entries()].filter(([, g]) => g.length > 1);
     this.hiddenResultFolders.clear();
     this.scanned = true;
+    // Fold the options away — the results deserve the space now.
+    if (this.optionsEl) this.optionsEl.open = false;
     this.renderResults();
   }
 
@@ -904,6 +1010,49 @@ class DuplicateFinderPanel {
       return;
     }
 
+    // Bulk merge: with a keep-policy picked, every visible group already has a
+    // pre-selected survivor — one button applies them all, each group written
+    // as its own (individually revertible) history entry.
+    if (!this.showIgnored && visible.length > 1 && this.plugin.settings.dupKeepPolicy !== "none") {
+      const n = visible.length;
+      const bulk = root.createEl("button", {
+        cls: "bases-toolbox-dup-bulk",
+        text: `Merge all ${n} visible groups (keeping the “${this.plugin.settings.dupKeepPolicy}” pick)`,
+      });
+      let armed = false;
+      bulk.addEventListener("click", () => void (async () => {
+        if (!armed) {
+          armed = true;
+          bulk.setText(`Click again to merge ${n} groups — each stays revertible from history`);
+          bulk.addClass("mod-warning");
+          return;
+        }
+        bulk.disabled = true;
+        const prog = new Notice(`[Bases Toolbox] Merging group 0/${n}…`, 0);
+        let doneGroups = 0;
+        let mergedNotes = 0;
+        for (const [, g] of visible) {
+          // A note can sit in TWO groups (same name AND same property value);
+          // an earlier merge in this loop may have trashed it — work only on
+          // members that still exist, and skip a group whose survivor is gone.
+          const alive = g.filter((f) => !!this.app.vault.getAbstractFileByPath(f.path));
+          if (alive.length < 2) continue;
+          const keep = this.defaultKeep(alive);
+          if (!keep) continue;
+          const sources = alive.filter((f) => f !== keep);
+          await mergeGroup(this.plugin, keep, sources);
+          mergedNotes += sources.length;
+          prog.setMessage(`[Bases Toolbox] Merging group ${++doneGroups}/${n}…`);
+        }
+        prog.hide();
+        new Notice(
+          `[Bases Toolbox] Merged ${doneGroups} group${doneGroups === 1 ? "" : "s"} — ${mergedNotes} note${mergedNotes === 1 ? "" : "s"} into their kept notes. Each group is individually revertible from the bulk file change history.`,
+          0
+        );
+        await this.scan(); // membership changed — rescan for what's left
+      })());
+    }
+
     for (const [key, group] of visible) this.renderGroup(root, key, group, this.showIgnored);
   }
 
@@ -926,12 +1075,40 @@ class DuplicateFinderPanel {
       const defaultKeep = this.defaultKeep(group);
       const radioName = `bt-dup-${simpleHash(key)}`;
       const radios: { file: TFile; radio: HTMLInputElement }[] = [];
+      // Which members actually take part: the radio picks the survivor, and
+      // every OTHER member has a "merge" checkbox — so part of a group can be
+      // left alone (unticked) without ignoring the whole group. Default: all in.
+      const mergeSel = new Map<TFile, boolean>();
+      const checkboxes = new Map<TFile, HTMLInputElement>();
+      const srcCount = () =>
+        group.filter((f) => f !== keep && mergeSel.get(f) !== false).length;
+      const syncCheckboxes = () => {
+        for (const [file, cb] of checkboxes) {
+          const isKeep = file === keep;
+          cb.disabled = isKeep;
+          cb.checked = isKeep ? true : mergeSel.get(file) !== false;
+        }
+      };
       for (const file of group) {
         const row = box.createDiv({ cls: "bases-toolbox-dup-row" });
         const radio = row.createEl("input", { type: "radio", attr: { name: radioName } });
+        radio.setAttribute("aria-label", "Keep this note (the others merge into it)");
         radios.push({ file, radio });
         radio.addEventListener("change", () => {
           keep = file;
+          syncCheckboxes();
+          resetMergeBtn();
+          void renderPreview();
+        });
+        const cb = row.createEl("input", {
+          cls: "bases-toolbox-dup-mergecb",
+          type: "checkbox",
+        });
+        cb.setAttribute("aria-label", "Include this note in the merge (untick to leave it alone)");
+        cb.checked = true;
+        checkboxes.set(file, cb);
+        cb.addEventListener("change", () => {
+          mergeSel.set(file, cb.checked);
           resetMergeBtn();
           void renderPreview();
         });
@@ -945,17 +1122,35 @@ class DuplicateFinderPanel {
           e.preventDefault();
           this.openFile(file);
         });
+        // Enough metadata to CHOOSE without opening each note: size, property
+        // count, created + edited dates.
+        const fm = (this.app.metadataCache.getFileCache(file)?.frontmatter ?? {}) as Record<
+          string,
+          unknown
+        >;
+        const props = Object.keys(fm).filter((k) => k !== "position").length;
         row.createSpan({
           cls: "bases-toolbox-index-prop-count",
-          text: new Date(file.stat.mtime).toLocaleDateString(),
+          text:
+            `${(file.stat.size / 1024).toFixed(1)} KB · ${props} prop${props === 1 ? "" : "s"}` +
+            ` · created ${new Date(file.stat.ctime).toLocaleDateString()}` +
+            ` · edited ${new Date(file.stat.mtime).toLocaleDateString()}`,
         });
       }
       const previewEl = box.createDiv({ cls: "bases-toolbox-dup-preview-wrap" });
       const renderPreview = async (): Promise<void> => {
         previewEl.empty();
         if (!keep) return;
-        const sources = group.filter((f) => f !== keep);
-        const pv = await buildMergePreview(this.app, keep, sources);
+        const kept = keep;
+        const sources = group.filter((f) => f !== kept && mergeSel.get(f) !== false);
+        if (!sources.length) {
+          previewEl.createDiv({
+            cls: "bases-toolbox-fr-info",
+            text: "Every other note is unticked — nothing would merge.",
+          });
+          return;
+        }
+        const pv = await buildMergePreview(this.app, kept, sources);
         const wrap = previewEl.createDiv({ cls: "bases-toolbox-dup-preview" });
         wrap.createDiv({
           cls: "bases-toolbox-dup-preview-head",
@@ -995,19 +1190,34 @@ class DuplicateFinderPanel {
           cls: "bases-toolbox-dup-pv-foot bases-toolbox-dup-pv-trash",
           text: `Moved to vault trash (recoverable): ${pv.removed.join(", ")}.`,
         });
+        // Body diffs: kept vs each merging note whose body differs — so "which
+        // of these actually has different content" is answered right here.
+        const keptBody = stripFrontmatter(await this.app.vault.cachedRead(kept)).trim();
+        for (const src of sources) {
+          const srcBody = stripFrontmatter(await this.app.vault.cachedRead(src)).trim();
+          if (srcBody === keptBody) continue;
+          const dt = wrap.createEl("details", { cls: "bases-toolbox-dup-diff" });
+          dt.createEl("summary", {
+            text: `Body diff: “${kept.basename}” vs “${src.basename}”`,
+          });
+          renderBodyDiff(dt, kept.basename, keptBody, src.basename, srcBody);
+        }
       };
 
-      const n = group.length - 1;
-      const idleText = `Merge ${n} note${n === 1 ? "" : "s"} into the kept note`;
-      const btn = box.createEl("button", { text: idleText });
+      const idleText = () => {
+        const n = srcCount();
+        return `Merge ${n} note${n === 1 ? "" : "s"} into the kept note`;
+      };
+      const btn = box.createEl("button", { text: "" });
       let armed = false;
-      // Disabled until a note is picked; picking one (or re-picking) also
-      // disarms the confirm step so a changed choice can't merge on one click.
+      // Disabled until a note is picked (and while nothing is ticked to merge);
+      // picking/re-picking also disarms the confirm step so a changed choice
+      // can't merge on one click.
       function resetMergeBtn(): void {
         armed = false;
-        btn.disabled = keep === null;
+        btn.disabled = keep === null || srcCount() === 0;
         btn.removeClass("mod-warning", "bases-toolbox-btn-success");
-        btn.setText(idleText);
+        btn.setText(idleText());
       }
       resetMergeBtn();
       // Apply the keep-policy pre-selection: check the matching radio, set keep,
@@ -1021,8 +1231,10 @@ class DuplicateFinderPanel {
           void renderPreview();
         }
       }
+      syncCheckboxes();
       btn.addEventListener("click", () => void (async () => {
         if (!keep) return;
+        const n = srcCount();
         if (!armed) {
           armed = true;
           btn.setText(`Click again to confirm merging ${n} note${n === 1 ? "" : "s"}`);
@@ -1031,7 +1243,11 @@ class DuplicateFinderPanel {
         }
         btn.disabled = true;
         const target = keep;
-        await mergeGroup(this.plugin, target, group.filter((f) => f !== target));
+        await mergeGroup(
+          this.plugin,
+          target,
+          group.filter((f) => f !== target && mergeSel.get(f) !== false)
+        );
         // The button itself becomes the confirmation: green, with the result.
         btn.removeClass("mod-warning");
         btn.addClass("bases-toolbox-btn-success");
