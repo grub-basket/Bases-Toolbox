@@ -88,6 +88,17 @@ import { BasesToolboxSettings, DEFAULT_SETTINGS, DisabledFilter, HistoryEntry, P
 
 export default class BasesToolboxPlugin extends Plugin {
   settings: BasesToolboxSettings = { ...DEFAULT_SETTINGS };
+  /**
+   * Resolves once plugin data (settings buckets + history files) has loaded.
+   * `onload` deliberately does NOT await that IO: it's ~45 filesystem
+   * round-trips (11 history domains + 6 settings buckets, each an exists/list/
+   * read), which is instant on an SSD but seconds on a network drive — and it
+   * was all on Obsidian's measured load path, earning the "plugin took too
+   * long to load" flag. Registration is synchronous; data arrives right after.
+   * Every save path awaits this first, so a save can never write the defaults
+   * over the user's real data.
+   */
+  dataReady: Promise<void> = Promise.resolve();
   history: HistoryEntry[] = [];
   disabledFilters: Record<string, DisabledFilter[]> = {};
   propertyCache: PropertyCache = new PropertyCache(this.app);
@@ -102,9 +113,7 @@ export default class BasesToolboxPlugin extends Plugin {
    * modal reads as "stuck"). Reconciled once on close. */
   auditOpen = false;
 
-  async onload(): Promise<void> {
-    await this.loadPluginData();
-
+  onload(): void {
     installNumberGuard(this);
     installLiteralEnter(this);
     installEmbedOptions(this);
@@ -126,12 +135,12 @@ export default class BasesToolboxPlugin extends Plugin {
     // Warn (once, persistently) when a pinned property has out-of-list values,
     // with a one-click path to the audit. Re-checked as the vault changes.
     const checkPins = debounce(() => this.refreshPinViolationNotice(), 1500, false);
-    this.app.workspace.onLayoutReady(() => this.refreshPinViolationNotice());
+    this.app.workspace.onLayoutReady(() => void this.dataReady.then(() => this.refreshPinViolationNotice()));
     // Proactively flag an unfinished CSV import left over from a previous session
     // (crash / close), so the user knows it's recoverable without reopening the
     // importer. Persistent notice with a one-click way in.
     this.app.workspace.onLayoutReady(() => {
-      void importDraftInfo(this).then((info) => {
+      void this.dataReady.then(() => importDraftInfo(this)).then((info) => {
         if (!info) return;
         const when = info.savedAt ? ` from ${new Date(info.savedAt).toLocaleString()}` : "";
         new Notice(
@@ -428,7 +437,15 @@ export default class BasesToolboxPlugin extends Plugin {
 
     this.addSettingTab(new BasesToolboxSettingTab(this.app, this));
 
-    this.applyMultilineListCells();
+    // Load the data OFF the measured load path, then re-apply everything that
+    // was installed above against the defaults.
+    this.dataReady = this.loadPluginData()
+      .then(() => {
+        this.applyMultilineListCells();
+        applyReadOnly(this);
+        this.refreshConditionalFormatting?.();
+      })
+      .catch((e) => console.error("[Bases Toolbox] Plugin data failed to load.", e));
   }
 
   onunload(): void {
@@ -554,8 +571,10 @@ export default class BasesToolboxPlugin extends Plugin {
 
   /** Reads every domain file and merges them into one chronological list. */
   private async loadHistory(): Promise<HistoryEntry[]> {
-    const all: HistoryEntry[] = [];
-    for (const d of HISTORY_DOMAINS) all.push(...(await this.historyStore(d).load()));
+    // All domains in parallel — serially this was 11 × (exists+list+reads) of
+    // round-trip latency, the bulk of the network-drive load cost.
+    const perDomain = await Promise.all(HISTORY_DOMAINS.map((d) => this.historyStore(d).load()));
+    const all = perDomain.flat();
     all.sort((a, b) => a.timestamp - b.timestamp);
     return all;
   }
@@ -573,10 +592,12 @@ export default class BasesToolboxPlugin extends Plugin {
 
   /** Persists every history domain. Used for reverts/clears that can span files. */
   async saveHistory(): Promise<void> {
+    await this.dataReady;
     await this.saveHistoryDomains(HISTORY_DOMAINS);
   }
 
   async addHistoryEntry(entry: HistoryEntry): Promise<void> {
+    await this.dataReady; // history must be loaded before it's appended to
     const before = this.history.length;
     this.history.push(entry);
     this.trimHistory();
@@ -625,8 +646,10 @@ export default class BasesToolboxPlugin extends Plugin {
     if (legacy.length) {
       await this.backupLegacyData();
       this.history = [...this.history, ...legacy].sort((a, b) => a.timestamp - b.timestamp);
-      await this.saveHistory(); // write the split files BEFORE dropping the old copy
-      await this.savePluginData(); // rewrites data.json without `history`
+      // Direct (unguarded) writes — this IS the dataReady work; the guarded
+      // wrappers would deadlock waiting for it to finish.
+      await this.saveHistoryDomains(HISTORY_DOMAINS); // split files BEFORE dropping the old copy
+      await this.writePluginData(); // rewrites data.json without `history`
     }
     // Settings buckets (CF rules, allowed values, forks, ignore lists, read-only)
     // and disabled filters live in their own files. A bucket file WINS over the
@@ -634,10 +657,18 @@ export default class BasesToolboxPlugin extends Plugin {
     // fields, that's a pre-split install to migrate.
     let migrateBuckets = false;
     const legacySettings = (data.settings ?? {}) as Record<string, unknown>;
-    for (const b of SETTINGS_BUCKETS) {
-      const store = this.bucketStore(b.rel);
-      if (await store.exists()) {
-        const saved = await store.load();
+    // All buckets (and the filters file) in parallel — each is an exists +
+    // maybe-read pair, and on a network drive the serial version paid full
+    // round-trip latency per file. Reads happen concurrently; the settings
+    // object is only touched afterwards, in bucket order, same as before.
+    const bucketReads = await Promise.all(
+      SETTINGS_BUCKETS.map(async (b) => {
+        const store = this.bucketStore(b.rel);
+        return (await store.exists()) ? { b, saved: await store.load() } : { b, saved: null };
+      })
+    );
+    for (const { b, saved } of bucketReads) {
+      if (saved) {
         for (const f of b.fields) {
           if (f in saved && saved[f] !== undefined) {
             (this.settings as unknown as Record<string, unknown>)[f] = saved[f];
@@ -659,7 +690,7 @@ export default class BasesToolboxPlugin extends Plugin {
       await this.backupLegacyData();
       // Force every bucket to write, then rewrite data.json without those fields.
       this.bucketClean.clear();
-      await this.savePluginData();
+      await this.writePluginData();
     }
 
     // One-time: seed ".base" into the companion exclude list for existing users
@@ -674,7 +705,7 @@ export default class BasesToolboxPlugin extends Plugin {
             : `${this.settings.companionExcludeExts.trim()}, base`;
       }
       this.settings.companionBaseExclusionApplied = true;
-      await this.savePluginData();
+      await this.writePluginData();
     }
   }
 
@@ -709,6 +740,13 @@ export default class BasesToolboxPlugin extends Plugin {
    * the undo record or unrelated data.
    */
   async savePluginData(): Promise<void> {
+    await this.dataReady; // never let an early save write defaults over real data
+    return this.writePluginData();
+  }
+
+  /** The actual write. Load-time migrations call this directly — they run
+   * INSIDE dataReady and would deadlock waiting on themselves. */
+  private async writePluginData(): Promise<void> {
     const bucketFields = new Set(SETTINGS_BUCKETS.flatMap((b) => b.fields));
     const core: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(this.settings as unknown as Record<string, unknown>)) {

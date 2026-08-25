@@ -145,12 +145,19 @@ export class HistoryChunkStore {
   async load(): Promise<HistoryEntry[]> {
     const out: HistoryEntry[] = [];
 
+    // Both existence probes up front, in parallel — on a network drive each
+    // probe is a full round-trip, and load() runs once per history domain.
+    const [legacyExists, dirExists] = await Promise.all([
+      this.adapter.exists(this.legacyPath).catch(() => false),
+      this.adapter.exists(this.dir).catch(() => false),
+    ]);
+
     // Read the phase-1 single file, if present. It is NOT retired here — the
     // chunks must be written first (below), or a crash between the two would
     // leave the entries in neither place.
     let legacy: HistoryEntry[] | null = null;
     try {
-      if (await this.adapter.exists(this.legacyPath)) {
+      if (legacyExists) {
         const env = JSON.parse(await this.adapter.read(this.legacyPath)) as { data?: HistoryEntry[] };
         legacy = env?.data ?? [];
         out.push(...legacy);
@@ -162,20 +169,26 @@ export class HistoryChunkStore {
     try {
       // NB: no early return when the folder is absent — the legacy
       // materialisation below still has to run on a first migration.
-      if (await this.adapter.exists(this.dir)) {
+      if (dirExists) {
         const listing = await this.adapter.list(this.dir);
         const chunks = listing.files.filter((f) => /\d+\.json$/.test(f)).sort();
-        for (const path of chunks) {
-          try {
-            const env = JSON.parse(await this.adapter.read(path)) as { data?: HistoryEntry[] };
-            if (Array.isArray(env?.data)) out.push(...env.data);
-          } catch (e) {
-            // One bad chunk must not lose the others — quarantine just that file.
-            console.error(`[Bases Toolbox] Corrupt history chunk ${path}; quarantining.`, e);
-            const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-            await this.adapter.rename(path, `${path}.corrupt-${stamp}`).catch(() => undefined);
-          }
-        }
+        // Read every chunk concurrently; splice results back in chunk order so
+        // the entry ordering is identical to the old serial loop.
+        const reads = await Promise.all(
+          chunks.map(async (path) => {
+            try {
+              const env = JSON.parse(await this.adapter.read(path)) as { data?: HistoryEntry[] };
+              return Array.isArray(env?.data) ? env.data : [];
+            } catch (e) {
+              // One bad chunk must not lose the others — quarantine just that file.
+              console.error(`[Bases Toolbox] Corrupt history chunk ${path}; quarantining.`, e);
+              const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+              await this.adapter.rename(path, `${path}.corrupt-${stamp}`).catch(() => undefined);
+              return [];
+            }
+          })
+        );
+        for (const data of reads) out.push(...data);
       }
     } catch (e) {
       console.error(`[Bases Toolbox] Could not read history chunks for ${this.domain}.`, e);

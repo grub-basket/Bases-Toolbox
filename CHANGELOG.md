@@ -2,6 +2,9 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.59
+- **Much faster load on slow / network drives.** Starting the plugin used to make ~45 filesystem round-trips (history files + settings buckets) one after another, *before* telling Obsidian it had loaded — invisible on an SSD, but seconds on a network drive, which is what earned the "plugin took a long time to load" flag. The plugin now registers everything instantly and loads its data just after, in parallel batches instead of serially. Nothing else changes: saves wait for the data to arrive first (so an early save can never overwrite your real settings), and undo/history wait for the load before acting.
+
 ## 0.1.58
 - **Importer — pick exactly which rows import.** A collapsible, searchable **row picker** lists every parsed row with a chip saying what the import will do to it against the target folder (**new** / **exists → update** / overwrite / skip / "-2" copy). All / None / Invert act on the *filtered* rows, so "filter to one provider → None → clear filter" slicing works. Deselected rows are reported in the summary, and the selection is part of the crash-recovery draft.
 - **Importer — presets for recurring imports.** Save the whole setup — target folder, column mapping (names, types, included columns, filename column), collision policy, conflict policy, template, base options — under a name (say, one per provider roster). Next month: pick the preset, paste the new sheet, import. Column settings match **by header**, so a re-exported sheet lines up even if its column order changed, and you're told when the sheet and the preset have drifted (columns missing / new).

@@ -322,6 +322,7 @@ export function reportNotice(entry: HistoryEntry, r: RevertReport): void {
 
 /** Reverts the newest entry that hasn't been reverted yet. */
 export async function undoLatest(plugin: BasesToolboxPlugin): Promise<void> {
+  await plugin.dataReady; // the command can beat the deferred history load
   const entry = [...plugin.history].reverse().find((e) => !e.revertedAt);
   if (!entry) {
     new Notice("Nothing to undo.");

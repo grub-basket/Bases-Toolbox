@@ -36,6 +36,7 @@ export class HistoryView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
+    await this.plugin.dataReady; // a restored tab can beat the deferred load
     this.render();
     installMainTabAction(this);
     installSidebarAction(this);
