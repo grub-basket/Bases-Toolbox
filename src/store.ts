@@ -288,6 +288,7 @@ export const HISTORY_DOMAINS = [
   "fork",
   "format-doctor",
   "rollup",
+  "sync-formula",
   "inline-fields",
   "metadata-stamp",
   "import",
@@ -311,6 +312,7 @@ export function historyDomain(source?: string | null): HistoryDomain {
   if (s.includes("fork") || s.includes("convert in place")) return "fork";
   if (s.includes("doctor")) return "format-doctor";
   if (s.includes("rollup")) return "rollup";
+  if (s.includes("formula")) return "sync-formula";
   if (s.includes("inline")) return "inline-fields";
   if (s.includes("metadata") || s.includes("stamp")) return "metadata-stamp";
   if (s.includes("import")) return "import";

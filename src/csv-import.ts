@@ -64,6 +64,7 @@ export interface ImportPreset {
   inputFormat: InputFormat;
   filenameHeader: string;
   columns: ColumnConfig[];
+  addCreated?: boolean;
 }
 
 /**
@@ -84,6 +85,7 @@ interface ImportDraft {
   columns: ColumnConfig[];
   savedAt: number;
   updateConflict?: UpdateConflict;
+  addCreated?: boolean;
   /** Row indices deselected in the row picker. */
   excludedRows?: number[];
 }
@@ -111,6 +113,9 @@ class CsvImportPanel {
   private folderEl: HTMLInputElement | null = null;
   private templateEl: HTMLTextAreaElement | null = null;
   private omitEmpty = false;
+  /** Stamp `created: <import time>` onto newly created notes (off by default). */
+  private addCreated = false;
+  private addCreatedToggle: ToggleComponent | null = null;
   private collision: CollisionPolicy = "suffix";
   private updateConflict: UpdateConflict = "imported";
   private conflictSetting: Setting | null = null;
@@ -174,6 +179,7 @@ class CsvImportPanel {
       savedAt: Date.now(),
       updateConflict: this.updateConflict,
       excludedRows: [...this.excludedRows],
+      addCreated: this.addCreated,
     };
     await this.draftStore.save(draft);
   }
@@ -244,6 +250,8 @@ class CsvImportPanel {
       this.baseNameSetting?.settingEl.toggle(d.makeBase);
       this.omitEmpty = d.omitEmpty;
       this.omitToggle?.setValue(d.omitEmpty);
+      this.addCreated = d.addCreated ?? false;
+      this.addCreatedToggle?.setValue(this.addCreated);
       this.lastHeaderKey = ""; // force a column rebuild for this text
       this.parse(d.text);
       // Overlay the saved column mapping onto the freshly-parsed columns when the
@@ -353,14 +361,16 @@ class CsvImportPanel {
         new ListInputSuggest(this.plugin, t.inputEl, () => folderPaths(this.plugin));
       });
 
-    new Setting(contentEl)
+    const templateSetting = new Setting(contentEl)
       .setName("Note body template")
       .setDesc(
         createFragment((f) => {
-          f.appendText("Optional Markdown placed below the frontmatter. Write ");
+          f.appendText(
+            "Optional Markdown that becomes each imported note's BODY, below its frontmatter. Leave it empty and the notes get properties only (that's fine — Bases works off properties). Filled in once per row: every "
+          );
           f.createEl("code", { text: "{{Column Header}}" });
           f.appendText(
-            " to insert that column's value for each row — the name must match a CSV header exactly (case-sensitive, spaces allowed). Any column works, even ones you didn't include as a property; an unknown placeholder becomes empty. Which column becomes each note's title is set by the “Filename” radio in the column table below."
+            " placeholder is replaced with that row's value from that column. Full Markdown works — headings, links, checklists."
           );
         })
       )
@@ -369,12 +379,53 @@ class CsvImportPanel {
         this.templateEl = t.inputEl;
       });
 
+    // The template rules, worked example included — this box was previously a
+    // one-line description and the feature went under-understood.
+    const tplHelp = templateSetting.settingEl.parentElement?.createEl("details", {
+      cls: "bases-toolbox-csv-tpl-help",
+    });
+    if (tplHelp) {
+      templateSetting.settingEl.insertAdjacentElement("afterend", tplHelp);
+      tplHelp.createEl("summary", { text: "How the template works (rules + example)" });
+      const box = tplHelp.createDiv();
+      const rule = (text: string) => box.createDiv({ cls: "bases-toolbox-fr-info", text: `• ${text}` });
+      rule(
+        "Placeholder names must match a CSV header EXACTLY — case-sensitive, spaces allowed: a “First Name” column is {{First Name}}, not {{first name}} or {{FirstName}}."
+      );
+      rule(
+        "ANY column can be used, including ones you unticked in the table below — unticking only stops a column becoming a frontmatter property, not its use here."
+      );
+      rule("A placeholder that matches no header is replaced with nothing (empty), not left as-is — a silently blank spot in the body usually means a typo in the name.");
+      rule("Blank cells insert nothing. The “Omit empty values” toggle is about properties and doesn't affect the template.");
+      rule(
+        "The template applies to notes this import CREATES (and full overwrites). Update mode never touches an existing note's body."
+      );
+      rule("Which column names the note file is the “Filename” radio in the column table — unrelated to the template.");
+      box.createDiv({ cls: "bases-toolbox-fr-info", text: "Example — for a roster row Name=Dr Alice Adams, Specialty=Cardiology, Phone=555-0001:" });
+      box.createEl("pre", {
+        cls: "bases-toolbox-csv-preview",
+        text:
+          "# {{Name}}\n\n**Specialty:** {{Specialty}}\n**Phone:** {{Phone}}\n\n## Notes\n- [ ] verify roster entry\n" +
+          "\n…each imported note's body becomes:\n\n# Dr Alice Adams\n\n**Specialty:** Cardiology\n**Phone:** 555-0001\n\n## Notes\n- [ ] verify roster entry",
+      });
+    }
+
     new Setting(contentEl)
       .setName("Omit empty values")
       .setDesc("Blank cells leave the property out of that note entirely.")
       .addToggle((t) => {
         this.omitToggle = t;
         t.setValue(this.omitEmpty).onChange((v) => (this.omitEmpty = v));
+      });
+
+    new Setting(contentEl)
+      .setName("Add a created property")
+      .setDesc(
+        "Each newly created note gets created: <import time> in its frontmatter, so imported notes carry a durable creation date (file dates can change on sync/copy). Skipped when the sheet itself maps a “created” column, and never touches notes handled by update mode. For modified times, note Bases can already use file.mtime, and the “Stamp file metadata” command writes both dates onto existing notes."
+      )
+      .addToggle((t) => {
+        this.addCreatedToggle = t;
+        t.setValue(this.addCreated).onChange((v) => (this.addCreated = v));
       });
 
     new Setting(contentEl)
@@ -856,6 +907,11 @@ class CsvImportPanel {
       if (value === null && this.omitEmpty) continue;
       fm[col.propName] = value;
     }
+    // Optional durable creation date — but a "created" column mapped from the
+    // sheet always wins over the import timestamp.
+    if (this.addCreated && !Object.keys(fm).some((k) => k.toLowerCase() === "created")) {
+      fm.created = new Date().toISOString();
+    }
     return fm;
   }
 
@@ -931,6 +987,7 @@ class CsvImportPanel {
       makeBase: this.makeBase,
       baseName: this.baseNameEl?.value ?? "",
       omitEmpty: this.omitEmpty,
+      addCreated: this.addCreated,
       inputFormat: this.inputFormat,
       filenameHeader: this.headers[this.filenameCol] ?? "",
       // Deep-copied so later edits in this session don't mutate the saved copy.
@@ -961,6 +1018,8 @@ class CsvImportPanel {
     this.baseNameSetting?.settingEl.toggle(p.makeBase);
     this.omitEmpty = p.omitEmpty;
     this.omitToggle?.setValue(p.omitEmpty);
+    this.addCreated = p.addCreated ?? false;
+    this.addCreatedToggle?.setValue(this.addCreated);
     this.inputFormat = p.inputFormat;
     this.formatDd?.setValue(p.inputFormat);
     if (this.presetNameEl) this.presetNameEl.value = p.name;

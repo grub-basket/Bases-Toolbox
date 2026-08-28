@@ -228,6 +228,35 @@ export async function mergeGroup(
       }
       // conflicts: keep the target's value (default resolution)
     }
+    // Date inheritance: the merged note spans every member's life, so when the
+    // notes carry date frontmatter (Stashpad-style `created`/`modified`), the
+    // kept note takes the OLDEST member's `created` and a fresh `modified`.
+    // Only keys that already exist somewhere in the group are written — notes
+    // without date properties don't grow them here. Covered by the whole-file
+    // snapshot, so a revert restores the previous dates too.
+    const allFms = [
+      fm,
+      ...sources.map(
+        (src) => (app.metadataCache.getFileCache(src)?.frontmatter ?? {}) as Record<string, unknown>
+      ),
+    ];
+    const datesOf = (key: string): { raw: unknown; t: number }[] =>
+      allFms
+        .map((f) => {
+          const k = findKey(f, key);
+          const raw = k === null ? undefined : f[k];
+          const t = typeof raw === "string" || typeof raw === "number" ? new Date(raw).getTime() : NaN;
+          return { raw, t };
+        })
+        .filter((d) => Number.isFinite(d.t));
+    const createds = datesOf("created");
+    if (createds.length) {
+      const oldest = createds.reduce((a, b) => (b.t < a.t ? b : a));
+      fm[findKey(fm, "created") ?? "created"] = oldest.raw;
+    }
+    if (allFms.some((f) => findKey(f, "modified") !== null)) {
+      fm[findKey(fm, "modified") ?? "modified"] = new Date().toISOString();
+    }
   });
 
   // Rewrite the kept note's body as the chronological concatenation. We read
@@ -283,8 +312,8 @@ interface PreviewProp {
   /** Display of the value that ends up on the kept note. */
   result: string;
   origin: PreviewOrigin;
-  /** Human note: where it came from / what got dropped. */
-  detail: string;
+  /** Human notes: where it came from / what got dropped — one line each. */
+  details: string[];
 }
 
 interface MergePreview {
@@ -335,12 +364,15 @@ async function buildMergePreview(
     note(k, "kept");
   }
 
+  // With only two notes in play, naming the other note on every line is noise
+  // (the names are near-identical by construction) — say "the other note".
+  const solo = sources.length === 1;
   for (const src of sources) {
     const srcFm = (app.metadataCache.getFileCache(src)?.frontmatter ?? {}) as Record<string, unknown>;
     const plan = planMerge(result, srcFm);
     for (const key of plan.copied) {
       result[key] = srcFm[key];
-      note(key, "added", `from ${src.basename}`);
+      note(key, "added", solo ? undefined : `from ${src.basename}`);
     }
     for (const key of plan.unioned) {
       const tk = findKey(result, key) ?? key;
@@ -349,13 +381,56 @@ async function buildMergePreview(
       const added = asList(srcFm[key])
         .map(valueToDisplay)
         .filter((d) => !beforeDisplays.has(d));
-      note(tk, "union", added.length ? `+${added.join(", ")} from ${src.basename}` : undefined);
+      note(
+        tk,
+        "union",
+        added.length ? (solo ? `+${added.join(", ")}` : `+${added.join(", ")} from ${src.basename}`) : undefined
+      );
     }
     for (const c of plan.conflicts) {
       const tk = findKey(result, c.key) ?? c.key;
       // Default resolution keeps the target's value; the source's is dropped.
-      note(tk, "conflict", `${src.basename}’s “${valueToDisplay(c.sourceValue)}” dropped`);
+      note(
+        tk,
+        "conflict",
+        solo
+          ? `dropped: “${valueToDisplay(c.sourceValue)}”`
+          : `${src.basename}: “${valueToDisplay(c.sourceValue)}” dropped`
+      );
     }
+  }
+
+  // Mirror mergeGroup's date inheritance so the preview doesn't claim a date
+  // was "dropped" that the merge actually keeps: `created` becomes the OLDEST
+  // value present anywhere in the group, `modified` the merge time.
+  const allFms = [
+    keptFm,
+    ...sources.map(
+      (s) => (app.metadataCache.getFileCache(s)?.frontmatter ?? {}) as Record<string, unknown>
+    ),
+  ];
+  const datesOf = (key: string): { raw: unknown; t: number }[] =>
+    allFms
+      .map((f) => {
+        const k = findKey(f, key);
+        const raw = k === null ? undefined : f[k];
+        const t = typeof raw === "string" || typeof raw === "number" ? new Date(raw).getTime() : NaN;
+        return { raw, t };
+      })
+      .filter((d) => Number.isFinite(d.t));
+  const createds = datesOf("created");
+  if (createds.length) {
+    const oldest = createds.reduce((a, b) => (b.t < a.t ? b : a));
+    const key = findKey(result, "created") ?? "created";
+    result[key] = oldest.raw;
+    origin.set(key, "union");
+    details.set(key, ["oldest in the group — inherited"]);
+  }
+  if (allFms.some((f) => findKey(f, "modified") !== null)) {
+    const key = findKey(result, "modified") ?? "modified";
+    result[key] = "(merge time)";
+    origin.set(key, "union");
+    details.set(key, ["set to the time of the merge"]);
   }
 
   // Body order: every note that has a body (kept included), oldest-created
@@ -372,7 +447,7 @@ async function buildMergePreview(
     key,
     result: valueToDisplay(result[key]),
     origin: origin.get(key) ?? "kept",
-    detail: (details.get(key) ?? []).join("; "),
+    details: details.get(key) ?? [],
   }));
   return {
     props,
@@ -497,7 +572,10 @@ function normalizeName(basename: string): string {
   return basename
     .toLowerCase()
     .replace(/\s*(copy|copie|duplicate)(\s*\d*)?$/i, "")
-    .replace(/\s*[-_(]?\s*\d+\s*[)]?$/, "")
+    // Strip a SHORT trailing number ("Meeting notes 2") but not a long digit
+    // tail — "AB12345" is an ID, and stripping it collapsed every note in an
+    // ID-numbered series into one bogus duplicate group.
+    .replace(/\s*[-_(]?\s*\d{1,3}\s*[)]?$/, "")
     .replace(/[-_.]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -532,6 +610,36 @@ function inScope(path: string, scope: FolderScope): boolean {
 /** Does `path` fall inside ANY of the (non-blank) folder scopes? */
 function inAnyScope(path: string, scopes: FolderScope[]): boolean {
   return scopes.some((s) => s.path && inScope(path, s));
+}
+
+/**
+ * Merge a set of notes into a brand-NEW note instead of picking a survivor —
+ * for when none of the duplicates deserves to be "the one" (e.g. every copy
+ * has drifted). The new note lands in the OLDEST member's folder, named after
+ * it with a “(merged)” suffix (uniquified), and then the normal group merge
+ * runs with the new note as the keeper: properties fold in, bodies concatenate
+ * oldest-first, backlinks re-point, sources go to the vault trash, and the
+ * date inheritance gives it the oldest `created` + a fresh `modified`.
+ * Reverting the history entry restores the sources and empties the new note
+ * back out (it isn't deleted — the user can remove the husk).
+ */
+async function mergeIntoNewNote(plugin: BasesToolboxPlugin, members: TFile[]): Promise<TFile> {
+  const ordered = [...members].sort(
+    (a, b) => a.stat.ctime - b.stat.ctime || a.path.localeCompare(b.path)
+  );
+  const oldest = ordered[0];
+  const folder = parentFolder(oldest.path);
+  const stem = `${oldest.basename} (merged)`;
+  let name = stem;
+  let n = 2;
+  const pathFor = (nm: string) => (folder ? `${folder}/${nm}.md` : `${nm}.md`);
+  while (plugin.app.vault.getAbstractFileByPath(pathFor(name))) name = `${stem} ${n++}`;
+  const file = await plugin.app.vault.create(pathFor(name), "");
+  // Oldest-first, so on a property conflict the OLDEST note's value wins —
+  // consistent with the inherited `created`: the new note is "the oldest note,
+  // enriched by the rest".
+  await mergeGroup(plugin, file, ordered);
+  return file;
 }
 
 /* ---------- body diff (for the duplicate preview) ---------- */
@@ -652,6 +760,10 @@ class DuplicateFinderPanel {
   private hiddenResultFolders = new Set<string>();
   /** The collapsible scan-options block — auto-folds after a scan. */
   private optionsEl: HTMLDetailsElement | null = null;
+  /** Per-group keep/tick choices, keyed by groupKey — so flipping between the
+   * "To review" and "Ignored" tabs (or any re-render) doesn't reset them.
+   * Cleared on each new scan (fresh results, fresh choices). */
+  private groupSel = new Map<string, { keep: string | null; excluded: string[] }>();
 
   constructor(plugin: BasesToolboxPlugin, openFile: (file: TFile) => void) {
     this.plugin = plugin;
@@ -905,6 +1017,7 @@ class DuplicateFinderPanel {
 
     this.dupGroups = [...groups.entries()].filter(([, g]) => g.length > 1);
     this.hiddenResultFolders.clear();
+    this.groupSel.clear();
     this.scanned = true;
     // Fold the options away — the results deserve the space now.
     if (this.optionsEl) this.optionsEl.open = false;
@@ -1073,12 +1186,23 @@ class DuplicateFinderPanel {
       // policy is "none" — then the user must explicitly pick.
       let keep: TFile | null = null;
       const defaultKeep = this.defaultKeep(group);
+      const gKey = this.groupKey(group);
+      const saved = this.groupSel.get(gKey);
       const radioName = `bt-dup-${simpleHash(key)}`;
       const radios: { file: TFile; radio: HTMLInputElement }[] = [];
       // Which members actually take part: the radio picks the survivor, and
       // every OTHER member has a "merge" checkbox — so part of a group can be
       // left alone (unticked) without ignoring the whole group. Default: all in.
       const mergeSel = new Map<TFile, boolean>();
+      if (saved) {
+        for (const f of group) if (saved.excluded.includes(f.path)) mergeSel.set(f, false);
+      }
+      const persistSel = () => {
+        this.groupSel.set(gKey, {
+          keep: keep?.path ?? null,
+          excluded: group.filter((f) => mergeSel.get(f) === false).map((f) => f.path),
+        });
+      };
       const checkboxes = new Map<TFile, HTMLInputElement>();
       const srcCount = () =>
         group.filter((f) => f !== keep && mergeSel.get(f) !== false).length;
@@ -1096,6 +1220,7 @@ class DuplicateFinderPanel {
         radios.push({ file, radio });
         radio.addEventListener("change", () => {
           keep = file;
+          persistSel();
           syncCheckboxes();
           resetMergeBtn();
           void renderPreview();
@@ -1109,6 +1234,7 @@ class DuplicateFinderPanel {
         checkboxes.set(file, cb);
         cb.addEventListener("change", () => {
           mergeSel.set(file, cb.checked);
+          persistSel();
           resetMergeBtn();
           void renderPreview();
         });
@@ -1161,10 +1287,11 @@ class DuplicateFinderPanel {
           const r = table.createDiv({ cls: `bases-toolbox-dup-pv-row bt-origin-${p.origin}` });
           r.createSpan({ cls: "bt-pv-key", text: p.key });
           r.createSpan({ cls: "bt-pv-val", text: p.result || "—" });
-          r.createSpan({
-            cls: "bt-pv-origin",
-            text: p.detail ? `${PREVIEW_ORIGIN_LABEL[p.origin]} · ${p.detail}` : PREVIEW_ORIGIN_LABEL[p.origin],
-          });
+          // Label, then each note's story on its own line — the old inline
+          // "kept wins · X's “a” dropped; Y's “b” dropped" run-on was unreadable.
+          const o = r.createSpan({ cls: "bt-pv-origin" });
+          o.createDiv({ text: PREVIEW_ORIGIN_LABEL[p.origin] });
+          for (const d of p.details) o.createDiv({ cls: "bt-pv-detail", text: d });
         }
         if (pv.bodyOrder.length) {
           const foot = wrap.createDiv({ cls: "bases-toolbox-dup-pv-foot" });
@@ -1186,30 +1313,82 @@ class DuplicateFinderPanel {
             text: "Some notes were edited after others were created, so this creation-date order may not match the order you last worked on them.",
           });
         }
-        wrap.createDiv({
-          cls: "bases-toolbox-dup-pv-foot bases-toolbox-dup-pv-trash",
-          text: `Moved to vault trash (recoverable): ${pv.removed.join(", ")}.`,
-        });
+        // Full paths, one per line — in a duplicate group the NAMES are all
+        // near-identical, so only the path tells them apart.
+        const trash = wrap.createDiv({ cls: "bases-toolbox-dup-pv-foot bases-toolbox-dup-pv-trash" });
+        trash.createDiv({ text: "Moved to vault trash (recoverable):" });
+        for (const src of sources) {
+          trash.createDiv({ cls: "bases-toolbox-dup-pv-trashline", text: src.path });
+        }
         // Body diffs: kept vs each merging note whose body differs — so "which
         // of these actually has different content" is answered right here.
         const keptBody = stripFrontmatter(await this.app.vault.cachedRead(kept)).trim();
+        let diffIntroDone = false;
         for (const src of sources) {
           const srcBody = stripFrontmatter(await this.app.vault.cachedRead(src)).trim();
           if (srcBody === keptBody) continue;
+          if (!diffIntroDone) {
+            diffIntroDone = true;
+            wrap.createDiv({
+              cls: "bases-toolbox-fr-info",
+              text:
+                "Each diff below compares the kept note against ONE other note (pairwise). The diffs are a reading aid only — merging never line-merges bodies, it appends them whole, in the order shown above.",
+            });
+          }
           const dt = wrap.createEl("details", { cls: "bases-toolbox-dup-diff" });
           dt.createEl("summary", {
-            text: `Body diff: “${kept.basename}” vs “${src.basename}”`,
+            text: `Body diff: “${kept.basename}” vs “${src.basename}” (pairwise)`,
           });
           renderBodyDiff(dt, kept.basename, keptBody, src.basename, srcBody);
         }
       };
 
+      /** Every ticked member — the keeper's tick is pinned on, so it counts. */
+      const allTicked = () => group.filter((f) => mergeSel.get(f) !== false);
       const idleText = () => {
         const n = srcCount();
         return `Merge ${n} note${n === 1 ? "" : "s"} into the kept note`;
       };
-      const btn = box.createEl("button", { text: "" });
+      const btnRow = box.createDiv({ cls: "bases-toolbox-dup-btnrow" });
+      const btn = btnRow.createEl("button", { text: "" });
       let armed = false;
+      // Second exit: no survivor deserves the crown — merge every ticked note
+      // into a brand-new one instead. Ignores the keep-radio entirely. Created
+      // HERE (before resetMergeBtn's first call) because resetMergeBtn resets
+      // this button too.
+      const newBtn = btnRow.createEl("button", { text: "" });
+      let armedNew = false;
+      const newIdleText = () => {
+        const n = allTicked().length;
+        return `Merge all ${n} into a new note`;
+      };
+      function resetNewBtn(): void {
+        armedNew = false;
+        newBtn.disabled = allTicked().length < 2;
+        newBtn.removeClass("mod-warning", "bases-toolbox-btn-success");
+        newBtn.setText(newIdleText());
+        newBtn.setAttribute(
+          "aria-label",
+          "Create a new note (in the oldest note's folder) and merge every ticked note into it"
+        );
+      }
+      newBtn.addEventListener("click", () => void (async () => {
+        const members = allTicked();
+        if (members.length < 2) return;
+        if (!armedNew) {
+          armedNew = true;
+          newBtn.setText(`Click again to merge ${members.length} notes into a NEW note`);
+          newBtn.addClass("mod-warning");
+          return;
+        }
+        newBtn.disabled = true;
+        btn.disabled = true; // the group is consumed either way
+        const file = await mergeIntoNewNote(this.plugin, members);
+        newBtn.removeClass("mod-warning");
+        newBtn.addClass("bases-toolbox-btn-success");
+        newBtn.setText(`Created “${file.basename}” — ${members.length} notes merged`);
+        this.openFile(file); // land the user on what they just made
+      })());
       // Disabled until a note is picked (and while nothing is ticked to merge);
       // picking/re-picking also disarms the confirm step so a changed choice
       // can't merge on one click.
@@ -1218,15 +1397,20 @@ class DuplicateFinderPanel {
         btn.disabled = keep === null || srcCount() === 0;
         btn.removeClass("mod-warning", "bases-toolbox-btn-success");
         btn.setText(idleText());
+        resetNewBtn();
       }
       resetMergeBtn();
       // Apply the keep-policy pre-selection: check the matching radio, set keep,
       // and render its preview — exactly as if the user had clicked it.
-      if (defaultKeep) {
-        const match = radios.find((r) => r.file === defaultKeep);
+      // Initial pick: a remembered choice (survives tab switches) beats the
+      // keep-policy default.
+      const savedKeep = saved ? group.find((f) => f.path === saved.keep) ?? null : null;
+      const initialKeep = savedKeep ?? defaultKeep;
+      if (initialKeep) {
+        const match = radios.find((r) => r.file === initialKeep);
         if (match) {
           match.radio.checked = true;
-          keep = defaultKeep;
+          keep = initialKeep;
           resetMergeBtn();
           void renderPreview();
         }
@@ -1252,6 +1436,7 @@ class DuplicateFinderPanel {
         btn.removeClass("mod-warning");
         btn.addClass("bases-toolbox-btn-success");
         btn.setText(`Merged — ${n} source${n === 1 ? "" : "s"} moved to trash`);
+        newBtn.disabled = true; // the group is consumed
       })());
     }
   }

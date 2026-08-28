@@ -437,7 +437,10 @@ body.bases-toolbox-multiline-lists .bases-table-cell .multi-select-container {
 }
 
 .bases-toolbox-dup-view-inner {
-  max-width: 720px;
+  /* Was 720px — cramped the whole finder into a centered column. Wide enough
+     now for paths + metadata + diffs to breathe; the margin still centers it
+     on very wide panes so lines don't run unreadably long. */
+  max-width: 1200px;
   margin: 0 auto;
   padding: var(--size-4-4) var(--size-4-3);
 }
@@ -1714,4 +1717,36 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   padding: 0 var(--size-2-2);
   color: var(--text-faint);
   font-style: italic;
+}
+
+/* Trashed-note list in the merge preview — one full path per line. */
+.bases-toolbox-dup-pv-trashline {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+  overflow-wrap: anywhere;
+  padding-left: var(--size-4-2);
+}
+
+/* Per-source detail lines under the origin label in the preview table. */
+.bases-toolbox-dup-pv-row .bt-pv-detail {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Importer — collapsible template help (rules + worked example). */
+.bases-toolbox-csv-tpl-help {
+  margin: calc(-1 * var(--size-4-1)) 0 var(--size-4-2);
+}
+.bases-toolbox-csv-tpl-help > summary {
+  cursor: pointer;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+/* Duplicate finder — the two merge actions side by side. */
+.bases-toolbox-dup-btnrow {
+  display: flex;
+  gap: var(--size-2-3);
+  flex-wrap: wrap;
+  margin-top: var(--size-2-2);
 }

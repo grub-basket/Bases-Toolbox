@@ -83,6 +83,7 @@ import {
   installForkSync,
 } from "./property-fork";
 import { openRollup } from "./rollup";
+import { openSyncFormula } from "./sync-formula";
 import { PropertyCache } from "./scan";
 import { BasesToolboxSettings, DEFAULT_SETTINGS, DisabledFilter, HistoryEntry, PluginData } from "./types";
 
@@ -225,6 +226,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "compute-rollup",
       name: "Compute rollup into property",
       callback: () => openRollup(this),
+    });
+
+    this.addCommand({
+      id: "sync-formula",
+      name: "Sync formula into property",
+      callback: () => void openSyncFormula(this),
     });
 
     this.addCommand({
@@ -1319,9 +1326,10 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           ["Convert or fork a property's format", "Bases expects dates as YYYY-MM-DD and links as [[wikilinks]], but you might store them differently. This normalizes dates or (un)wraps wikilinks — either in place, or into a SECOND property that stays in sync with the original, so you keep your format AND the one Bases wants."],
           ["Audit pinned allowed values", "You can “pin” the set of values a property is allowed to have (from the property index). This lists any value currently outside that set and lets you fix it (find & replace) or accept it (add to the allowed list)."],
           ["Compute rollup into property", "For each note in the open base, gathers the notes linked to it (incoming or outgoing) and aggregates them — count of linked notes, or sum / average / min / max of a number property on them — writing the result into a property you name. E.g. give every Project a “task-count” of the Tasks that link to it, or a “total-hours”. One-shot and revertible; re-run to refresh."],
+          ["Sync formula into property", "For each note in the open base, evaluates one of the base's formula (computed) columns and writes the result into a real frontmatter property you name — so a value that only existed as a live formula becomes a stored property you can sort, filter, or reuse elsewhere. Pick the formula, name the property. One-shot and revertible; re-run to refresh. The sibling of Compute rollup, for computed columns instead of linked notes."],
           ["Migrate inline fields to properties", "Converts inline “key:: value” fields written in a note's body into real frontmatter properties that Bases can use."],
           ["Merge current note into another", "Combines the current note — its body and its properties — into another note you pick, then tidies up (re-points links, trashes the source). Recorded to History, so the whole merge can be reverted."],
-          ["Find duplicate notes", "Finds notes that are near-duplicates (similar names, same property value, or identical bodies; scope the scan to folders, or exclude some) so you can merge them. Each group shows size / property count / dates per note, a BODY DIFF against the kept note, and a per-note tick so part of a group can be left out of the merge. A keep-policy (oldest/newest/longest) pre-selects the survivor, and with one set, “Merge all visible groups” clears a whole scan in one go. Every merge — bulk included — is individually revertible from History."],
+          ["Find duplicate notes", "Finds notes that are near-duplicates (similar names, same property value, or identical bodies; scope the scan to folders, or exclude some) so you can merge them. Each group shows size / property count / dates per note, a BODY DIFF against the kept note, and a per-note tick so part of a group can be left out of the merge. A keep-policy (oldest/newest/longest) pre-selects the survivor, and with one set, “Merge all visible groups” clears a whole scan in one go. When no copy deserves to survive, “Merge all N into a new note” combines every ticked note into a brand-new one (in the oldest note's folder, inheriting its created date and its values on conflicts). Every merge — bulk included — is individually revertible from History."],
           ["Create companion notes for non-Markdown files", "Bases can only query Markdown notes. This creates a small Markdown “companion” beside a PDF/image/etc. that mirrors the file's metadata as properties, so those files appear in Bases."],
           ["Stamp file metadata into note properties", "Writes the file's created/modified dates into frontmatter so they're durable (survive sync/export) and usable in Bases."],
           ["Import CSV as notes", "Turns each row of a CSV into a note, with the columns becoming frontmatter properties. Built for recurring imports: a ROW PICKER chooses exactly which rows import (filterable, with chips showing what each row will do — new / update / overwrite / skip), PRESETS save the whole setup (folder, column mapping, policies) under a name so re-importing the same provider's sheet is one pick (columns match by header, so a re-exported sheet lines up even if its column order changed), and in update mode a CONFLICT policy decides whether the sheet's value or the note's existing value wins — globally or per column — so hand-corrected fields survive the next import."],

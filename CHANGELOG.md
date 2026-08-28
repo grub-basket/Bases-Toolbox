@@ -2,6 +2,16 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.62
+- **Sync formula into property.** A new command (and launcher entry) that writes a base's *computed* formula column into a real frontmatter property on every note in the view — so a value that only existed as a live formula becomes a stored property you can sort, filter, group, or reuse anywhere. Pick the formula, name the property; it evaluates via Bases' own engine, skips reserved names, and is one-shot and fully revertible from history (re-run to refresh). The sibling of **Compute rollup into property**, for computed columns instead of linked notes. (Closes the request for syncing formula results into properties.)
+
+## 0.1.61
+- **Duplicate finder — merge into a NEW note.** When none of the duplicates deserves to be "the one", a second button per group merges every ticked note into a brand-new note instead: it lands in the oldest note's folder as "<name> (merged)", inherits the oldest `created` and a fresh `modified`, takes the oldest note's value when properties conflict, concatenates the bodies oldest-first, re-points backlinks, and trashes the sources. Unticked notes are left alone. Revertible from history (the sources come back; the new note is emptied rather than deleted). The new note opens when it's done.
+
+## 0.1.60
+- **Duplicate finder feedback round.** Merged notes now inherit the **oldest** member's `created` and a fresh `modified` (when the notes carry date frontmatter) — and the preview says so. Keep/tick selections **survive switching between the To review / Ignored tabs**. Unique-ID filenames (letters + a long number) no longer collapse into one bogus group — only short trailing numbers ("Meeting notes 2") still fold. Trashed notes list one full path per line. Preview details read one per line, without repeating near-identical filenames in 2-note groups. Diffs are labelled **pairwise** with a note that merging appends bodies whole. The whole view is wider (720 → 1200px).
+- **Importer:** optional **"Add a created property"** toggle (off) stamps `created: <import time>` on newly created notes (a sheet's own created column wins; update mode untouched). The **body template** now documents itself — a collapsible rules-and-example block under the setting.
+
 ## 0.1.59
 - **Much faster load on slow / network drives.** Starting the plugin used to make ~45 filesystem round-trips (history files + settings buckets) one after another, *before* telling Obsidian it had loaded — invisible on an SSD, but seconds on a network drive, which is what earned the "plugin took a long time to load" flag. The plugin now registers everything instantly and loads its data just after, in parallel batches instead of serially. Nothing else changes: saves wait for the data to arrive first (so an early save can never overwrite your real settings), and undo/history wait for the load before acting.
 

@@ -49,6 +49,7 @@ const TOOLS: ToolFeature[] = [
   { name: "Audit pinned allowed values", desc: "Find values outside an allowed list", icon: "pin", command: "audit-allowed-values" },
   { name: "Audit aliased links", desc: "Find property links with aliases to standardize", icon: "link", command: "audit-aliased-links" },
   { name: "Compute rollup", desc: "Aggregate linked notes into a property", icon: "sigma", command: "compute-rollup" },
+  { name: "Sync formula", desc: "Write a base's formula results into a property", icon: "function-square", command: "sync-formula" },
   { name: "Migrate inline fields", desc: "Convert “key:: value” to frontmatter", icon: "list-plus", command: "migrate-inline-fields" },
   { name: "Merge note into another", desc: "Combine two notes + their properties", icon: "merge", command: "merge-note" },
   { name: "Create companion notes", desc: "Make non-Markdown files queryable", icon: "file-plus-2", command: "companion-notes" },
