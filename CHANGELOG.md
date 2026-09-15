@@ -2,6 +2,9 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.65
+- **Filter the history by source.** The bulk file change history gets a source dropdown, so you can narrow the log to just one kind of operation — e.g. **Kanban order** (which groups the card-ordering and its sort change into one option) for a kanban-scoped view of what changed and one-click reverts, or find & replace, merges, imports, and so on. Shows “N of M operations (filtered)”; “All sources” restores the full list.
+
 ## 0.1.64
 - **Kanban: one-click “hide empty columns.”** A toolbar button on kanban bases (and a command) that toggles Bases' hideEmptyGroups without digging into the view-options menu. It only appears while a kanban view is on screen and shows the current state; click again to bring empty columns back.
 - **Hide view types from the picker.** A new opt-in setting hides chosen Bases view types (Table / Cards / List / Kanban) from the view-type picker — the native “Add view” / change-type menu and Bases Toolbox's own add-view dropdown — for when a community plugin shares a native type's name and the duplicate is confusing. The type keeps working on existing views; it's only removed from the picker, and the native-menu filter is conservative enough to never remove a real view from the switcher. Nothing hidden by default.

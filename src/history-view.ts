@@ -21,6 +21,8 @@ export class HistoryView extends ItemView {
   private force = false;
   /** Result of the last revert, per entry — so skipped files stay on screen. */
   private lastReport = new Map<HistoryEntry, RevertReport>();
+  /** Active source-category filter ("" = all). Survives re-renders. */
+  private sourceFilter = "";
 
   constructor(leaf: WorkspaceLeaf, plugin: BasesToolboxPlugin) {
     super(leaf);
@@ -33,6 +35,15 @@ export class HistoryView extends ItemView {
 
   getDisplayText(): string {
     return "Bulk file change history";
+  }
+
+  /** Friendly category for an entry's `source`, used to group the source
+   * filter. The two kanban sources ("kanban order" / "kanban order sort")
+   * collapse into one option so kanban ordering is a single pick. */
+  private sourceCategory(source?: string): string {
+    const s = (source ?? "").toLowerCase();
+    if (s.includes("kanban")) return "Kanban order";
+    return source && source.trim() ? source : "Other";
   }
 
   async onOpen(): Promise<void> {
@@ -57,11 +68,35 @@ export class HistoryView extends ItemView {
       return;
     }
 
+    // Distinct source categories present, for the filter dropdown.
+    const categories = [...new Set(this.plugin.history.map((e) => this.sourceCategory(e.source)))].sort(
+      (a, b) => a.localeCompare(b)
+    );
+    // A filter that no longer matches anything (its entries were all reverted
+    // away / the tab reloaded) falls back to "all".
+    if (this.sourceFilter && !categories.includes(this.sourceFilter)) this.sourceFilter = "";
+    const shown = this.sourceFilter
+      ? this.plugin.history.filter((e) => this.sourceCategory(e.source) === this.sourceFilter)
+      : [...this.plugin.history];
+
     const bar = root.createDiv({ cls: "bases-toolbox-frv-bar" });
     bar.createSpan({
       cls: "bases-toolbox-fr-info",
-      text: `${this.plugin.history.length} operation${this.plugin.history.length === 1 ? "" : "s"} logged.`,
+      text: this.sourceFilter
+        ? `${shown.length} of ${this.plugin.history.length} operation${this.plugin.history.length === 1 ? "" : "s"} (filtered).`
+        : `${this.plugin.history.length} operation${this.plugin.history.length === 1 ? "" : "s"} logged.`,
     });
+    if (categories.length > 1) {
+      const dd = bar.createEl("select", { cls: "dropdown bases-toolbox-frv-source" });
+      dd.setAttribute("aria-label", "Filter by source");
+      dd.createEl("option", { text: "All sources", value: "" });
+      for (const c of categories) dd.createEl("option", { text: c, value: c });
+      dd.value = this.sourceFilter;
+      dd.addEventListener("change", () => {
+        this.sourceFilter = dd.value;
+        this.render();
+      });
+    }
     // Own line so it doesn't crowd the summary; propercased.
     const forceLabel = root.createEl("label", { cls: "bases-toolbox-fr-info bases-toolbox-frv-force" });
     const forceCb = forceLabel.createEl("input", { type: "checkbox" });
@@ -76,8 +111,14 @@ export class HistoryView extends ItemView {
       text: "By default, reverting skips any note you edited again after the change (marked “edited since”), so it never overwrites your newer work. Turn this on to revert those too. Whole-file changes (note merges, base view edits) always revert as a whole and ignore this setting.",
     });
 
-    for (const entry of [...this.plugin.history].reverse()) {
+    for (const entry of [...shown].reverse()) {
       this.renderEntry(root, entry);
+    }
+    if (!shown.length) {
+      root.createDiv({
+        cls: "bases-toolbox-fr-info",
+        text: `No operations from “${this.sourceFilter}”.`,
+      });
     }
   }
 
