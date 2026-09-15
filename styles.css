@@ -1750,3 +1750,19 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   flex-wrap: wrap;
   margin-top: var(--size-2-2);
 }
+
+/* Kanban toolbar — hide-empty-columns toggle (pressed = hiding). */
+.bases-toolbar-item.bases-toolbox-kanban-empty-btn {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.bases-toolbar-item.bases-toolbox-kanban-empty-btn.is-active {
+  color: var(--interactive-accent);
+}
+
+/* History view — source filter dropdown (the .frv-bar flex layout already
+   exists above, so this only sizes the select). */
+.bases-toolbox-frv-source {
+  max-width: 16em;
+}
