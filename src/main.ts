@@ -84,6 +84,8 @@ import {
 } from "./property-fork";
 import { openRollup } from "./rollup";
 import { openKanbanOrder } from "./kanban-order";
+import { installKanbanButtons, toggleHideEmptyColumns } from "./kanban-toolbar";
+import { installViewTypeFilter, registeredViewTypes } from "./view-type-filter";
 import { openSyncFormula } from "./sync-formula";
 import { PropertyCache } from "./scan";
 import { BasesToolboxSettings, DEFAULT_SETTINGS, DisabledFilter, HistoryEntry, PluginData } from "./types";
@@ -127,6 +129,8 @@ export default class BasesToolboxPlugin extends Plugin {
     installReadOnly(this);
     installViewManagerButton(this);
     installColumnManagerButton(this);
+    installKanbanButtons(this);
+    installViewTypeFilter(this);
     installStashpadLinks(this);
 
     const dirty = () => this.propertyCache.markDirty();
@@ -233,6 +237,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "kanban-manual-order",
       name: "Manual card order for this base's kanban",
       callback: () => openKanbanOrder(this),
+    });
+
+    this.addCommand({
+      id: "kanban-toggle-hide-empty",
+      name: "Toggle hide empty columns (kanban)",
+      callback: () => toggleHideEmptyColumns(this),
     });
 
     this.addCommand({
@@ -894,6 +904,28 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("Hide view types from the picker")
+      .setHeading();
+    containerEl.createDiv({
+      cls: "setting-item-description",
+      text:
+        "Hide a Bases view type from the view-type picker (the “Add view” / change-type menu, and Bases Toolbox's own add-view dropdown) — handy if you run a community plugin of the same name and don't want the native one offered. The type still works; it's just not offered. Nothing is hidden by default.",
+    });
+    for (const t of registeredViewTypes(this.plugin.app)) {
+      new Setting(containerEl)
+        .setName(t.name)
+        .addToggle((tg) =>
+          tg.setValue(this.plugin.settings.hiddenViewTypes.includes(t.id)).onChange(async (v) => {
+            const list = this.plugin.settings.hiddenViewTypes;
+            const i = list.indexOf(t.id);
+            if (v && i < 0) list.push(t.id);
+            else if (!v && i >= 0) list.splice(i, 1);
+            await this.plugin.savePluginData();
+          })
+        );
+    }
+
+    new Setting(containerEl)
       .setName("Always skip file extensions")
       .setDesc(
         "Extensions the “Exclude skipped file extensions from this base” command removes from a base (comma or space separated — the dot is optional). Nothing changes on its own: run the command on a base and it appends a filter so files with these extensions stop appearing in every view. Revertible from history."
@@ -1333,6 +1365,8 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           ["Convert or fork a property's format", "Bases expects dates as YYYY-MM-DD and links as [[wikilinks]], but you might store them differently. This normalizes dates or (un)wraps wikilinks — either in place, or into a SECOND property that stays in sync with the original, so you keep your format AND the one Bases wants."],
           ["Audit pinned allowed values", "You can “pin” the set of values a property is allowed to have (from the property index). This lists any value currently outside that set and lets you fix it (find & replace) or accept it (add to the allowed list)."],
           ["Compute rollup into property", "For each note in the open base, gathers the notes linked to it (incoming or outgoing) and aggregates them — count of linked notes, or sum / average / min / max of a number property on them — writing the result into a property you name. E.g. give every Project a “task-count” of the Tasks that link to it, or a “total-hours”. One-shot and revertible; re-run to refresh."],
+          ["Hide view types from the picker (setting)", "A setting, not a command. Hides chosen Bases view types (Table / Cards / List / Kanban / any a plugin registers) from the view-type picker — the native “Add view” and change-type menu, plus Bases Toolbox's own add-view dropdown — for when a community plugin shares a native type's name and the duplicate is confusing. The type keeps working on existing views; it's only removed from the picker. The native-menu filter is conservative: it only trims a menu that is entirely a type picker, so it never removes a real view from the switcher. Nothing hidden by default."],
+          ["Toggle hide empty columns (kanban)", "A one-click button in a kanban base's toolbar (and a command) that hides the columns with no cards — Bases' own hideEmptyGroups option, surfaced so you don't have to dig into the view-options menu. The button only shows on kanban views and reflects the current state; click again to bring the empty columns back."],
           ["Manual card order for this base's kanban", "Bases' kanban orders cards inside each column by the base's sort, so there's no persistent manual position — reload and a dragged card snaps back. This gives the base a numeric order property, seeds it (spaced, so you can slot a card between two others) from a basis you pick — creation date, modification date, name, or the current order — and points the kanban's sort at it, so the order becomes a real, editable, persistent thing. Re-run any time to reseed. Both the values and the sort change are revertible from history."],
           ["Sync formula into property", "For each note in the open base, evaluates one of the base's formula (computed) columns and writes the result into a real frontmatter property you name — so a value that only existed as a live formula becomes a stored property you can sort, filter, or reuse elsewhere. Pick the formula, name the property. One-shot and revertible; re-run to refresh. The sibling of Compute rollup, for computed columns instead of linked notes."],
           ["Migrate inline fields to properties", "Converts inline “key:: value” fields written in a note's body into real frontmatter properties that Bases can use."],

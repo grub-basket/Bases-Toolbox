@@ -52,7 +52,7 @@ interface BasesInternalPlugin {
 
 /** View types Bases has registered, read at runtime so new ones (or ones added
  * by other plugins) show up without a Bases Toolbox update. */
-function viewTypes(app: App): string[] {
+function viewTypes(app: App, hidden: string[] = []): string[] {
   const internal = (
     app as unknown as {
       internalPlugins?: { getEnabledPluginById?: (id: string) => unknown };
@@ -61,7 +61,8 @@ function viewTypes(app: App): string[] {
   const bases = internal?.getEnabledPluginById?.("bases") as BasesInternalPlugin | null | undefined;
   const reg = bases?.registrations;
   const keys = reg && typeof reg === "object" ? Object.keys(reg) : [];
-  return keys.length ? keys : [...DEFAULT_VIEW_TYPES];
+  const all = keys.length ? keys : [...DEFAULT_VIEW_TYPES];
+  return all.filter((t) => !hidden.includes(t));
 }
 
 /** Deep copy of a view node — preserves keys we don't know about. Prefers
@@ -334,7 +335,7 @@ export class ViewManagerModal extends Modal {
 
     // ---- Add a view ----
     new Setting(contentEl).setName("Add a view").setHeading();
-    const types = viewTypes(this.app);
+    const types = viewTypes(this.app, this.plugin.settings.hiddenViewTypes);
     if (!types.includes(this.newType)) this.newType = types[0] ?? "table";
 
     new Setting(contentEl)

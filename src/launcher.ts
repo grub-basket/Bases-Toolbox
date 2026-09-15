@@ -50,6 +50,7 @@ const TOOLS: ToolFeature[] = [
   { name: "Audit aliased links", desc: "Find property links with aliases to standardize", icon: "link", command: "audit-aliased-links" },
   { name: "Compute rollup", desc: "Aggregate linked notes into a property", icon: "sigma", command: "compute-rollup" },
   { name: "Kanban card order", desc: "Give a base's kanban a persistent, manual card order", icon: "kanban-square", command: "kanban-manual-order" },
+  { name: "Hide empty kanban columns", desc: "Toggle hiding columns with no cards on a kanban base", icon: "gallery-vertical-end", command: "kanban-toggle-hide-empty" },
   { name: "Sync formula", desc: "Write a base's formula results into a property", icon: "function-square", command: "sync-formula" },
   { name: "Migrate inline fields", desc: "Convert “key:: value” to frontmatter", icon: "list-plus", command: "migrate-inline-fields" },
   { name: "Merge note into another", desc: "Combine two notes + their properties", icon: "merge", command: "merge-note" },
