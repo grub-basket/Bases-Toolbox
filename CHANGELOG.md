@@ -2,6 +2,9 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.63
+- **Manual card order for kanban.** Obsidian's Bases kanban orders cards inside each column by the base's sort, so a dragged card has no persistent position — reload and it snaps back (there's nowhere for the kanban to store a manual order). This command gives the base a numeric order property, seeds it **spaced** (10, 20, 30… so you can slot a card between two others without renumbering) from a basis you pick — creation date, modification date, name, or the current order — and points the kanban's sort at it. Now each column has a real, editable, **persistent** order: change a card's order value and it moves. Re-run any time to reseed. Command, launcher entry, and in-app reference; both the values and the sort change are revertible from the bulk file change history.
+
 ## 0.1.62
 - **Sync formula into property.** A new command (and launcher entry) that writes a base's *computed* formula column into a real frontmatter property on every note in the view — so a value that only existed as a live formula becomes a stored property you can sort, filter, group, or reuse anywhere. Pick the formula, name the property; it evaluates via Bases' own engine, skips reserved names, and is one-shot and fully revertible from history (re-run to refresh). The sibling of **Compute rollup into property**, for computed columns instead of linked notes. (Closes the request for syncing formula results into properties.)
 

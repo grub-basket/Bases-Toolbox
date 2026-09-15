@@ -83,6 +83,7 @@ import {
   installForkSync,
 } from "./property-fork";
 import { openRollup } from "./rollup";
+import { openKanbanOrder } from "./kanban-order";
 import { openSyncFormula } from "./sync-formula";
 import { PropertyCache } from "./scan";
 import { BasesToolboxSettings, DEFAULT_SETTINGS, DisabledFilter, HistoryEntry, PluginData } from "./types";
@@ -226,6 +227,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "compute-rollup",
       name: "Compute rollup into property",
       callback: () => openRollup(this),
+    });
+
+    this.addCommand({
+      id: "kanban-manual-order",
+      name: "Manual card order for this base's kanban",
+      callback: () => openKanbanOrder(this),
     });
 
     this.addCommand({
@@ -1326,6 +1333,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           ["Convert or fork a property's format", "Bases expects dates as YYYY-MM-DD and links as [[wikilinks]], but you might store them differently. This normalizes dates or (un)wraps wikilinks — either in place, or into a SECOND property that stays in sync with the original, so you keep your format AND the one Bases wants."],
           ["Audit pinned allowed values", "You can “pin” the set of values a property is allowed to have (from the property index). This lists any value currently outside that set and lets you fix it (find & replace) or accept it (add to the allowed list)."],
           ["Compute rollup into property", "For each note in the open base, gathers the notes linked to it (incoming or outgoing) and aggregates them — count of linked notes, or sum / average / min / max of a number property on them — writing the result into a property you name. E.g. give every Project a “task-count” of the Tasks that link to it, or a “total-hours”. One-shot and revertible; re-run to refresh."],
+          ["Manual card order for this base's kanban", "Bases' kanban orders cards inside each column by the base's sort, so there's no persistent manual position — reload and a dragged card snaps back. This gives the base a numeric order property, seeds it (spaced, so you can slot a card between two others) from a basis you pick — creation date, modification date, name, or the current order — and points the kanban's sort at it, so the order becomes a real, editable, persistent thing. Re-run any time to reseed. Both the values and the sort change are revertible from history."],
           ["Sync formula into property", "For each note in the open base, evaluates one of the base's formula (computed) columns and writes the result into a real frontmatter property you name — so a value that only existed as a live formula becomes a stored property you can sort, filter, or reuse elsewhere. Pick the formula, name the property. One-shot and revertible; re-run to refresh. The sibling of Compute rollup, for computed columns instead of linked notes."],
           ["Migrate inline fields to properties", "Converts inline “key:: value” fields written in a note's body into real frontmatter properties that Bases can use."],
           ["Merge current note into another", "Combines the current note — its body and its properties — into another note you pick, then tidies up (re-points links, trashes the source). Recorded to History, so the whole merge can be reverted."],
