@@ -2,6 +2,11 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.66
+- **Importer: build a value from several columns.** New **composite properties** concatenate column values with your own separators — a `{{Last}}, {{First}}` or `{{Code}}-{{Year}}` pattern written into a new property (or an existing one, to override it). And a **filename pattern** builds each note's name from a `{{First}} {{Last}}` pattern instead of a single column. So a filename (or any property) made of two columns no longer needs a spreadsheet pre-pass.
+- **Importer: per-folder setup memory.** Every import now remembers its whole setup for the destination folder. Next time you target that folder, a one-click **“Reuse that setup”** appears — the automatic companion to named presets, so a recurring import to the same folder doesn't need re-mapping.
+- **Removed: hide view types from the picker** (added in 0.1.64). The case that prompted it — a community plugin registering a same-named Bases view type — turned out not to occur in practice (such plugins add their own separate views, not Bases view types), so the option was pulled rather than left as dead weight. The kanban hide-empty-columns button and manual card ordering are unaffected.
+
 ## 0.1.65
 - **Filter the history by source.** The bulk file change history gets a source dropdown, so you can narrow the log to just one kind of operation — e.g. **Kanban order** (which groups the card-ordering and its sort change into one option) for a kanban-scoped view of what changed and one-click reverts, or find & replace, merges, imports, and so on. Shows “N of M operations (filtered)”; “All sources” restores the full list.
 

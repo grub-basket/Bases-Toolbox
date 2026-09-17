@@ -42,6 +42,19 @@ interface ColumnConfig {
 
 type CollisionPolicy = "suffix" | "skip" | "overwrite" | "update";
 
+/**
+ * A composite (concatenated) property: its frontmatter name and a pattern of
+ * `{{Column Header}}` placeholders mixed with literal text — e.g.
+ * `{{Last}}, {{First}}` or `{{Code}}-{{Year}}`. Substituted per row (same
+ * placeholder syntax as the body template) into a real property, so a value
+ * built from two columns + custom separators no longer needs a spreadsheet
+ * pre-pass. A composite can also drive the filename (see filenamePattern).
+ */
+interface CompositeProp {
+  prop: string;
+  pattern: string;
+}
+
 /** Update mode: what happens when a property already holds a DIFFERENT value. */
 type UpdateConflict = "imported" | "existing";
 
@@ -65,6 +78,9 @@ export interface ImportPreset {
   filenameHeader: string;
   columns: ColumnConfig[];
   addCreated?: boolean;
+  composites?: CompositeProp[];
+  /** When set, the filename is this pattern substituted (overrides the column). */
+  filenamePattern?: string;
 }
 
 /**
@@ -86,6 +102,8 @@ interface ImportDraft {
   savedAt: number;
   updateConflict?: UpdateConflict;
   addCreated?: boolean;
+  composites?: CompositeProp[];
+  filenamePattern?: string;
   /** Row indices deselected in the row picker. */
   excludedRows?: number[];
 }
@@ -116,6 +134,14 @@ class CsvImportPanel {
   /** Stamp `created: <import time>` onto newly created notes (off by default). */
   private addCreated = false;
   private addCreatedToggle: ToggleComponent | null = null;
+  /** Composite (concatenated) properties built from column placeholders. */
+  private composites: CompositeProp[] = [];
+  private compositesEl: HTMLElement | null = null;
+  /** When non-empty, the note filename is this `{{Column}}` pattern per row. */
+  private filenamePattern = "";
+  private filenamePatternEl: HTMLInputElement | null = null;
+  /** "Reuse the setup from your last import here" hint under the folder field. */
+  private folderSetupHintEl: HTMLElement | null = null;
   private collision: CollisionPolicy = "suffix";
   private updateConflict: UpdateConflict = "imported";
   private conflictSetting: Setting | null = null;
@@ -180,6 +206,8 @@ class CsvImportPanel {
       updateConflict: this.updateConflict,
       excludedRows: [...this.excludedRows],
       addCreated: this.addCreated,
+      composites: this.composites.map((c) => ({ ...c })),
+      filenamePattern: this.filenamePattern,
     };
     await this.draftStore.save(draft);
   }
@@ -252,6 +280,10 @@ class CsvImportPanel {
       this.omitToggle?.setValue(d.omitEmpty);
       this.addCreated = d.addCreated ?? false;
       this.addCreatedToggle?.setValue(this.addCreated);
+      this.composites = (d.composites ?? []).map((c) => ({ ...c }));
+      this.filenamePattern = d.filenamePattern ?? "";
+      if (this.filenamePatternEl) this.filenamePatternEl.value = this.filenamePattern;
+      this.renderComposites();
       this.lastHeaderKey = ""; // force a column rebuild for this text
       this.parse(d.text);
       // Overlay the saved column mapping onto the freshly-parsed columns when the
@@ -410,6 +442,49 @@ class CsvImportPanel {
       });
     }
 
+    // ---- Composite (concatenated) properties ----
+    new Setting(contentEl)
+      .setName("Composite properties")
+      .setDesc(
+        createFragment((f) => {
+          f.appendText("Build a property by concatenating column values with your own separators — a ");
+          f.createEl("code", { text: "{{Column}}" });
+          f.appendText(
+            " pattern like {{Last}}, {{First}} or {{Code}}-{{Year}}. Give it a new property name, or reuse an existing one to override it. Point the filename at one (below) to build note names from two columns instead of pre-joining them in a spreadsheet."
+          );
+        })
+      )
+      .addButton((b) =>
+        b.setButtonText("Add composite").onClick(() => {
+          this.composites.push({ prop: "", pattern: "" });
+          this.renderComposites();
+          this.scheduleDraftSave();
+        })
+      );
+    this.compositesEl = contentEl.createDiv({ cls: "bases-toolbox-csv-composites" });
+    this.renderComposites();
+
+    // ---- Filename pattern ----
+    new Setting(contentEl)
+      .setName("Filename pattern")
+      .setDesc(
+        createFragment((f) => {
+          f.appendText("Optional. When set, each note's filename is this ");
+          f.createEl("code", { text: "{{Column}}" });
+          f.appendText(
+            " pattern (e.g. {{First}} {{Last}}) instead of a single column — this overrides the “Filename” radio in the column table. Illegal filename characters are stripped."
+          );
+        })
+      )
+      .addText((t) => {
+        t.setPlaceholder("e.g. {{First}} {{Last}}");
+        this.filenamePatternEl = t.inputEl;
+        t.setValue(this.filenamePattern).onChange((v) => {
+          this.filenamePattern = v;
+          this.renderPreview();
+        });
+      });
+
     new Setting(contentEl)
       .setName("Omit empty values")
       .setDesc("Blank cells leave the property out of that note entirely.")
@@ -505,6 +580,12 @@ class CsvImportPanel {
     this.folderEl?.addEventListener("input", this.refreshBaseHint);
     this.folderEl?.addEventListener("input", () => this.renderRows());
     this.refreshBaseHint();
+
+    // Per-folder setup memory: offer to reuse the setup last imported to the
+    // typed folder. Non-clobbering — it's a button, not an auto-apply.
+    this.folderSetupHintEl = contentEl.createDiv({ cls: "bases-toolbox-fr-info bases-toolbox-import-foldercache" });
+    this.folderEl?.addEventListener("input", () => this.refreshFolderSetupHint());
+    this.refreshFolderSetupHint();
 
     new Setting(contentEl).addButton((b) => {
       b.setButtonText("Import").setCta().setDisabled(true).onClick(() => void this.doImport());
@@ -898,7 +979,59 @@ class CsvImportPanel {
     return { write: (absPath, data) => writeFile(absPath, data), reconcile };
   }
 
-  /** Builds one row's frontmatter object from the current column config. */
+  /** Render the composite-property rows (name + pattern + remove). */
+  private renderComposites(): void {
+    const root = this.compositesEl;
+    if (!root) return;
+    root.empty();
+    this.composites.forEach((c, i) => {
+      const row = root.createDiv({ cls: "bases-toolbox-csv-composite-row" });
+      const name = row.createEl("input", {
+        type: "text",
+        cls: "bases-toolbox-csv-composite-name",
+        attr: { placeholder: "Property name", "aria-label": "Composite property name" },
+      });
+      name.value = c.prop;
+      name.addEventListener("input", () => {
+        c.prop = name.value.trim();
+        this.renderPreview();
+        this.scheduleDraftSave();
+      });
+      const pat = row.createEl("input", {
+        type: "text",
+        cls: "bases-toolbox-csv-composite-pattern",
+        attr: { placeholder: "{{First}} {{Last}}", "aria-label": "Composite pattern" },
+      });
+      pat.value = c.pattern;
+      pat.addEventListener("input", () => {
+        c.pattern = pat.value;
+        this.renderPreview();
+        this.scheduleDraftSave();
+      });
+      const del = row.createEl("button", { cls: "bases-toolbox-csv-composite-del", text: "✕" });
+      del.setAttribute("aria-label", "Remove this composite property");
+      del.addEventListener("click", () => {
+        this.composites.splice(i, 1);
+        this.renderComposites();
+        this.renderPreview();
+        this.scheduleDraftSave();
+      });
+    });
+  }
+
+  /** Substitute `{{Column Header}}` placeholders in a pattern with this row's
+   * values (exact, case-sensitive header match; unknown placeholder → empty).
+   * The shared engine behind the body template, composite properties, and the
+   * filename pattern. */
+  private substitute(pattern: string, row: string[]): string {
+    return pattern.replace(/\{\{([^}]+)\}\}/g, (_, name: string) => {
+      const i = this.headers.findIndex((h) => h.trim() === name.trim());
+      return i === -1 ? "" : (row[i] ?? "");
+    });
+  }
+
+  /** Builds one row's frontmatter object from the current column config, plus
+   * any composite (concatenated) properties. */
   private rowToFm(row: string[]): Record<string, unknown> {
     const fm: Record<string, unknown> = {};
     for (const [i, col] of this.columns.entries()) {
@@ -906,6 +1039,17 @@ class CsvImportPanel {
       const value = cellToValue(row[i] ?? "", col.type);
       if (value === null && this.omitEmpty) continue;
       fm[col.propName] = value;
+    }
+    // Composite properties: a concatenation of column values + literal text.
+    // Written after the mapped columns, so a composite that reuses a column's
+    // property name deliberately overrides it (that's the "use existing one"
+    // case). Always text; an empty result is omitted under "omit empty".
+    for (const c of this.composites) {
+      const prop = c.prop.trim();
+      if (!prop) continue;
+      const value = this.substitute(c.pattern, row);
+      if (value === "" && this.omitEmpty) continue;
+      fm[prop] = value;
     }
     // Optional durable creation date — but a "created" column mapped from the
     // sheet always wins over the import timestamp.
@@ -915,13 +1059,19 @@ class CsvImportPanel {
     return fm;
   }
 
+  /** The note filename for a row: the filename pattern (substituted) when set,
+   * otherwise the chosen filename column. Sanitised, with a stable fallback. */
+  private rowFilename(row: string[], idx: number): string {
+    const raw = this.filenamePattern.trim()
+      ? this.substitute(this.filenamePattern, row).trim()
+      : (row[this.filenameCol] ?? "");
+    return sanitizeFilename(raw || `note-${idx + 1}`);
+  }
+
   private rowBody(row: string[]): string {
     const template = this.templateEl?.value ?? "";
     if (!template.trim()) return "";
-    return template.replace(/\{\{([^}]+)\}\}/g, (_, name: string) => {
-      const i = this.headers.findIndex((h) => h.trim() === name.trim());
-      return i === -1 ? "" : (row[i] ?? "");
-    });
+    return this.substitute(template, row);
   }
 
   /* ---------- presets (recurring imports) ---------- */
@@ -971,14 +1121,30 @@ class CsvImportPanel {
     dd.setValue(selected);
   }
 
-  private async savePreset(): Promise<void> {
-    // Name from the field, falling back to the selected preset (= update it).
-    const name = this.presetNameEl?.value.trim() || this.presetDd?.getValue() || "";
-    if (!name) {
-      new Notice("Give the preset a name first.");
+  /** Show a one-click "reuse the setup you last imported to this folder"
+   * affordance when the typed destination has a cached setup. Non-clobbering. */
+  private refreshFolderSetupHint(): void {
+    const el = this.folderSetupHintEl;
+    if (!el) return;
+    el.empty();
+    const folder = normalizePath(this.folderEl?.value.trim() || "");
+    const cached = folder ? this.plugin.settings.importFolderSetups[folder] : undefined;
+    if (!cached) {
+      el.toggle(false);
       return;
     }
-    const preset: ImportPreset = {
+    el.toggle(true);
+    el.createSpan({ text: "You've imported to this folder before. " });
+    const btn = el.createEl("button", { cls: "mod-cta", text: "Reuse that setup" });
+    btn.addEventListener("click", () => {
+      this.applyPreset(cached);
+      new Notice(`Reused the column setup you last imported to “${folder}”.`);
+    });
+  }
+
+  /** A preset-shaped snapshot of the current setup (everything but the data). */
+  private buildPreset(name: string): ImportPreset {
+    return {
       name,
       folder: this.folderEl?.value ?? "",
       template: this.templateEl?.value ?? "",
@@ -992,7 +1158,19 @@ class CsvImportPanel {
       filenameHeader: this.headers[this.filenameCol] ?? "",
       // Deep-copied so later edits in this session don't mutate the saved copy.
       columns: this.columns.map((c) => ({ ...c })),
+      composites: this.composites.map((c) => ({ ...c })),
+      filenamePattern: this.filenamePattern,
     };
+  }
+
+  private async savePreset(): Promise<void> {
+    // Name from the field, falling back to the selected preset (= update it).
+    const name = this.presetNameEl?.value.trim() || this.presetDd?.getValue() || "";
+    if (!name) {
+      new Notice("Give the preset a name first.");
+      return;
+    }
+    const preset = this.buildPreset(name);
     const list = this.plugin.settings.importPresets;
     const i = list.findIndex((x) => x.name === name);
     if (i >= 0) list[i] = preset;
@@ -1020,6 +1198,10 @@ class CsvImportPanel {
     this.omitToggle?.setValue(p.omitEmpty);
     this.addCreated = p.addCreated ?? false;
     this.addCreatedToggle?.setValue(this.addCreated);
+    this.composites = (p.composites ?? []).map((c) => ({ ...c }));
+    this.filenamePattern = p.filenamePattern ?? "";
+    if (this.filenamePatternEl) this.filenamePatternEl.value = this.filenamePattern;
+    this.renderComposites();
     this.inputFormat = p.inputFormat;
     this.formatDd?.setValue(p.inputFormat);
     if (this.presetNameEl) this.presetNameEl.value = p.name;
@@ -1189,7 +1371,7 @@ class CsvImportPanel {
           sel === total ? `Rows to import: all ${total}` : `Rows to import: ${sel} of ${total} selected`
         );
       });
-      const name = sanitizeFilename(row[this.filenameCol] ?? `note-${i + 1}`);
+      const name = this.rowFilename(row, i);
       line.createSpan({ cls: "bases-toolbox-csv-rowname", text: name });
       const cells = this.columns
         .map((c, ci) => (c.include && ci !== this.filenameCol ? (row[ci] ?? "").trim() : ""))
@@ -1244,7 +1426,7 @@ class CsvImportPanel {
       this.renderPreview();
     });
 
-    const filename = sanitizeFilename(row[this.filenameCol] ?? `note-${this.previewRow + 1}`);
+    const filename = this.rowFilename(row, this.previewRow);
     const fm = this.rowToFm(row);
     const body = this.rowBody(row);
     root.createEl("pre", {
@@ -1300,7 +1482,7 @@ class CsvImportPanel {
       const deselected = [...this.excludedRows].filter((i) => i < this.rows.length).length;
       for (const [idx, row] of this.rows.entries()) {
         if (this.excludedRows.has(idx)) continue; // left out in the row picker
-        const base = sanitizeFilename(row[this.filenameCol] ?? `note-${idx + 1}`);
+        const base = this.rowFilename(row, idx);
         let name = base;
         const taken = (n: string) =>
           usedNames.has(n) || !!this.app.vault.getAbstractFileByPath(`${folder}/${n}.md`);
@@ -1517,6 +1699,14 @@ class CsvImportPanel {
         );
       } else {
         new Notice(`[Bases Toolbox] ${summaryFull}`, persistent ? 0 : undefined);
+      }
+      // Remember this setup for the destination folder, so returning to it can
+      // reuse the column mapping / composites / filename pattern in one click.
+      try {
+        this.plugin.settings.importFolderSetups[folder] = this.buildPreset(folder);
+        await this.plugin.savePluginData();
+      } catch (e) {
+        console.error("[Bases Toolbox] Could not cache the import setup for this folder.", e);
       }
       void this.clearDraft(); // import succeeded — the draft is no longer needed
       this.onDone?.();

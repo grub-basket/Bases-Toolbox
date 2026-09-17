@@ -198,9 +198,10 @@ export interface BasesToolboxSettings {
   /** Saved CSV-importer setups (folder, mapping, policies) by name — for
    * recurring imports like a provider roster re-imported every month. */
   importPresets: import("./csv-import").ImportPreset[];
-  /** Bases view-type ids to hide from the view-type picker (native menu + the
-   * view manager's add-view dropdown). Empty = hide nothing. */
-  hiddenViewTypes: string[];
+  /** Importer setups remembered per destination folder — auto-saved on each
+   * import and offered back (one click) the next time that folder is the
+   * target. Keyed by normalized folder path. */
+  importFolderSetups: Record<string, import("./csv-import").ImportPreset>;
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -238,7 +239,7 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   stashpadLinks: false,
   skipExtensions: "edtz",
   importPresets: [],
-  hiddenViewTypes: [],
+  importFolderSetups: {},
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */

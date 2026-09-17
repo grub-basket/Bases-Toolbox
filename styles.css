@@ -1766,3 +1766,33 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
 .bases-toolbox-frv-source {
   max-width: 16em;
 }
+
+/* CSV importer — composite (concatenated) property rows. */
+.bases-toolbox-csv-composites {
+  margin: var(--size-2-2) 0 var(--size-4-2);
+}
+.bases-toolbox-csv-composite-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-3);
+  margin-bottom: var(--size-2-2);
+}
+.bases-toolbox-csv-composite-name {
+  flex: 0 1 12em;
+}
+.bases-toolbox-csv-composite-pattern {
+  flex: 1;
+  min-width: 10em;
+  font-family: var(--font-monospace);
+}
+.bases-toolbox-csv-composite-del {
+  flex: 0 0 auto;
+}
+
+/* CSV importer — per-folder "reuse last setup" hint. */
+.bases-toolbox-import-foldercache {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-3);
+  margin: var(--size-2-2) 0;
+}
