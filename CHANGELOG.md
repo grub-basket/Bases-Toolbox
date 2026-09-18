@@ -2,6 +2,10 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.67
+- **Importer: date/time template variables.** Alongside {{Column}} placeholders, the body, composite properties, and the filename pattern now understand **{{date}}**, **{{time}}**, and **{{now}}** — each with an optional format after a colon (`{{date:YYYY.MM.DD}}`, `{{time:h:mm A}}`). Filled at import time, so a composite property `imported_on` = `{{date}}` stamps every note. A CSV column of the same name still wins (a sheet with a "date" column keeps meaning that column).
+- **Importer: the template variables are now documented.** The template help is a proper dictionary — column variables, date/time variables with format examples, the rules (same-named column wins, unknown variable → empty, which operations each applies to), and a worked example — shared by all three template spots.
+
 ## 0.1.66
 - **Importer: build a value from several columns.** New **composite properties** concatenate column values with your own separators — a `{{Last}}, {{First}}` or `{{Code}}-{{Year}}` pattern written into a new property (or an existing one, to override it). And a **filename pattern** builds each note's name from a `{{First}} {{Last}}` pattern instead of a single column. So a filename (or any property) made of two columns no longer needs a spreadsheet pre-pass.
 - **Importer: per-folder setup memory.** Every import now remembers its whole setup for the destination folder. Next time you target that folder, a one-click **“Reuse that setup”** appears — the automatic companion to named presets, so a recurring import to the same folder doesn't need re-mapping.

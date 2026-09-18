@@ -1,4 +1,4 @@
-import { ButtonComponent, Debouncer, DropdownComponent, FileSystemAdapter, Menu, Modal, Notice, Platform, Setting, TFile, TFolder, ToggleComponent, debounce, normalizePath, parseYaml, setIcon, stringifyYaml } from "obsidian";
+import { ButtonComponent, Debouncer, DropdownComponent, FileSystemAdapter, Menu, Modal, Notice, Platform, Setting, TFile, TFolder, ToggleComponent, debounce, moment, normalizePath, parseYaml, setIcon, stringifyYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { folderPaths } from "./csv-export";
 import { findKey } from "./scan";
@@ -418,27 +418,38 @@ class CsvImportPanel {
     });
     if (tplHelp) {
       templateSetting.settingEl.insertAdjacentElement("afterend", tplHelp);
-      tplHelp.createEl("summary", { text: "How the template works (rules + example)" });
+      tplHelp.createEl("summary", { text: "Template variables — the full list (used by the body, composite properties, and the filename pattern)" });
       const box = tplHelp.createDiv();
       const rule = (text: string) => box.createDiv({ cls: "bases-toolbox-fr-info", text: `• ${text}` });
-      rule(
-        "Placeholder names must match a CSV header EXACTLY — case-sensitive, spaces allowed: a “First Name” column is {{First Name}}, not {{first name}} or {{FirstName}}."
-      );
-      rule(
-        "ANY column can be used, including ones you unticked in the table below — unticking only stops a column becoming a frontmatter property, not its use here."
-      );
-      rule("A placeholder that matches no header is replaced with nothing (empty), not left as-is — a silently blank spot in the body usually means a typo in the name.");
-      rule("Blank cells insert nothing. The “Omit empty values” toggle is about properties and doesn't affect the template.");
-      rule(
-        "The template applies to notes this import CREATES (and full overwrites). Update mode never touches an existing note's body."
-      );
-      rule("Which column names the note file is the “Filename” radio in the column table — unrelated to the template.");
-      box.createDiv({ cls: "bases-toolbox-fr-info", text: "Example — for a roster row Name=Dr Alice Adams, Specialty=Cardiology, Phone=555-0001:" });
+
+      box.createDiv({ cls: "bases-toolbox-fr-info bases-toolbox-tpl-heading", text: "Every {{…}} placeholder below works the same in three places: this body template, a composite property's pattern, and the filename pattern." });
+
+      box.createDiv({ cls: "bases-toolbox-fr-info bases-toolbox-tpl-heading", text: "Column variables" });
+      rule("{{Column Header}} — that column's value for the row. The name must match a CSV header EXACTLY: case-sensitive, spaces allowed. A “First Name” column is {{First Name}} — not {{first name}} or {{FirstName}}.");
+      rule("ANY column works, including ones you unticked in the table below (unticking only stops a column becoming its own property — it can still be used in a template).");
+
+      box.createDiv({ cls: "bases-toolbox-fr-info bases-toolbox-tpl-heading", text: "Date / time variables (filled at import time)" });
+      rule("{{date}} — the import date, e.g. 2026-09-18. Add a format after a colon (moment.js tokens): {{date:YYYY.MM.DD}} → 2026.09.18, {{date:MMM D, YYYY}} → Sep 18, 2026, {{date:dddd}} → Friday.");
+      rule("{{time}} — the import time, e.g. 14:30. Formattable too: {{time:h:mm A}} → 2:30 PM.");
+      rule("{{now}} (or {{datetime}}) — date + time together, e.g. 2026-09-18T14:30:00. Formattable: {{now:YYYY-MM-DD HH:mm}}.");
+
+      box.createDiv({ cls: "bases-toolbox-fr-info bases-toolbox-tpl-heading", text: "Rules" });
+      rule("A column of the SAME name as a variable wins — a sheet with a “date” column keeps using it, so {{date}} means that column, not today's date.");
+      rule("An unknown {{name}} (a typo, or a header that doesn't exist) becomes EMPTY — a silently blank spot usually means a misspelled name.");
+      rule("A blank cell inserts nothing. (The “Omit empty values” toggle is about whole properties, not templates.)");
+      rule("The body template applies to notes this import CREATES (and full overwrites); update mode never rewrites an existing note's body. Composite properties and the filename apply to created + overwritten notes.");
+
+      box.createDiv({ cls: "bases-toolbox-fr-info bases-toolbox-tpl-heading", text: "Example — row: First=Alice, Last=Adams, City=NYC" });
       box.createEl("pre", {
         cls: "bases-toolbox-csv-preview",
         text:
-          "# {{Name}}\n\n**Specialty:** {{Specialty}}\n**Phone:** {{Phone}}\n\n## Notes\n- [ ] verify roster entry\n" +
-          "\n…each imported note's body becomes:\n\n# Dr Alice Adams\n\n**Specialty:** Cardiology\n**Phone:** 555-0001\n\n## Notes\n- [ ] verify roster entry",
+          "Body template:  # {{First}} {{Last}}\\n\\n**City:** {{City}}\\nImported {{date}}.\n" +
+          "Composite property “full_name” = {{Last}}, {{First}}\n" +
+          "Composite property “imported_on” = {{date:YYYY-MM-DD}}\n" +
+          "Filename pattern = {{First}} {{Last}}\n\n" +
+          "→ note “Alice Adams.md” with body:\n" +
+          "# Alice Adams\\n\\n**City:** NYC\\nImported 2026-09-18.\n" +
+          "→ properties: full_name: Adams, Alice   ·   imported_on: 2026-09-18",
       });
     }
 
@@ -450,7 +461,7 @@ class CsvImportPanel {
           f.appendText("Build a property by concatenating column values with your own separators — a ");
           f.createEl("code", { text: "{{Column}}" });
           f.appendText(
-            " pattern like {{Last}}, {{First}} or {{Code}}-{{Year}}. Give it a new property name, or reuse an existing one to override it. Point the filename at one (below) to build note names from two columns instead of pre-joining them in a spreadsheet."
+            " pattern like {{Last}}, {{First}} or {{Code}}-{{Year}}, or a date variable like {{date}} for a stamped-on value. Give it a new property name, or reuse an existing one to override it. Full variable list is under the body template above."
           );
         })
       )
@@ -472,7 +483,7 @@ class CsvImportPanel {
           f.appendText("Optional. When set, each note's filename is this ");
           f.createEl("code", { text: "{{Column}}" });
           f.appendText(
-            " pattern (e.g. {{First}} {{Last}}) instead of a single column — this overrides the “Filename” radio in the column table. Illegal filename characters are stripped."
+            " pattern (e.g. {{First}} {{Last}}, or {{Last}}-{{date:YYYY-MM-DD}}) instead of a single column — this overrides the “Filename” radio in the column table. Same variables as the body template; illegal filename characters are stripped."
           );
         })
       )
@@ -1024,10 +1035,36 @@ class CsvImportPanel {
    * The shared engine behind the body template, composite properties, and the
    * filename pattern. */
   private substitute(pattern: string, row: string[]): string {
-    return pattern.replace(/\{\{([^}]+)\}\}/g, (_, name: string) => {
-      const i = this.headers.findIndex((h) => h.trim() === name.trim());
-      return i === -1 ? "" : (row[i] ?? "");
+    return pattern.replace(/\{\{([^}]+)\}\}/g, (_, token: string) => {
+      const name = token.trim();
+      // A CSV column of this exact name wins over a same-named variable — so a
+      // sheet with a "date" column keeps using it.
+      const i = this.headers.findIndex((h) => h.trim() === name);
+      if (i !== -1) return row[i] ?? "";
+      return this.templateVar(name);
     });
+  }
+
+  /** Resolve a non-column template variable: {{date}}, {{time}}, {{now}} with
+   * an optional moment format after a colon ({{date:YYYY.MM.DD}}). Unknown
+   * variables resolve to empty (a blank spot in the output = a typo). */
+  private templateVar(name: string): string {
+    const ci = name.indexOf(":");
+    const key = (ci === -1 ? name : name.slice(0, ci)).trim().toLowerCase();
+    const fmt = ci === -1 ? "" : name.slice(ci + 1).trim();
+    // Obsidian re-exports moment as a namespace type; it's callable at runtime.
+    const now = (moment as unknown as () => { format(f: string): string })();
+    switch (key) {
+      case "date":
+        return now.format(fmt || "YYYY-MM-DD");
+      case "time":
+        return now.format(fmt || "HH:mm");
+      case "now":
+      case "datetime":
+        return now.format(fmt || "YYYY-MM-DDTHH:mm:ss");
+      default:
+        return "";
+    }
   }
 
   /** Builds one row's frontmatter object from the current column config, plus
