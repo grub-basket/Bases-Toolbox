@@ -12,9 +12,9 @@ import {
 } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { activeBaseView } from "./base-detect";
-import { baseFolderScope, folderPaths, readBaseInfo } from "./csv-export";
+import { baseFolderScope, readBaseInfo } from "./csv-export";
 import { getPropertyType, isUnsafeKey } from "./scan";
-import { ListInputSuggest, PropertyValueSuggest, attachPropertySuggest } from "./suggest";
+import { PropertyValueSuggest, attachFolderSuggest, attachPropertySuggest } from "./suggest";
 
 /** Fuzzy note picker → returns the chosen file so a value can get a [[wikilink]]. */
 class LinkPicker extends FuzzySuggestModal<TFile> {
@@ -173,7 +173,7 @@ export class PropertiesModal extends Modal {
         .setDesc('Where to create it. Blank = vault root. Type to autocomplete.')
         .addText((t) => {
           t.setValue(this.target.kind === "create" ? this.target.folder : "");
-          new ListInputSuggest(this.plugin, t.inputEl, () => folderPaths(this.plugin));
+          attachFolderSuggest(this.plugin, t.inputEl);
           this.folderInput = t.inputEl;
         });
     }

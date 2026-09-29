@@ -2,6 +2,7 @@ import { ButtonComponent, Modal, Notice, Setting, TFile, TFolder, ToggleComponen
 import type BasesToolboxPlugin from "./main";
 import { findKey, isUnsafeKey } from "./scan";
 import { ChangeRecord } from "./types";
+import { attachExtensionSuggest, attachFolderSuggest, attachPropertySuggest } from "./suggest";
 
 /**
  * Companion notes for non-Markdown files: Bases only reads frontmatter from
@@ -206,6 +207,7 @@ export class CompanionNotesModal extends Modal {
         t.setPlaceholder("Attachments\nProjects/assets");
         t.setValue(this.plugin.settings.companionFolders);
         this.folderEl = t.inputEl;
+        attachFolderSuggest(this.plugin, t.inputEl, { list: "\n,;" });
       });
 
     new Setting(contentEl)
@@ -223,6 +225,7 @@ export class CompanionNotesModal extends Modal {
         t.setPlaceholder("e.g. tmp, log");
         t.setValue(this.plugin.settings.companionExcludeExts);
         this.extsEl = t.inputEl;
+        attachExtensionSuggest(this.plugin, t.inputEl, { list: ", ;" });
       });
 
     new Setting(contentEl)
@@ -232,6 +235,7 @@ export class CompanionNotesModal extends Modal {
         t.setPlaceholder("(adjacent)");
         t.setValue(this.plugin.settings.companionsFolder);
         this.destEl = t.inputEl;
+        attachFolderSuggest(this.plugin, t.inputEl);
       });
 
     const buttons = new Setting(contentEl);
@@ -360,6 +364,7 @@ export class MetadataStampModal extends Modal {
       .addText((t) => {
         t.setPlaceholder("e.g. Projects");
         this.folderEl = t.inputEl;
+        attachFolderSuggest(this.plugin, t.inputEl);
       });
 
     new Setting(contentEl)
@@ -368,6 +373,7 @@ export class MetadataStampModal extends Modal {
       .addText((t) => {
         t.setValue("created");
         this.createdEl = t.inputEl;
+        attachPropertySuggest(this.plugin, t.inputEl);
       });
 
     new Setting(contentEl)
@@ -376,6 +382,7 @@ export class MetadataStampModal extends Modal {
       .addText((t) => {
         t.setValue("modified");
         this.modifiedEl = t.inputEl;
+        attachPropertySuggest(this.plugin, t.inputEl);
       });
 
     new Setting(contentEl)

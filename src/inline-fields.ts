@@ -3,6 +3,7 @@ import type BasesToolboxPlugin from "./main";
 import { parseReplacement } from "./find-replace";
 import { findKey, isUnsafeKey } from "./scan";
 import { ChangeRecord } from "./types";
+import { attachFolderSuggest } from "./suggest";
 
 /**
  * Migrates Dataview inline fields (`Key:: value` lines and `[key:: value]`
@@ -74,6 +75,7 @@ export class InlineFieldMigratorModal extends Modal {
       .addText((t) => {
         t.setPlaceholder("e.g. Projects");
         this.folderEl = t.inputEl;
+        attachFolderSuggest(this.plugin, t.inputEl);
       });
 
     new Setting(contentEl)

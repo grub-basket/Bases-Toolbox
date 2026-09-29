@@ -4,6 +4,7 @@ import { activeBaseView } from "./base-detect";
 import { parseReplacement } from "./find-replace";
 import { findKey, getPropertyType, isUnsafeKey, parseValueForProperty, valueToDisplay } from "./scan";
 import { ChangeRecord } from "./types";
+import { attachPropertySuggest, attachValueSuggest } from "./suggest";
 
 const NEW_PROPERTY = "__bt_new_property__";
 
@@ -102,6 +103,8 @@ export class BulkEditModal extends Modal {
     this.newNameSetting = new Setting(contentEl).setName("New property name").addText((t) => {
       t.setPlaceholder("property-name");
       this.nameInputEl = t.inputEl;
+      // A property that exists elsewhere in the vault (just not in this base).
+      attachPropertySuggest(this.plugin, t.inputEl);
     });
     this.setNewNameVisible(this.property === NEW_PROPERTY);
 
@@ -124,6 +127,14 @@ export class BulkEditModal extends Modal {
     const valueSetting = new Setting(contentEl).setName("Value").addTextArea((t) => {
       t.setPlaceholder("New value");
       this.valueEl = t.inputEl;
+      // Existing values of the chosen property; one item per line, so only the
+      // line under the caret is completed.
+      attachValueSuggest(
+        this.plugin,
+        t.inputEl,
+        () => (this.property === NEW_PROPERTY ? (this.nameInputEl?.value.trim() ?? "") : this.property),
+        { list: "\n", limit: 100 }
+      );
     });
     this.valueDescEl = valueSetting.descEl;
     this.updateValueDesc();

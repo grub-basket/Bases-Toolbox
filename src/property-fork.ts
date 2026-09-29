@@ -3,6 +3,7 @@ import type BasesToolboxPlugin from "./main";
 import { normalizeDate, stripWikilinks } from "./csv-core";
 import { PropertyUsage, findKey, isUnsafeKey, valueToDisplay } from "./scan";
 import { ChangeRecord } from "./types";
+import { attachPropertySuggest } from "./suggest";
 
 /**
  * Property fork / convert: transform a property's values vault-wide —
@@ -180,6 +181,7 @@ class ForkModal extends Modal {
       new Setting(contentEl).setName("Fork property name").addText((t) => {
         t.setValue(defaultForkName(this.usage.name, this.transform));
         this.targetEl = t.inputEl;
+        attachPropertySuggest(this.plugin, t.inputEl);
       }),
       new Setting(contentEl)
         .setName("Keep in live sync")
@@ -436,9 +438,11 @@ export class ForkRenameModal extends Modal {
 
     new Setting(contentEl).setName("Source property").addText((t) => {
       t.setValue(source).onChange((v) => (source = v.trim()));
+      attachPropertySuggest(this.plugin, t.inputEl);
     });
     new Setting(contentEl).setName("Fork property").addText((t) => {
       t.setValue(target).onChange((v) => (target = v.trim()));
+      attachPropertySuggest(this.plugin, t.inputEl);
     });
     new Setting(contentEl).setName("Transform").addDropdown((dd) => {
       for (const [k, label] of Object.entries(TRANSFORM_LABELS)) dd.addOption(k, label);

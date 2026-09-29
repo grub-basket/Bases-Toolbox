@@ -28,9 +28,9 @@ import {
   BaseScopeModal,
   VALUELESS_OPS,
 } from "./conditional-format";
-import { attachPropertySuggest, attachValueSuggest } from "./suggest";
+import { VaultInputSuggest, attachExtensionSuggest, attachFolderSuggest, attachPropertySuggest, attachValueSuggest, extensionSource } from "./suggest";
 import { exportBaseCsv } from "./csv-export";
-import { CsvImportModal, importDraftInfo } from "./csv-import";
+import { CsvImportModal, dismissImportDraft, importDraftInfo } from "./csv-import";
 import { CsvImportView, VIEW_TYPE_CSV_IMPORT, openCsvImportView } from "./csv-import-view";
 import { PropertiesModal, createNoteWithProperties, editActiveNoteProperties } from "./properties-modal";
 import { CsvExportModal, CsvExportView, VIEW_TYPE_CSV_EXPORT, openCsvExportView } from "./csv-export-view";
@@ -147,11 +147,16 @@ export default class BasesToolboxPlugin extends Plugin {
       void this.dataReady.then(() => importDraftInfo(this)).then((info) => {
         if (!info) return;
         const when = info.savedAt ? ` from ${new Date(info.savedAt).toLocaleString()}` : "";
-        new Notice(
+        const notice = new Notice(
           createFragment((f) => {
             f.createSpan({ text: `[Bases Toolbox] You have an unfinished CSV import${when} (~${info.rows} lines). ` });
             const btn = f.createEl("button", { cls: "bases-toolbox-notice-btn", text: "Open importer to restore" });
             btn.addEventListener("click", () => void openCsvImportView(this));
+            const ignore = f.createEl("button", { cls: "bases-toolbox-notice-btn", text: "Ignore" });
+            ignore.addEventListener("click", () => {
+              void dismissImportDraft(this);
+              notice.hide();
+            });
           }),
           0
         );
@@ -906,15 +911,16 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       .setDesc(
         "Extensions the “Exclude skipped file extensions from this base” command removes from a base (comma or space separated — the dot is optional). Nothing changes on its own: run the command on a base and it appends a filter so files with these extensions stop appearing in every view. Revertible from history."
       )
-      .addText((t) =>
-        t
-          .setPlaceholder("edtz, png, pdf")
+      .addText((t) => {
+        t.setPlaceholder("edtz, png, pdf")
           .setValue(this.plugin.settings.skipExtensions)
           .onChange(async (v) => {
             this.plugin.settings.skipExtensions = v;
             await this.plugin.savePluginData();
-          })
-      );
+          });
+        // Extensions actually present in the vault; completes the item at the caret.
+        attachExtensionSuggest(this.plugin, t.inputEl, { list: ", " });
+      });
 
     new Setting(containerEl)
       .setName("Multiline list cells")
@@ -1216,6 +1222,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       .addText((t) => {
         t.setPlaceholder("(adjacent)");
         t.setValue(this.plugin.settings.companionsFolder);
+        attachFolderSuggest(this.plugin, t.inputEl);
         t.onChange(async (v) => {
           this.plugin.settings.companionsFolder = v.trim().replace(/^\/+|\/+$/g, "");
           await this.plugin.savePluginData();
@@ -1238,6 +1245,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       .addTextArea((t) => {
         t.setPlaceholder("Attachments\nProjects/assets");
         t.setValue(this.plugin.settings.companionFolders);
+        attachFolderSuggest(this.plugin, t.inputEl, { list: "\n,;" });
         t.onChange(async (v) => {
           this.plugin.settings.companionFolders = v;
           await this.plugin.savePluginData();
@@ -1634,6 +1642,10 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       .addText((t) => {
         t.setPlaceholder(".tmp");
         addEl = t.inputEl;
+        // Vault extensions not already excluded.
+        new VaultInputSuggest(this.app, t.inputEl, () =>
+          extensionSource(this.app).filter((i) => !excluded.has(i.value))
+        );
         t.inputEl.addEventListener("keydown", (e) => {
           if (e.key === "Enter") {
             e.preventDefault();

@@ -2,6 +2,14 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.69
+- **Autocomplete in every field that names something in your vault.** Folder fields (companion-note destination and folder lists, stamp scope, inline-field migration scope, CSV import target, New note folder) suggest folders, including empty ones. Property fields (bulk edit, fork, rollup, sync formula, rename property, CSV column mapping, composite names, stamp created/modified properties) suggest property names, and value fields suggest the values already used for the chosen property, most-used first. List fields (`a, b, c` or one per line) complete only the item under the cursor and hide items already listed. Also suggested: file extensions (skip/exclude lists), `{{column}}` / `{{date}}` template variables in the importer's filename and composite patterns, saved preset names, and existing `.base` files in the import folder.
+- **Picking a suggestion now saves like typing does.** The CSV importer's draft autosave, for example, used to miss values picked from a list.
+- The existing property/value lists in conditional formatting keep showing every entry (never truncated); other lists cap at 100. Value lists now narrow as you type instead of always showing everything.
+
+## 0.1.68
+- **Ignore button on the unfinished-import reminder.** The startup "You have an unfinished CSV import…" notice can now be muted without discarding the draft; it returns only if a newer draft is saved. The draft stays restorable from inside the importer.
+
 ## 0.1.67
 - **Importer: date/time template variables.** Alongside {{Column}} placeholders, the body, composite properties, and the filename pattern now understand **{{date}}**, **{{time}}**, and **{{now}}** — each with an optional format after a colon (`{{date:YYYY.MM.DD}}`, `{{time:h:mm A}}`). Filled at import time, so a composite property `imported_on` = `{{date}}` stamps every note. A CSV column of the same name still wins (a sheet with a "date" column keeps meaning that column).
 - **Importer: the template variables are now documented.** The template help is a proper dictionary — column variables, date/time variables with format examples, the rules (same-named column wins, unknown variable → empty, which operations each applies to), and a worked example — shared by all three template spots.

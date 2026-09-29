@@ -3,6 +3,7 @@ import type BasesToolboxPlugin from "./main";
 import { activeBaseResults } from "./bulk-edit";
 import { findKey, isUnsafeKey } from "./scan";
 import { ChangeRecord } from "./types";
+import { attachPropertySuggest } from "./suggest";
 
 type Direction = "incoming" | "outgoing";
 type Agg = "count" | "sum" | "avg" | "min" | "max";
@@ -81,6 +82,7 @@ class RollupModal extends Modal {
       .addText((t) => {
         t.setPlaceholder("e.g. hours");
         this.sourcePropEl = t.inputEl;
+        attachPropertySuggest(this.plugin, t.inputEl);
       });
     this.sourceSetting.settingEl.setCssStyles({ display: "none" });
 
@@ -90,6 +92,7 @@ class RollupModal extends Modal {
       .addText((t) => {
         t.setPlaceholder("e.g. task-count");
         this.targetPropEl = t.inputEl;
+        attachPropertySuggest(this.plugin, t.inputEl);
       });
 
     new Setting(contentEl).addButton((b) =>

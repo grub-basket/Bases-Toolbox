@@ -3,7 +3,7 @@ import type BasesToolboxPlugin from "./main";
 import { findKey, isUnsafeKey, valueToDisplay } from "./scan";
 import { BasesToolboxSettings, FileSnapshot, FolderScope } from "./types";
 import { installMainTabAction, installSidebarAction, openFileFromView } from "./view-refresh";
-import { FolderPathSuggest, attachPropertySuggest } from "./suggest";
+import { attachFolderSuggest, attachPropertySuggest } from "./suggest";
 
 /* ---------- merge core ---------- */
 
@@ -842,7 +842,7 @@ class DuplicateFinderPanel {
         row.addText((t) => {
           t.setPlaceholder("Folder path (e.g. Projects/Active)");
           t.setValue(scope.path);
-          new FolderPathSuggest(this.plugin, t.inputEl, false);
+          attachFolderSuggest(this.plugin, t.inputEl);
           const commit = () => {
             const raw = t.inputEl.value.trim();
             scope.path = raw ? normalizePath(raw) : "";

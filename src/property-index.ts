@@ -6,7 +6,7 @@ import { parseReplacement, replaceIn } from "./find-replace";
 import { ForkTargetDeleteModal, forksTargeting } from "./property-fork";
 import { anchorViewWindow, installRefocusRefresh, installSidebarAction, openFileFromView } from "./view-refresh";
 import { siftMatch } from "./sift";
-import { PropertyValueSuggest } from "./suggest";
+import { PropertyValueSuggest, attachPropertySuggest } from "./suggest";
 import { PropertyUsage, findKey, typeIconName } from "./scan";
 import { ChangeRecord } from "./types";
 import {
@@ -465,6 +465,8 @@ export class PropertyIndexView extends ItemView {
       body: `Renames the property across all ${usage.count} file${usage.count === 1 ? "" : "s"}. If a file already has the new name, the old value is folded away (kept value wins). Undoable from history.`,
       initial: usage.name,
       confirmText: "Rename",
+      // Renaming onto an existing property folds into it — offer the names.
+      attach: (input) => attachPropertySuggest(this.plugin, input),
       onSubmit: (newName) =>
         void (async () => {
           if (newName.toLowerCase() === usage.name.toLowerCase()) return;

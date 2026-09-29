@@ -1,9 +1,8 @@
 import { ButtonComponent, Debouncer, DropdownComponent, FileSystemAdapter, Menu, Modal, Notice, Platform, Setting, TFile, TFolder, ToggleComponent, debounce, moment, normalizePath, parseYaml, setIcon, stringifyYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { folderPaths } from "./csv-export";
 import { findKey } from "./scan";
 import { ChangeRecord } from "./types";
-import { ListInputSuggest } from "./suggest";
+import { ListInputSuggest, SuggestItem, TemplateVarSuggest, VaultInputSuggest, attachFolderSuggest, attachPropertySuggest } from "./suggest";
 import { JsonStore } from "./store";
 import { ConfirmModal } from "./property-delete";
 import {
@@ -100,6 +99,12 @@ interface ImportDraft {
   filenameCol: number;
   columns: ColumnConfig[];
   savedAt: number;
+  /**
+   * When the user dismissed the startup "unfinished import" reminder. The draft
+   * itself is kept (still restorable from inside the importer); this only mutes
+   * the launch notice until a newer draft is saved (dismissedAt < savedAt).
+   */
+  dismissedAt?: number;
   updateConflict?: UpdateConflict;
   addCreated?: boolean;
   composites?: CompositeProp[];
@@ -390,7 +395,7 @@ class CsvImportPanel {
       .addText((t) => {
         t.setValue("CSV Import");
         this.folderEl = t.inputEl;
-        new ListInputSuggest(this.plugin, t.inputEl, () => folderPaths(this.plugin));
+        attachFolderSuggest(this.plugin, t.inputEl);
       });
 
     const templateSetting = new Setting(contentEl)
@@ -490,6 +495,7 @@ class CsvImportPanel {
       .addText((t) => {
         t.setPlaceholder("e.g. {{First}} {{Last}}");
         this.filenamePatternEl = t.inputEl;
+        new TemplateVarSuggest(this.app, t.inputEl, () => this.templateVarItems());
         t.setValue(this.filenamePattern).onChange((v) => {
           this.filenamePattern = v;
           this.renderPreview();
@@ -565,6 +571,15 @@ class CsvImportPanel {
       .addText((t) => {
         t.setPlaceholder("Leave blank to name after folder");
         this.baseNameEl = t.inputEl;
+        // Existing bases in the target folder — picking one joins it (reused,
+        // never overwritten), which the hint below then confirms.
+        new VaultInputSuggest(this.app, t.inputEl, () => {
+          const folder = normalizePath(this.folderEl?.value.trim() || "CSV Import");
+          return this.app.vault
+            .getFiles()
+            .filter((f) => f.extension === "base" && f.parent?.path === folder)
+            .map((f) => ({ value: f.basename, note: "existing base — will be reused" }));
+        }, { key: () => this.folderEl?.value ?? "" });
       });
     this.baseNameSetting.settingEl.toggle(this.makeBase);
 
@@ -794,6 +809,7 @@ class CsvImportPanel {
         attr: { placeholder: "Property Name" },
       });
       name.value = col.propName;
+      attachPropertySuggest(this.plugin, name);
       name.addEventListener("input", () => {
         col.propName = name.value.trim();
         this.renderPreview();
@@ -1003,6 +1019,7 @@ class CsvImportPanel {
         attr: { placeholder: "Property name", "aria-label": "Composite property name" },
       });
       name.value = c.prop;
+      attachPropertySuggest(this.plugin, name);
       name.addEventListener("input", () => {
         c.prop = name.value.trim();
         this.renderPreview();
@@ -1014,6 +1031,7 @@ class CsvImportPanel {
         attr: { placeholder: "{{First}} {{Last}}", "aria-label": "Composite pattern" },
       });
       pat.value = c.pattern;
+      new TemplateVarSuggest(this.app, pat, () => this.templateVarItems());
       pat.addEventListener("input", () => {
         c.pattern = pat.value;
         this.renderPreview();
@@ -1043,6 +1061,27 @@ class CsvImportPanel {
       if (i !== -1) return row[i] ?? "";
       return this.templateVar(name);
     });
+  }
+
+  /** What {{…}} can hold: this sheet's column headers, then the date/time
+   * variables (a same-named column wins, so those are skipped). Feeds the
+   * {{ autocomplete on the filename and composite patterns. */
+  private templateVarItems(): SuggestItem[] {
+    const out: SuggestItem[] = [];
+    const seen = new Set<string>();
+    const push = (value: string, note: string) => {
+      const k = value.trim().toLowerCase();
+      if (!value.trim() || seen.has(k)) return;
+      seen.add(k);
+      out.push({ value, note });
+    };
+    for (const h of this.headers) push(h.trim(), "column");
+    push("date", "import date, e.g. 2026-09-18");
+    push("date:YYYY-MM-DD", "import date with a moment.js format");
+    push("time", "import time, e.g. 14:30");
+    push("now", "date + time, e.g. 2026-09-18T14:30:00");
+    push("datetime", "same as now");
+    return out;
   }
 
   /** Resolve a non-column template variable: {{date}}, {{time}}, {{now}} with
@@ -1135,6 +1174,8 @@ class CsvImportPanel {
     s.addText((t) => {
       t.setPlaceholder("Name (e.g. Acme roster)");
       this.presetNameEl = t.inputEl;
+      // Existing preset names — saving under one replaces it.
+      new ListInputSuggest(this.plugin, t.inputEl, () => this.plugin.settings.importPresets.map((p) => p.name));
     });
     s.addButton((b) =>
       b
@@ -1771,7 +1812,22 @@ export async function importDraftInfo(
   const store = new JsonStore<Partial<ImportDraft>>(plugin, "import-drafts/last.json", () => ({}));
   const draft = await store.load();
   if (!draft.text || !draft.text.trim()) return null;
+  // Muted via "Ignore" and no newer draft saved since — stay quiet on launch.
+  if (draft.dismissedAt && draft.dismissedAt >= (draft.savedAt ?? 0)) return null;
   return { rows: (draft.text.match(/\n/g)?.length ?? 0) + 1, savedAt: draft.savedAt ?? 0 };
+}
+
+/**
+ * Mutes the startup "unfinished import" reminder without discarding the draft:
+ * stamps dismissedAt so {@link importDraftInfo} stays quiet until a newer draft
+ * is saved. The draft remains restorable from inside the importer.
+ */
+export async function dismissImportDraft(plugin: BasesToolboxPlugin): Promise<void> {
+  const store = new JsonStore<Partial<ImportDraft>>(plugin, "import-drafts/last.json", () => ({}));
+  const draft = await store.load();
+  if (!draft.text || !draft.text.trim()) return;
+  draft.dismissedAt = Date.now();
+  await store.save(draft);
 }
 
 /** CSV import as a dialog — thin wrapper over the shared panel. */

@@ -3,6 +3,7 @@ import type BasesToolboxPlugin from "./main";
 import { activeBaseView, type BaseViewLike } from "./base-detect";
 import { findKey, isUnsafeKey } from "./scan";
 import { ChangeRecord } from "./types";
+import { attachPropertySuggest } from "./suggest";
 import {
   type FormulaDef,
   entrySupportsFormulas,
@@ -109,6 +110,7 @@ class SyncFormulaModal extends Modal {
         t.setPlaceholder("e.g. priority-score");
         t.setValue(this.formula);
         this.targetPropEl = t.inputEl;
+        attachPropertySuggest(this.plugin, t.inputEl);
         t.inputEl.addEventListener("input", () => (t.inputEl.dataset.touched = "1"));
       });
 

@@ -1,6 +1,6 @@
 {
   "name": "bases-toolbox",
-  "version": "0.1.67",
+  "version": "0.1.69",
   "private": true,
   "scripts": {
     "dev": "node esbuild.config.mjs",
