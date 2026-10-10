@@ -829,6 +829,20 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   margin-bottom: var(--size-4-2);
 }
 
+/* Bulk edit: {{property}} tip + live example of what a note will get */
+.bases-toolbox-bulk-refhint {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  margin-bottom: var(--size-2-2);
+}
+.bases-toolbox-bulk-refpreview {
+  font-size: var(--font-ui-small);
+  margin-bottom: var(--size-4-2);
+  overflow-wrap: anywhere;
+}
+.bases-toolbox-bulk-refpreview:empty { display: none; }
+.bases-toolbox-bulk-refskip { color: var(--text-warning); }
+
 .bases-toolbox-history-reverted {
   color: var(--text-faint);
   font-size: var(--font-ui-smaller);
@@ -1354,6 +1368,35 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   gap: var(--size-2-1);
 }
 .bases-toolbox-fr-warn-icon { display: inline-flex; }
+
+/* "Whole vault" scope line at the top of the find & replace view */
+.bases-toolbox-fr-scope {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--size-2-2);
+  margin-bottom: var(--size-4-3);
+  padding: var(--size-2-3) var(--size-4-2);
+  border-left: 3px solid var(--color-orange);
+  background: rgba(var(--color-orange-rgb), 0.08);
+  border-radius: var(--radius-s);
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+}
+.bases-toolbox-fr-scope-icon { display: inline-flex; color: var(--color-orange); padding-top: 2px; }
+/* Limited to one base's rows: accent instead of the whole-vault orange */
+.bases-toolbox-fr-scope.is-base {
+  border-left-color: var(--interactive-accent);
+  background: hsla(var(--interactive-accent-hsl), 0.08);
+}
+.bases-toolbox-fr-scope.is-base .bases-toolbox-fr-scope-icon { color: var(--interactive-accent); }
+.bases-toolbox-fr-scope-icon svg { width: var(--icon-s, 16px); height: var(--icon-s, 16px); }
+
+/* Undo button inside the "updated N files" notice */
+.bases-toolbox-notice-undo {
+  margin-left: var(--size-2-2);
+  padding: 0 var(--size-4-2);
+  font-size: var(--font-ui-small);
+}
 .bases-toolbox-fr-warn-icon svg { width: var(--icon-s, 16px); height: var(--icon-s, 16px); }
 
 /* "N files will change" summary — bigger, tucked close to the list divider */
@@ -1434,6 +1477,31 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
 .bases-toolbox-launcher-desc {
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
+}
+/* Scope tag beside each launcher card's name: what the tool can change. */
+.bases-toolbox-launcher-scope {
+  display: inline-block;
+  margin-left: var(--size-2-2);
+  padding: 0 6px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-normal);
+  line-height: 1.5;
+  color: var(--text-muted);
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.bases-toolbox-launcher-scope.is-vault {
+  color: var(--color-orange);
+  border-color: rgba(var(--color-orange-rgb), 0.5);
+}
+.bases-toolbox-launcher-scope.is-base {
+  color: var(--text-accent);
+  border-color: hsla(var(--interactive-accent-hsl), 0.5);
+}
+.bases-toolbox-launcher-scope.is-display {
+  color: var(--text-faint);
 }
 .bases-toolbox-launcher-actions {
   grid-column: 1 / -1;

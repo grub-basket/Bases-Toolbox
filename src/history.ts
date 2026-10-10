@@ -320,6 +320,28 @@ export function reportNotice(entry: HistoryEntry, r: RevertReport): void {
   );
 }
 
+/**
+ * Shows the "done" notice for an operation that was just logged, with an Undo
+ * button that reverts THAT entry (not merely the latest one, in case another
+ * change landed in between). Stays up longer than a plain notice so there's
+ * time to react to a bigger-than-expected change.
+ */
+export function noticeWithUndo(plugin: BasesToolboxPlugin, message: string, entry: HistoryEntry): void {
+  const frag = createFragment((f) => {
+    f.createSpan({ text: message + " " });
+    const btn = f.createEl("button", { cls: "bases-toolbox-notice-undo", text: "Undo" });
+    btn.addEventListener("click", () => {
+      btn.disabled = true;
+      if (entry.revertedAt) {
+        new Notice("Already undone.");
+        return;
+      }
+      void revertEntry(plugin, entry).then((r) => reportNotice(entry, r));
+    });
+  });
+  new Notice(frag, 12000);
+}
+
 /** Reverts the newest entry that hasn't been reverted yet. */
 export async function undoLatest(plugin: BasesToolboxPlugin): Promise<void> {
   await plugin.dataReady; // the command can beat the deferred history load

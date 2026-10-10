@@ -1,14 +1,54 @@
-import { ItemView, Notice, TFile, WorkspaceLeaf, setIcon } from "obsidian";
+import { App, ItemView, Notice, TFile, WorkspaceLeaf, setIcon } from "obsidian";
+import { isBaseView } from "./base-detect";
 import type BasesToolboxPlugin from "./main";
 import { parseReplacement, replaceIn } from "./find-replace";
 import { PropertyUsage, findKey, valueToDisplay } from "./scan";
-import { ChangeRecord } from "./types";
+import { ChangeRecord, HistoryEntry } from "./types";
+import { noticeWithUndo } from "./history";
+import { ConfirmModal } from "./property-delete";
 import { installMainTabAction, installRefocusRefresh, installSidebarAction, openFileFromView } from "./view-refresh";
 import { attachAllowedSuggest } from "./suggest";
 
 export const VIEW_TYPE_FIND_REPLACE = "bases-toolbox-find-replace";
 
 const ALL = "__bt_all_values__";
+/**
+ * The Find dropdown's starting state: nothing chosen yet, so nothing previews
+ * and Apply stays off. (It used to start on "All values" with an empty
+ * replacement — one click cleared the property in every note in the vault.)
+ */
+const CHOOSE = "__bt_choose_value__";
+
+/**
+ * Open base tabs and the notes each one shows right now (after its filters and
+ * search), keyed by TAB (leaf id), not by `.base` file: the same base open in
+ * two tabs can show different views with different filters, and the run must
+ * use exactly the rows of the tab the user picked. Reads the view's controller
+ * results, the same undocumented internals bulk edit uses; a tab that isn't
+ * loaded yet simply isn't listed.
+ */
+function openBaseRows(app: App): Map<string, { name: string; paths: Set<string> }> {
+  const found: { id: string; base: string; paths: Set<string> }[] = [];
+  for (const leaf of app.workspace.getLeavesOfType("bases")) {
+    const v = leaf.view;
+    const id = (leaf as unknown as { id?: string }).id;
+    if (!isBaseView(v) || !id) continue;
+    const results = v.controller?.results;
+    if (!(results instanceof Map)) continue;
+    const paths = new Set<string>();
+    // Notes only: a folder filter also matches the .base files themselves.
+    for (const f of results.keys()) if (f instanceof TFile && f.extension === "md") paths.add(f.path);
+    found.push({ id, base: v.file.basename, paths });
+  }
+  // Same base in several tabs → label them "Tasks · tab 1", "Tasks · tab 2".
+  const out = new Map<string, { name: string; paths: Set<string> }>();
+  for (const f of found) {
+    const same = found.filter((g) => g.base === f.base);
+    const name = same.length > 1 ? `${f.base} · tab ${same.indexOf(f) + 1}` : f.base;
+    out.set(f.id, { name, paths: f.paths });
+  }
+  return out;
+}
 
 interface PreviewRow {
   path: string;
@@ -26,7 +66,11 @@ export class FindReplaceView extends ItemView {
   icon = "replace";
   private plugin: BasesToolboxPlugin;
   private property = "";
-  private find: string = ALL;
+  private find: string = CHOOSE;
+  /** Id of the base TAB whose shown rows limit the run; "" = whole vault. */
+  private scopeBase = "";
+  /** That tab's label when picked, kept for messages after it closes. */
+  private scopeName = "";
   private replace = "";
   private rows: PreviewRow[] = [];
   private running = false;
@@ -54,7 +98,7 @@ export class FindReplaceView extends ItemView {
   /** Called by the property index / audit to open pre-filled. */
   setPreset(property: string, find?: string): void {
     this.property = property;
-    this.find = find ?? ALL;
+    this.find = find ?? CHOOSE;
     this.renderControls();
   }
 
@@ -85,8 +129,45 @@ export class FindReplaceView extends ItemView {
       return;
     }
 
-    // Each part on its own row: [Property ▾], [Find ▾], "Replace with", [textbox].
+    // Say the reach up front: people expect bulk tools to act on the open
+    // base's filtered rows, and by default this one doesn't.
+    const bases = openBaseRows(this.app);
+    const picked = this.scopeBase ? bases.get(this.scopeBase) : undefined;
+    const scope = root.createDiv({ cls: "bases-toolbox-fr-scope" });
+    scope.toggleClass("is-base", !!this.scopeBase);
+    setIcon(scope.createSpan({ cls: "bases-toolbox-fr-scope-icon" }), this.scopeBase ? "table" : "globe");
+    scope.createSpan({
+      text: !this.scopeBase
+        ? "Whole vault: changes every note that has the property, not just a base's rows. To change only the rows a base shows, pick it under Notes."
+        : picked
+          ? `Only the notes base “${picked.name}” shows right now (${picked.paths.size}, after its filters).`
+          : "The base tab you picked was closed, so nothing will change. Pick an open base under Notes, or switch to Whole vault.",
+    });
+
+    // Each part on its own row: [Notes ▾], [Property ▾], [Find ▾], "Replace with", [textbox].
     const ctl = root.createDiv({ cls: "bases-toolbox-fr-controls" });
+
+    // Notes: whole vault, or only the rows an open base shows. Offered when a
+    // base is open (or one was picked and has since closed — kept, not
+    // silently widened to the whole vault).
+    if (bases.size || this.scopeBase) {
+      const notesRow = ctl.createDiv({ cls: "bases-toolbox-fr-ctl-row" });
+      notesRow.createSpan({ cls: "bases-toolbox-fr-ctl-label", text: "Notes" });
+      const notesSel = notesRow.createEl("select", { cls: "dropdown" });
+      notesSel.createEl("option", { value: "", text: "Whole vault" });
+      for (const [path, b] of bases) {
+        notesSel.createEl("option", { value: path, text: `Only rows of “${b.name}” (${b.paths.size} notes)` });
+      }
+      if (this.scopeBase && !picked) {
+        notesSel.createEl("option", { value: this.scopeBase, text: `Only rows of “${this.scopeName}” (not open)` });
+      }
+      notesSel.value = this.scopeBase;
+      notesSel.addEventListener("change", () => {
+        this.scopeBase = notesSel.value;
+        this.scopeName = bases.get(notesSel.value)?.name ?? "";
+        this.renderControls();
+      });
+    }
 
     const propRow = ctl.createDiv({ cls: "bases-toolbox-fr-ctl-row" });
     propRow.createSpan({ cls: "bases-toolbox-fr-ctl-label", text: "Property" });
@@ -98,7 +179,7 @@ export class FindReplaceView extends ItemView {
     this.propertySel.value = this.property;
     this.propertySel.addEventListener("change", () => {
       this.property = this.propertySel?.value ?? "";
-      this.find = ALL;
+      this.find = CHOOSE;
       this.renderControls();
     });
 
@@ -106,18 +187,25 @@ export class FindReplaceView extends ItemView {
     findRow.createSpan({ cls: "bases-toolbox-fr-ctl-label", text: "Find" });
     this.findSel = findRow.createEl("select", { cls: "dropdown" });
     const usage = this.usage();
-    this.findSel.createEl("option", { value: ALL, text: `All values (${usage?.count ?? 0} files)` });
+    this.findSel.createEl("option", { value: CHOOSE, text: "Choose a value…" });
+    this.findSel.createEl("option", {
+      value: ALL,
+      // The per-value counts are vault-wide, so a scoped run doesn't show one here.
+      text: this.scopeBase
+        ? "All values — every note with this property in that base"
+        : `All values — every note with this property (${usage?.count ?? 0} files)`,
+    });
     for (const [display, count] of [...(usage?.values.entries() ?? [])].sort((a, b) => b[1] - a[1])) {
       this.findSel.createEl("option", { value: display, text: `${display} (${count})` });
     }
     this.findSel.value = this.find;
     if (this.findSel.value !== this.find) {
-      // preset value vanished from the vault — fall back to All
-      this.find = ALL;
-      this.findSel.value = ALL;
+      // preset value vanished from the vault — make the user choose again
+      this.find = CHOOSE;
+      this.findSel.value = CHOOSE;
     }
     this.findSel.addEventListener("change", () => {
-      this.find = this.findSel?.value ?? ALL;
+      this.find = this.findSel?.value ?? CHOOSE;
       this.refreshResults();
     });
 
@@ -152,6 +240,19 @@ export class FindReplaceView extends ItemView {
     if (!usage || !results) return;
     results.empty();
 
+    if (this.find === CHOOSE) {
+      this.rows = [];
+      if (this.validateEl) {
+        this.validateEl.empty();
+        this.validateEl.removeClass("bases-toolbox-fr-clearwarn");
+        this.validateEl.createSpan({
+          text: `Pick the value to find — or “All values” to change every note that has ${usage.name}.`,
+        });
+      }
+      this.updateApply();
+      return;
+    }
+
     // Validation line. Empty replacement is destructive (clears the value), so
     // it reads as a red warning with an icon; a filled-in value tempers it back
     // to a plain informational note.
@@ -175,8 +276,10 @@ export class FindReplaceView extends ItemView {
 
     const find = this.find === ALL ? null : this.find;
     const replacement = parseReplacement(this.replace, usage.type);
+    const scope = this.scopePaths();
     this.rows = [];
     for (const file of usage.files) {
+      if (scope && !scope.has(file.path)) continue;
       const fm = (this.app.metadataCache.getFileCache(file)?.frontmatter ?? {}) as Record<string, unknown>;
       const key = findKey(fm, usage.name);
       if (key === null) continue;
@@ -226,6 +329,13 @@ export class FindReplaceView extends ItemView {
     this.updateApply();
   }
 
+  /** null = whole vault; otherwise the paths the picked base shows right now
+   * (empty if that base has been closed, so nothing previews or applies). */
+  private scopePaths(): Set<string> | null {
+    if (!this.scopeBase) return null;
+    return openBaseRows(this.app).get(this.scopeBase)?.paths ?? new Set();
+  }
+
   private updateApply(): void {
     const n = this.rows.filter((r) => r.checked).length;
     if (this.applyBtn) {
@@ -234,8 +344,55 @@ export class FindReplaceView extends ItemView {
     }
   }
 
-  private async apply(): Promise<void> {
-    if (this.running) return;
+  /**
+   * "All values" rewrites (or, with an empty replacement, clears) the property
+   * in every checked note across the vault, so it asks first. A specific value
+   * is a targeted change and applies straight away, as before.
+   */
+  private apply(): void {
+    if (this.running || this.find === CHOOSE) return;
+    const usage = this.usage();
+    if (!usage) return;
+    if (this.scopeGone()) return;
+    if (this.find !== ALL) {
+      void this.doApply();
+      return;
+    }
+    const n = this.rows.filter((r) => r.checked).length;
+    const notes = `${n} note${n === 1 ? "" : "s"}`;
+    const clearing = this.replace.trim() === "";
+    const display = valueToDisplay(parseReplacement(this.replace, usage.type));
+    const where = this.scopeBase
+      ? `shown by base “${this.scopeName}”`
+      : "across the whole vault — not just a base's rows";
+    new ConfirmModal(this.plugin, {
+      title: clearing ? `Clear “${usage.name}” in ${notes}?` : `Replace every “${usage.name}” value in ${notes}?`,
+      body:
+        (clearing
+          ? `This empties ${usage.name} in ${notes} ${where}.`
+          : `Every value of ${usage.name} in ${notes} ${where} becomes “${display}” (lists collapse to that one value).`) +
+        " It's logged, so you can undo it from History.",
+      confirmText: clearing ? "Clear values" : "Replace all",
+      danger: true,
+      onConfirm: () => void this.doApply(),
+    }).open();
+  }
+
+  /**
+   * A scoped run whose base tab closed after the preview was built (the view
+   * didn't re-render) must not go ahead on stale rows — stop, say why, and
+   * re-render, which shows the "(not open)" state with nothing to apply.
+   */
+  private scopeGone(): boolean {
+    if (!this.scopeBase || openBaseRows(this.app).has(this.scopeBase)) return false;
+    new Notice(`Base “${this.scopeName}” isn't open any more — nothing was changed.`);
+    this.renderControls();
+    return true;
+  }
+
+  private async doApply(): Promise<void> {
+    // Re-checked here too: the base can close while the confirm dialog is up.
+    if (this.running || this.scopeGone()) return;
     const usage = this.usage();
     if (!usage) return;
     this.running = true;
@@ -262,18 +419,24 @@ export class FindReplaceView extends ItemView {
         });
         if (changed) changes.push({ path: file.path, property: usage.name, oldValue, newValue });
       }
+      const message = `${usage.name}: updated ${changes.length} file${changes.length === 1 ? "" : "s"}.`;
       if (changes.length) {
-        await this.plugin.addHistoryEntry({
+        const entry: HistoryEntry = {
           property: usage.name,
           find,
           replace: this.replace,
           timestamp: Date.now(),
           changes,
           source: "find & replace",
-        });
+        };
+        await this.plugin.addHistoryEntry(entry);
+        noticeWithUndo(this.plugin, message, entry);
+      } else {
+        new Notice(message);
       }
-      new Notice(`${usage.name}: updated ${changes.length} file${changes.length === 1 ? "" : "s"}.`);
       this.replace = "";
+      // After an all-values run, don't leave the view primed to run it again.
+      if (this.find === ALL) this.find = CHOOSE;
       this.renderControls();
     } finally {
       this.running = false;

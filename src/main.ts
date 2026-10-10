@@ -334,7 +334,7 @@ export default class BasesToolboxPlugin extends Plugin {
 
     this.addCommand({
       id: "bulk-edit-base-results",
-      name: "Bulk edit properties of base results",
+      name: "Bulk edit base results",
       callback: () => openBulkEdit(this),
     });
 
@@ -856,6 +856,11 @@ class BasesToolboxSettingTab extends PluginSettingTab {
     this.mounted = true;
     containerEl.empty();
 
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "The defaults are safe — you don't need to change anything here to start. The tools themselves live in the launcher (the wrench icon in the left ribbon); the Reference at the bottom of this page explains each one.",
+    });
+
     new Setting(containerEl)
       .setName("Block arrow-key and scroll-wheel changes")
       .setDesc(
@@ -1344,7 +1349,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
         title: "Commands",
         note: "Run from the command palette (Cmd/Ctrl-P), or the launcher.",
         items: [
-          ["Find and replace property values", "Opens the Find & Replace tab (see above)."],
+          ["Find and replace property values", "Opens the Find & Replace tab (see above). Works on every note in the vault that has the property — not just a base's rows. To change only the notes a base shows, use Bulk edit base results."],
           ["Undo last change", "Reverts the most recent change made by these tools — find & replace, a merge, format fixes, and so on. (Everything is also individually revertible from the History tab.)"],
           ["Convert or fork a property's format", "Bases expects dates as YYYY-MM-DD and links as [[wikilinks]], but you might store them differently. This normalizes dates or (un)wraps wikilinks — either in place, or into a SECOND property that stays in sync with the original, so you keep your format AND the one Bases wants."],
           ["Audit pinned allowed values", "You can “pin” the set of values a property is allowed to have (from the property index). This lists any value currently outside that set and lets you fix it (find & replace) or accept it (add to the allowed list)."],
@@ -1359,7 +1364,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           ["Stamp file metadata into note properties", "Writes the file's created/modified dates into frontmatter so they're durable (survive sync/export) and usable in Bases."],
           ["Import CSV as notes", "Turns each row of a CSV into a note, with the columns becoming frontmatter properties. Built for recurring imports: a ROW PICKER chooses exactly which rows import (filterable, with chips showing what each row will do — new / update / overwrite / skip), PRESETS save the whole setup (folder, column mapping, policies) under a name so re-importing the same provider's sheet is one pick (columns match by header, so a re-exported sheet lines up even if its column order changed), and in update mode a CONFLICT policy decides whether the sheet's value or the note's existing value wins — globally or per column — so hand-corrected fields survive the next import. COMPOSITE PROPERTIES concatenate several columns with your own separators (a “{{Last}}, {{First}}” pattern into a new or existing property), and a FILENAME PATTERN builds each note's name from a “{{First}} {{Last}}” pattern instead of a single column — so you can join two columns without a spreadsheet pre-pass. Each import also remembers its whole setup PER DESTINATION FOLDER, so returning to a folder offers a one-click “reuse that setup” — the automatic sibling of named presets."],
           ["Export base results as CSV", "Exports the rows the open base currently shows to a CSV file."],
-          ["Bulk edit properties of base results", "Set, append to, remove from, or clear a property across every note the open base returns — in one action."],
+          ["Bulk edit base results", "Set, append to, remove from, or clear a property across every note the open base returns — after its filters and search — in one action. To change a property everywhere in the vault instead, use Find and replace."],
           ["Zoom into focused cell", "Opens a large editor for the Bases cell you're on, for comfortable editing of long values."],
           ["Audit aliased internal links in properties", "Finds property values whose internal links use aliases ([[Note|Alias]]) and groups them by target, flagging any note that's shown more than one way (different aliases, or aliased in some values and plain in others) — the ones worth standardizing. Read-only."],
           ["Toggle base filters", "Temporarily disable (and later re-enable) a base's filters without editing the .base file."],

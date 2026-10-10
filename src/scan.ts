@@ -99,7 +99,7 @@ export function scanProperties(app: App): PropertyUsage[] {
   return [...byLower.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-const LIST_TYPES = new Set(["multitext", "tags", "aliases"]);
+export const LIST_TYPES = new Set(["multitext", "tags", "aliases"]);
 
 /**
  * Converts raw text from a textarea/input into a frontmatter value for the

@@ -14,60 +14,132 @@ export const VIEW_TYPE_LAUNCHER = "bases-toolbox-launcher";
 
 /**
  * A friendly left-sidebar "launch anything" panel: every Bases Toolbox feature
- * with a button to open it, grouped by how it opens (a sidebar panel, a tab, or
- * a dialog). Built for coworkers who don't want to hunt the command palette.
+ * with a button to open it, grouped by WHAT IT ACTS ON (the open base, one
+ * note, the whole vault…) with the tools that rewrite many notes at once kept
+ * at the bottom, out of harm's way. Each card also wears a scope tag, so the
+ * reach of a tool is visible in Favorites and search results too. Built for
+ * coworkers who don't want to hunt the command palette.
  */
 
-interface ViewFeature {
+/**
+ * What a tool can change — shown as a tag on its card. "display" tools only
+ * read notes or change how Bases looks, never note contents.
+ */
+type Scope = "vault" | "folder" | "base" | "note" | "display";
+
+const SCOPE_LABEL: Record<Scope, string> = {
+  vault: "Whole vault",
+  folder: "Folder or vault",
+  base: "Open base",
+  note: "One note",
+  display: "Changes no notes",
+};
+
+const SCOPE_TIP: Record<Scope, string> = {
+  vault: "Can change notes anywhere in the vault",
+  folder: "Changes notes in a folder you pick — or the whole vault if you leave it empty",
+  base: "Works on the base in your active tab (its filtered rows)",
+  note: "Works on a single note",
+  display: "Only reads notes or changes how Bases looks — note contents are left alone",
+};
+
+interface FeatureBase {
   name: string;
   desc: string;
   icon: string;
+  scope?: Scope;
+  /** Overrides the scope tag's text (e.g. "Two notes" for merge). */
+  scopeLabel?: string;
+}
+
+interface ViewFeature extends FeatureBase {
+  kind: "view";
   type: string;
 }
 
-interface ToolFeature {
-  name: string;
-  desc: string;
-  icon: string;
+interface ToolFeature extends FeatureBase {
+  kind: "tool";
   /** Command id WITHOUT the `bases-toolbox:` prefix. */
   command: string;
 }
 
-const VIEWS: ViewFeature[] = [
-  { name: "Property index", desc: "Every property, its values & files", icon: "table-properties", type: VIEW_TYPE_PROPERTY_INDEX },
-  { name: "Find & replace", desc: "Bulk-edit a property's values", icon: "replace", type: VIEW_TYPE_FIND_REPLACE },
-  { name: "History", desc: "Review & revert past changes", icon: "history", type: VIEW_TYPE_HISTORY },
-  { name: "Format doctor", desc: "Fix values that don't match their type", icon: "stethoscope", type: VIEW_TYPE_FORMAT_DOCTOR },
-  { name: "Conditional formatting", desc: "Color Bases rows/cells by value", icon: "paintbrush", type: VIEW_TYPE_CONDITIONAL_FORMAT },
-  { name: "Find duplicate notes", desc: "Detect near-duplicate notes", icon: "copy", type: VIEW_TYPE_DUPLICATE_FINDER },
-  { name: "Import CSV as notes", desc: "Turn a CSV/TSV into notes", icon: "file-down", type: VIEW_TYPE_CSV_IMPORT },
-  { name: "Export to CSV", desc: "Scan a folder's notes into a CSV", icon: "file-up", type: VIEW_TYPE_CSV_EXPORT },
+type Feature = ViewFeature | ToolFeature;
+
+interface Section {
+  title: string;
+  hint?: string;
+  items: Feature[];
+}
+
+const view = (f: Omit<ViewFeature, "kind">): ViewFeature => ({ kind: "view", ...f });
+const tool = (f: Omit<ToolFeature, "kind">): ToolFeature => ({ kind: "tool", ...f });
+
+const SECTIONS: Section[] = [
+  {
+    title: "This base",
+    hint: "Work on the base in your active tab.",
+    items: [
+      tool({ name: "Bulk edit base results", desc: "Edit the notes the open base shows (only its filtered rows)", icon: "square-pen", command: "bulk-edit-base-results", scope: "base" }),
+      tool({ name: "Toggle base filters", desc: "Quickly enable/disable a base's filters", icon: "filter", command: "toggle-base-filters", scope: "base" }),
+      tool({ name: "Manage base columns", desc: "Hide, reveal, reorder & jump to a view's columns", icon: "columns-3", command: "manage-base-columns", scope: "base" }),
+      tool({ name: "Manage base views", desc: "Rename, duplicate, reorder & delete a base's views", icon: "settings-2", command: "manage-base-views", scope: "base" }),
+      tool({ name: "Add formula column", desc: "Add or fix a base's formula (computed) column", icon: "function-square", command: "add-formula-column", scope: "base" }),
+      tool({ name: "Sync formula", desc: "Write a base's formula results into a property", icon: "function-square", command: "sync-formula", scope: "base" }),
+      tool({ name: "Compute rollup", desc: "Aggregate linked notes into a property", icon: "sigma", command: "compute-rollup", scope: "base" }),
+      tool({ name: "Zoom into cell", desc: "Big editor for the focused Bases cell", icon: "maximize-2", command: "zoom-into-cell", scope: "note" }),
+      tool({ name: "Toggle base read-only", desc: "Lock this base so its cells can't be edited", icon: "lock", command: "toggle-base-readonly", scope: "base" }),
+      tool({ name: "Kanban card order", desc: "Give a base's kanban a persistent, manual card order", icon: "kanban-square", command: "kanban-manual-order", scope: "base" }),
+      tool({ name: "Hide empty kanban columns", desc: "Toggle hiding columns with no cards on a kanban base", icon: "gallery-vertical-end", command: "kanban-toggle-hide-empty", scope: "base" }),
+      tool({ name: "Exclude skipped extensions", desc: "Filter files like .edtz out of a base (uses your skip list)", icon: "file-x", command: "exclude-skipped-extensions", scope: "base" }),
+      view({ name: "Conditional formatting", desc: "Color Bases rows/cells by value", icon: "paintbrush", type: VIEW_TYPE_CONDITIONAL_FORMAT, scope: "display" }),
+    ],
+  },
+  {
+    title: "One note",
+    hint: "Work on the note you have open.",
+    items: [
+      tool({ name: "New note with properties", desc: "Create a note via a roomy property form", icon: "file-plus", command: "new-note-with-properties", scope: "note" }),
+      tool({ name: "Edit note properties", desc: "Roomy form for the active note (with rename)", icon: "table-properties", command: "edit-note-properties", scope: "note" }),
+      tool({ name: "Merge note into another", desc: "Combine two notes + their properties", icon: "merge", command: "merge-note", scope: "note", scopeLabel: "Two notes" }),
+    ],
+  },
+  {
+    title: "Explore & review",
+    hint: "Look across the vault. Nothing changes until you act on an item.",
+    items: [
+      view({ name: "Property index", desc: "Every property, its values & files", icon: "table-properties", type: VIEW_TYPE_PROPERTY_INDEX, scope: "vault" }),
+      view({ name: "History", desc: "Review & revert past changes", icon: "history", type: VIEW_TYPE_HISTORY }),
+      view({ name: "Format doctor", desc: "Fix values that don't match their type", icon: "stethoscope", type: VIEW_TYPE_FORMAT_DOCTOR, scope: "vault" }),
+      view({ name: "Find duplicate notes", desc: "Detect near-duplicate notes", icon: "copy", type: VIEW_TYPE_DUPLICATE_FINDER, scope: "vault" }),
+      tool({ name: "Audit pinned allowed values", desc: "Find values outside an allowed list", icon: "pin", command: "audit-allowed-values", scope: "vault" }),
+      tool({ name: "Audit aliased links", desc: "Find property links with aliases to standardize", icon: "link", command: "audit-aliased-links", scope: "display" }),
+    ],
+  },
+  {
+    title: "Import & export",
+    items: [
+      view({ name: "Import CSV as notes", desc: "Turn a CSV/TSV into notes", icon: "file-down", type: VIEW_TYPE_CSV_IMPORT, scope: "folder", scopeLabel: "Creates notes" }),
+      view({ name: "Export to CSV", desc: "Scan a folder's notes into a CSV", icon: "file-up", type: VIEW_TYPE_CSV_EXPORT, scope: "display" }),
+      tool({ name: "New grid", desc: "Open an editable grid over a folder (needs GridSense)", icon: "grid-3x3", command: "new-grid", scope: "folder" }),
+    ],
+  },
+  {
+    title: "Many notes at once",
+    hint: "Change notes across the whole vault (or a folder you pick) in one go. Every change is logged, so you can undo it from History.",
+    items: [
+      view({ name: "Find & replace", desc: "Change one property's values in every note in the vault", icon: "replace", type: VIEW_TYPE_FIND_REPLACE, scope: "vault" }),
+      tool({ name: "Convert / fork a property", desc: "Normalize dates, (un)wrap wikilinks, or copy into another property", icon: "git-fork", command: "fork-property", scope: "vault" }),
+      tool({ name: "Migrate inline fields", desc: "Convert “key:: value” to frontmatter", icon: "list-plus", command: "migrate-inline-fields", scope: "folder" }),
+      tool({ name: "Stamp file metadata", desc: "Write created/modified into frontmatter", icon: "stamp", command: "metadata-stamp", scope: "folder" }),
+      tool({ name: "Create companion notes", desc: "Make non-Markdown files queryable", icon: "file-plus-2", command: "companion-notes", scope: "folder" }),
+    ],
+  },
 ];
 
-const TOOLS: ToolFeature[] = [
-  { name: "Convert / fork a property", desc: "Normalize dates, (un)wrap wikilinks", icon: "git-fork", command: "fork-property" },
-  { name: "Audit pinned allowed values", desc: "Find values outside an allowed list", icon: "pin", command: "audit-allowed-values" },
-  { name: "Audit aliased links", desc: "Find property links with aliases to standardize", icon: "link", command: "audit-aliased-links" },
-  { name: "Compute rollup", desc: "Aggregate linked notes into a property", icon: "sigma", command: "compute-rollup" },
-  { name: "Kanban card order", desc: "Give a base's kanban a persistent, manual card order", icon: "kanban-square", command: "kanban-manual-order" },
-  { name: "Hide empty kanban columns", desc: "Toggle hiding columns with no cards on a kanban base", icon: "gallery-vertical-end", command: "kanban-toggle-hide-empty" },
-  { name: "Sync formula", desc: "Write a base's formula results into a property", icon: "function-square", command: "sync-formula" },
-  { name: "Migrate inline fields", desc: "Convert “key:: value” to frontmatter", icon: "list-plus", command: "migrate-inline-fields" },
-  { name: "Merge note into another", desc: "Combine two notes + their properties", icon: "merge", command: "merge-note" },
-  { name: "Create companion notes", desc: "Make non-Markdown files queryable", icon: "file-plus-2", command: "companion-notes" },
-  { name: "Stamp file metadata", desc: "Write created/modified into frontmatter", icon: "stamp", command: "metadata-stamp" },
-  { name: "New note with properties", desc: "Create a note via a roomy property form", icon: "file-plus", command: "new-note-with-properties" },
-  { name: "Edit note properties", desc: "Roomy form for the active note (with rename)", icon: "table-properties", command: "edit-note-properties" },
-  { name: "Bulk edit base results", desc: "Edit properties across a base's rows", icon: "square-pen", command: "bulk-edit-base-results" },
-  { name: "Zoom into cell", desc: "Big editor for the focused Bases cell", icon: "maximize-2", command: "zoom-into-cell" },
-  { name: "Toggle base filters", desc: "Quickly enable/disable a base's filters", icon: "filter", command: "toggle-base-filters" },
-  { name: "Manage base views", desc: "Rename, duplicate, reorder & delete a base's views", icon: "settings-2", command: "manage-base-views" },
-  { name: "Exclude skipped extensions", desc: "Filter files like .edtz out of a base (uses your skip list)", icon: "file-x", command: "exclude-skipped-extensions" },
-  { name: "New grid", desc: "Open an editable grid over a folder (needs GridSense)", icon: "grid-3x3", command: "new-grid" },
-  { name: "Manage base columns", desc: "Hide, reveal, reorder & jump to a view's columns", icon: "columns-3", command: "manage-base-columns" },
-  { name: "Add formula column", desc: "Add or fix a base's formula (computed) column", icon: "function-square", command: "add-formula-column" },
-  { name: "Toggle base read-only", desc: "Lock this base so its cells can't be edited", icon: "lock", command: "toggle-base-readonly" },
-];
+const ALL_FEATURES: Feature[] = SECTIONS.flatMap((s) => s.items);
+
+/** The favorite id a feature is stored under (stable across regroupings). */
+const featureId = (f: Feature): string => (f.kind === "view" ? `view:${f.type}` : `cmd:${f.command}`);
 
 export class LauncherView extends ItemView {
   icon = "wrench";
@@ -98,7 +170,7 @@ export class LauncherView extends ItemView {
     root.addClass("bases-toolbox-launcher");
     root.createDiv({
       cls: "bases-toolbox-launcher-intro",
-      text: "Open any Bases Toolbox feature. Tap the ☆ to pin one to Favorites.",
+      text: "Open any Bases Toolbox feature. The tag on each card says what it can change. Tap the ☆ to pin one to Favorites.",
     });
 
     // Search/filter — narrows the visible cards by name or description.
@@ -124,13 +196,14 @@ export class LauncherView extends ItemView {
       });
     }
 
-    // Panels & windows — the views open either in a sidebar or a main tab.
-    root.createDiv({ cls: "bases-toolbox-launcher-section", text: "Panels & windows" });
-    for (const f of VIEWS) this.renderView(root, f);
-
-    // Dialogs & actions — each opens its own modal / runs its action.
-    root.createDiv({ cls: "bases-toolbox-launcher-section", text: "Dialogs & actions" });
-    for (const f of TOOLS) this.renderTool(root, f);
+    // Grouped by what the tools act on; the many-notes-at-once tools come last.
+    // How each one opens is still visible from its buttons (Sidebar/Tab/Window
+    // for panels, Open for dialogs).
+    for (const section of SECTIONS) {
+      root.createDiv({ cls: "bases-toolbox-launcher-section", text: section.title });
+      if (section.hint) root.createDiv({ cls: "bases-toolbox-launcher-hint", text: section.hint });
+      for (const f of section.items) this.renderFeature(root, f);
+    }
 
     // Settings shortcut at the bottom.
     root.createDiv({ cls: "bases-toolbox-launcher-section", text: "Settings" });
@@ -179,19 +252,16 @@ export class LauncherView extends ItemView {
   /** Render a feature by its favorite id, wherever it lives. Returns the card. */
   private renderById(parent: HTMLElement, id: string): HTMLElement | null {
     if (id === "settings") return this.renderSettings(parent);
-    if (id.startsWith("view:")) {
-      const f = VIEWS.find((v) => `view:${v.type}` === id);
-      return f ? this.renderView(parent, f) : null;
-    }
-    if (id.startsWith("cmd:")) {
-      const f = TOOLS.find((t) => `cmd:${t.command}` === id);
-      return f ? this.renderTool(parent, f) : null;
-    }
-    return null;
+    const f = ALL_FEATURES.find((x) => featureId(x) === id);
+    return f ? this.renderFeature(parent, f) : null;
+  }
+
+  private renderFeature(parent: HTMLElement, f: Feature): HTMLElement {
+    return f.kind === "view" ? this.renderView(parent, f) : this.renderTool(parent, f);
   }
 
   private renderView(parent: HTMLElement, f: ViewFeature): HTMLElement {
-    const card = this.card(parent, f.name, f.desc, f.icon, `view:${f.type}`);
+    const card = this.card(parent, f, featureId(f));
     this.launchBtn(card, "panel-right", "Sidebar", `Open ${f.name} in the sidebar`, () =>
       void this.openView(f.type, "sidebar")
     );
@@ -205,13 +275,17 @@ export class LauncherView extends ItemView {
   }
 
   private renderTool(parent: HTMLElement, f: ToolFeature): HTMLElement {
-    const card = this.card(parent, f.name, f.desc, f.icon, `cmd:${f.command}`);
+    const card = this.card(parent, f, featureId(f));
     this.launchBtn(card, "play", "Open", `Open ${f.name}`, () => this.runCommand(f.command));
     return card;
   }
 
   private renderSettings(parent: HTMLElement): HTMLElement {
-    const s = this.card(parent, "Bases Toolbox settings", "Toggles, forks, formatting rules, reference", "settings", "settings");
+    const s = this.card(
+      parent,
+      { name: "Bases Toolbox settings", desc: "Toggles, forks, formatting rules, reference", icon: "settings" },
+      "settings"
+    );
     this.launchBtn(s, "settings", "Open", "Open Bases Toolbox settings", () => this.runCommand("open-settings"));
     return s;
   }
@@ -276,12 +350,22 @@ export class LauncherView extends ItemView {
     ).commands.executeCommandById(`${this.plugin.manifest.id}:${command}`);
   }
 
-  private card(parent: HTMLElement, name: string, desc: string, icon: string, id: string): HTMLElement {
+  private card(parent: HTMLElement, f: FeatureBase, id: string): HTMLElement {
+    const { name, desc, icon, scope } = f;
+    const scopeText = scope ? (f.scopeLabel ?? SCOPE_LABEL[scope]) : "";
     const card = parent.createDiv({ cls: "bases-toolbox-launcher-card" });
-    card.dataset.search = `${name} ${desc}`.toLowerCase();
+    // The scope tag is searchable too, so "vault" lists every vault-wide tool.
+    card.dataset.search = `${name} ${desc} ${scopeText}`.toLowerCase();
     setIcon(card.createSpan({ cls: "bases-toolbox-launcher-icon" }), icon);
     const text = card.createDiv({ cls: "bases-toolbox-launcher-text" });
-    text.createDiv({ cls: "bases-toolbox-launcher-name", text: name });
+    const nameEl = text.createDiv({ cls: "bases-toolbox-launcher-name", text: name });
+    if (scope) {
+      nameEl.createSpan({
+        cls: `bases-toolbox-launcher-scope is-${scope}`,
+        text: scopeText,
+        attr: { "aria-label": SCOPE_TIP[scope] },
+      });
+    }
     text.createDiv({ cls: "bases-toolbox-launcher-desc", text: desc });
 
     const fav = this.plugin.settings.favoriteFeatures.includes(id);

@@ -2,11 +2,41 @@
 
 Quality-of-life tools for Bases and properties in Obsidian.
 
+## Start here: which tool do I want?
+
+There's a lot in here, so start with the task. Open everything from the
+**launcher** (the wrench icon in the left ribbon), which groups the tools by
+what they act on and tags each one with its scope. The settings defaults are
+safe, so you don't need to change anything to begin.
+
+The **Scope** column says how far a tool reaches. **Open base** tools only touch
+the notes the base in your active tab shows, after its filters. **Whole vault**
+tools touch every note that has the property, whatever base you have open.
+
+| I want to… | Tool | Scope |
+|---|---|---|
+| See every property, its values and which notes use them | Property index | Whole vault (look first, act per item) |
+| Change a property on the notes a base is showing | Bulk edit base results | Open base |
+| Fill in a property only where it's missing | Bulk edit base results → "Set only if missing" | Open base |
+| Copy one property into another (e.g. `startTime` → `Time`) | Convert / fork a property → "Copy as-is" | Whole vault |
+| Rename or merge one value everywhere (e.g. `todo` → `to-do`) | Find & replace | Whole vault |
+| Fix values stored in the wrong format (dates, numbers…) | Format doctor | Whole vault |
+| Undo something | The **Undo** button on the "updated N files" notice, or History | Whatever the change touched |
+
+Every tool that changes notes logs the change, so you can revert it from
+**History**. The tools that rewrite many notes at once sit at the bottom of
+the launcher, under "Many notes at once".
+
 ## Features
 
 ### Find & replace property values
 
-Command: **Find & replace property values**. Pick a property, then either
+Command: **Find and replace property values**. By default it works on **every
+note in the vault** that has the property. With a base open, the **Notes**
+picker can limit it to the rows one base tab shows (after its filters; the
+same base open in two tabs is listed once per tab). If that tab is closed,
+nothing applies until you pick an open base or switch back to Whole vault.
+Pick a property, then either
 replace one specific value everywhere it appears or override every value at
 once. Works on list properties too (the matched item is replaced in place;
 a global override collapses the list to the new value). Leaving the
@@ -33,12 +63,19 @@ in the plugin settings and are on by default.
 
 ### Bulk edit base results
 
-Command: **Bulk edit properties of base results**. With a base open, act on
+Command: **Bulk edit base results**. With a base open, act on
 every file the view currently shows — filters, search, everything applied.
 Five modes: **set** (replace), **set only if missing** (backfill defaults
 without clobbering), **append** / **remove** list items, and **delete the
 property** entirely. All logged in history and revertible; reverting a
 bulk-create deletes the property again, reverting a delete restores it.
+
+The value can refer to **other properties of the same note**: `{{startTime}}`
+copies each row's own `startTime` into the property you're setting, and
+`{{startTime:HH:mm}}` reformats a date/time with a moment.js format. Mix them
+with text (`at {{startTime:h:mm a}}`) or use one per line to append list
+items. Notes where a referenced property is missing or empty are skipped and
+counted, and the dialog previews what the first note will get.
 
 ### Rollups into real properties
 
