@@ -84,6 +84,10 @@ import {
 } from "./property-fork";
 import { openRollup } from "./rollup";
 import { openKanbanOrder } from "./kanban-order";
+import { activeBaseView } from "./base-detect";
+import { sanitizePresets } from "./property-order";
+import { openPropertyOrder } from "./property-order-modal";
+import { renderPropertyOrderSettings } from "./property-order-settings";
 import { installKanbanButtons, toggleHideEmptyColumns } from "./kanban-toolbar";
 import { openSyncFormula } from "./sync-formula";
 import { PropertyCache } from "./scan";
@@ -240,6 +244,12 @@ export default class BasesToolboxPlugin extends Plugin {
       id: "kanban-manual-order",
       name: "Manual card order for this base's kanban",
       callback: () => openKanbanOrder(this),
+    });
+
+    this.addCommand({
+      id: "reorder-note-properties",
+      name: "Reorder properties in notes",
+      callback: () => openPropertyOrder(this, activeBaseView(this.app)),
     });
 
     this.addCommand({
@@ -653,6 +663,13 @@ export default class BasesToolboxPlugin extends Plugin {
     };
     this.settings = { ...DEFAULT_SETTINGS, ...data.settings };
     this.disabledFilters = data.disabledFilters ?? {};
+    // Saved property orders are user data that can also arrive by import or a
+    // hand-edited data.json — never trust their shape.
+    this.settings.propertyOrders = sanitizePresets(this.settings.propertyOrders);
+    if (this.settings.propertyOrderUnlisted !== "in-place") this.settings.propertyOrderUnlisted = "after";
+    if (typeof this.settings.propertyOrderExportPath !== "string" || !this.settings.propertyOrderExportPath.trim()) {
+      this.settings.propertyOrderExportPath = DEFAULT_SETTINGS.propertyOrderExportPath;
+    }
 
     // Migrate the duplicate-finder exclude list from its old string[] shape to
     // FolderScope[]. Old entries excluded a folder AND its subfolders, so
@@ -1216,6 +1233,8 @@ class BasesToolboxSettingTab extends PluginSettingTab {
       }
     }
 
+    renderPropertyOrderSettings(this.plugin, containerEl, () => this.display());
+
     new Setting(containerEl)
       .setName("Companion notes")
       .setDesc("Companions make non-Markdown files queryable in Bases. Run via the command \u201cCreate companion notes for non-Markdown files\u201d.")
@@ -1356,6 +1375,7 @@ class BasesToolboxSettingTab extends PluginSettingTab {
           ["Compute rollup into property", "For each note in the open base, gathers the notes linked to it (incoming or outgoing) and aggregates them — count of linked notes, or sum / average / min / max of a number property on them — writing the result into a property you name. E.g. give every Project a “task-count” of the Tasks that link to it, or a “total-hours”. One-shot and revertible; re-run to refresh."],
           ["Toggle hide empty columns (kanban)", "A one-click button in a kanban base's toolbar (and a command) that hides the columns with no cards — Bases' own hideEmptyGroups option, surfaced so you don't have to dig into the view-options menu. The button only shows on kanban views and reflects the current state; click again to bring the empty columns back."],
           ["Manual card order for this base's kanban", "Bases' kanban orders cards inside each column by the base's sort, so there's no persistent manual position — reload and a dragged card snaps back. This gives the base a numeric order property, seeds it (spaced, so you can slot a card between two others) from a basis you pick — creation date, modification date, name, or the current order — and points the kanban's sort at it, so the order becomes a real, editable, persistent thing. Re-run any time to reseed. Both the values and the sort change are revertible from history."],
+          ["Reorder properties in notes", "Sets the ORDER properties appear in inside each note — what Obsidian's Properties view shows — across many notes at once. Values never change and nothing extra is written into your notes; only the order of the frontmatter keys. Pick the notes (the open base's current view, the whole base ignoring the view's filters, or every note in the vault), arrange the list (it starts from the view's columns, then every other property by how often it's used; drag or use the arrows, remove one to leave it alone), and choose what happens to properties not in the list — after the listed ones, or left where they are. Shows how many notes will change first; notes already in order aren't touched. Save orders by name to reuse them, and export/import them from settings (the same file works in GridSense). Also reachable from the Manage columns dialog. Revertible from history. Note: Obsidian rewrites the frontmatter when saving it, so YAML comments in the reordered notes are dropped."],
           ["Sync formula into property", "For each note in the open base, evaluates one of the base's formula (computed) columns and writes the result into a real frontmatter property you name — so a value that only existed as a live formula becomes a stored property you can sort, filter, or reuse elsewhere. Pick the formula, name the property. One-shot and revertible; re-run to refresh. The sibling of Compute rollup, for computed columns instead of linked notes."],
           ["Migrate inline fields to properties", "Converts inline “key:: value” fields written in a note's body into real frontmatter properties that Bases can use."],
           ["Merge current note into another", "Combines the current note — its body and its properties — into another note you pick, then tidies up (re-points links, trashes the source). Recorded to History, so the whole merge can be reverted."],

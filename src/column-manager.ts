@@ -12,6 +12,8 @@ import {
 } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { activeBaseView } from "./base-detect";
+import type { BaseViewLike } from "./base-detect";
+import { openPropertyOrder } from "./property-order-modal";
 import { visibleColumnOrder } from "./conditional-format";
 import { siftMatch } from "./sift";
 import type { ViewOpUndo } from "./types";
@@ -455,6 +457,21 @@ export class ColumnManagerModal extends Modal {
         "The columns this view shows, left to right. Hide one, reveal one the notes already use, drag the order around, " +
         "or jump to a column that's scrolled off-screen. Every change is revertible from the bulk file change history.",
     });
+
+    // ---- the notes' own property order (a different thing from columns) ----
+    new Setting(contentEl)
+      .setName("Property order inside the notes")
+      .setDesc("Columns here don't change the notes. To set the order properties appear in inside each note (Obsidian's Properties view), reorder them in bulk.")
+      .addButton((b) =>
+        b.setButtonText("Reorder properties…").onClick(() => {
+          const leaf =
+            (this.viewName ? leafShowing(this.app, this.file, this.viewName) : null) ??
+            baseLeaves(this.app, this.file)[0] ??
+            null;
+          this.close();
+          openPropertyOrder(this.plugin, (leaf?.view as unknown as BaseViewLike | undefined) ?? null);
+        })
+      );
 
     // ---- which view ----
     if (views.length > 1) {

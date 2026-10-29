@@ -2,6 +2,7 @@ import { ItemView, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { changeInEffect, describeEntry, reportNotice, revertEntry } from "./history";
 import type { RevertReport, SkipReason } from "./history";
+import { keyOrderState } from "./property-order";
 import { valueToDisplay } from "./scan";
 import { HistoryEntry } from "./types";
 import { installMainTabAction, installMetadataRefresh, installRefocusRefresh, installSidebarAction, openFileFromView } from "./view-refresh";
@@ -141,7 +142,7 @@ export class HistoryView extends ItemView {
     header.createSpan({ cls: "bases-toolbox-index-prop-name", text: describeEntry(entry) });
     if (entry.source)
       header.createSpan({ cls: "bases-toolbox-index-prop-type", text: entry.source });
-    const fileCount = entry.fileSnapshots?.length ?? entry.changes.length;
+    const fileCount = entry.fileSnapshots?.length ?? entry.keyOrder?.length ?? entry.changes.length;
     header.createSpan({
       cls: "bases-toolbox-index-prop-count",
       text: `${new Date(entry.timestamp).toLocaleString()} · ${fileCount} file${fileCount === 1 ? "" : "s"}`,
@@ -178,6 +179,12 @@ export class HistoryView extends ItemView {
     // nothing revert (a partial merge-revert would be incoherent).
     if (entry.fileSnapshots?.length) {
       this.renderSnapshotEntry(box, entry);
+      return;
+    }
+
+    // Property-order runs: key order only, per-note before → after.
+    if (entry.keyOrder?.length) {
+      this.renderKeyOrderEntry(box, entry);
       return;
     }
 
@@ -247,6 +254,7 @@ export class HistoryView extends ItemView {
       "property missing": "property renamed or removed — left untouched",
       "file missing": "file moved or deleted — nothing to revert",
       "path reused": "a note now occupies this path — not recreated",
+      "write failed": "couldn't be written (see the developer console) — revert again to retry",
     };
 
     const panel = box.createDiv({ cls: "bases-toolbox-history-skipped" });
@@ -264,12 +272,79 @@ export class HistoryView extends ItemView {
       });
       row.createSpan({ cls: "bases-toolbox-frv-diff", text: reasonText[s.reason] });
     }
-    if (report.skipped.some((s) => s.reason === "edited since")) {
+    if (entry.keyOrder?.length && report.skipped.some((s) => s.reason === "edited since")) {
+      panel.createDiv({
+        cls: "bases-toolbox-fr-info bases-toolbox-frv-force-help",
+        text: "“Edited since” means that note's properties were added, removed or reordered after this change, so its order was left alone. Tick “Also revert notes I've edited since the change” above and revert again to put the old order back anyway (any properties added since are kept, at the end).",
+      });
+    } else if (report.skipped.some((s) => s.reason === "edited since")) {
       panel.createDiv({
         cls: "bases-toolbox-fr-info bases-toolbox-frv-force-help",
         text: "“Edited since” means the property was changed again after this operation, so it was left alone to protect that newer edit. Open a file to review it — or tick “Also revert notes I've edited since the change” above and revert again to overwrite them.",
       });
     }
+  }
+
+  /** A property-order run: one row per note (old order → new order, drift
+   * badge, checkbox), reverted by putting the old order back — only in notes
+   * still in the order the run left them, unless force is on. */
+  private renderKeyOrderEntry(box: HTMLElement, entry: HistoryEntry): void {
+    const rows = entry.keyOrder ?? [];
+    const checked = this.checked.get(entry) ?? new Set(rows.map((c) => c.path));
+    this.checked.set(entry, checked);
+    const short = (keys: string[]): string => {
+      const shown = keys.slice(0, 6).join(", ");
+      return keys.length > 6 ? `${shown}, … (+${keys.length - 6})` : shown;
+    };
+
+    const list = box.createDiv({ cls: "bases-toolbox-frv-list" });
+    for (const change of rows) {
+      const row = list.createDiv({ cls: "bases-toolbox-frv-row" });
+      const cb = row.createEl("input", { type: "checkbox" });
+      cb.checked = checked.has(change.path);
+      cb.setAttribute("aria-label", `Include ${change.path}`);
+      cb.addEventListener("change", () => {
+        if (cb.checked) checked.add(change.path);
+        else checked.delete(change.path);
+      });
+      const file = this.app.vault.getAbstractFileByPath(change.path);
+      const link = row.createSpan({ cls: "bases-toolbox-frv-path", text: change.path });
+      link.addEventListener("click", () => {
+        if (file instanceof TFile) void openFileFromView(this, file);
+        else void this.app.workspace.openLinkText(change.path, "", true);
+      });
+      const state = keyOrderState(this.app, change);
+      if (state === "missing") row.createSpan({ cls: "bases-toolbox-history-reverted", text: "file missing" });
+      else if (state === "reverted" && !entry.revertedAt)
+        row.createSpan({ cls: "bases-toolbox-history-reverted", text: "reverted" });
+      else if (state === "edited" && !entry.revertedAt)
+        row.createSpan({ cls: "bases-toolbox-history-reverted", text: "edited since" });
+      row.createSpan({
+        cls: "bases-toolbox-frv-diff",
+        text: `${short(change.before)} → ${short(change.after)}`,
+      });
+    }
+
+    if (!entry.revertedAt) {
+      box.createDiv({
+        cls: "bases-toolbox-fr-info",
+        text: "Reverting puts each note's properties back in their old order. Values aren't touched. Notes whose properties changed since are skipped unless you tick the option above.",
+      });
+      const btn = box.createEl("button", { text: "Revert selected" });
+      btn.addEventListener("click", () => void (async () => {
+        btn.disabled = true;
+        const paths = this.checked.get(entry) ?? new Set<string>();
+        const all = paths.size === rows.length;
+        const report = await revertEntry(this.plugin, entry, {
+          paths: all ? undefined : paths,
+          force: this.force,
+        });
+        this.lastReport.set(entry, report);
+        reportNotice(entry, report);
+        this.render();
+      })());
+    }
+    this.renderSkipped(box, entry);
   }
 
   /** A base-view operation: undone surgically by applying its inverse to the

@@ -82,6 +82,7 @@ const SECTIONS: Section[] = [
       tool({ name: "Bulk edit base results", desc: "Edit the notes the open base shows (only its filtered rows)", icon: "square-pen", command: "bulk-edit-base-results", scope: "base" }),
       tool({ name: "Toggle base filters", desc: "Quickly enable/disable a base's filters", icon: "filter", command: "toggle-base-filters", scope: "base" }),
       tool({ name: "Manage base columns", desc: "Hide, reveal, reorder & jump to a view's columns", icon: "columns-3", command: "manage-base-columns", scope: "base" }),
+      tool({ name: "Reorder properties in notes", desc: "Set the order properties appear in inside each note (base, view or whole vault)", icon: "list-ordered", command: "reorder-note-properties", scope: "base", scopeLabel: "Base or vault" }),
       tool({ name: "Manage base views", desc: "Rename, duplicate, reorder & delete a base's views", icon: "settings-2", command: "manage-base-views", scope: "base" }),
       tool({ name: "Add formula column", desc: "Add or fix a base's formula (computed) column", icon: "function-square", command: "add-formula-column", scope: "base" }),
       tool({ name: "Sync formula", desc: "Write a base's formula results into a property", icon: "function-square", command: "sync-formula", scope: "base" }),

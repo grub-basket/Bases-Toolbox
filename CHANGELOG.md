@@ -2,6 +2,16 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.71
+- **Reorder properties in notes.** A new command (also in the launcher, and a button in Manage columns) sets the order properties appear in *inside* your notes, which is what Obsidian's Properties view shows, across many notes at once. Only the order changes: values stay as they are and nothing extra is written into the notes. Requested in [issue #2](https://github.com/grub-basket/Bases-Toolbox/issues/2).
+  - **Pick the notes:** the open base's current view (its filtered rows), the whole base (the base's own filters, ignoring the view's), or every note in the vault. With no base open, it runs on the vault.
+  - **Arrange the list:** it starts from the view's columns, then every other property by how often it's used, each with a note count. Drag the handle or use the arrow buttons; remove a property to leave it alone.
+  - **Properties not in the list** go after the listed ones, or stay where they are (a setting, changeable each time).
+  - **See before you write:** "N of M notes will change"; notes already in order aren't touched, and over 200 notes it asks first.
+  - **Undoable:** an Undo button on the done notice, Undo last change, or History (all notes or just the ones you pick). A note you've changed since is skipped unless you force it.
+  - **Saved orders:** save, load, update and delete named orders. Settings → **Property orders** renames and deletes them, and **exports** them (clipboard and a `.json` file in your vault) or **imports** them (paste or pick a file). The file format is shared with GridSense, so an order moves between the two.
+  - Heads-up: Obsidian rewrites the frontmatter when it saves it, so YAML comments in the reordered notes are dropped.
+
 ## 0.1.70
 Prompted by a new user's walkthrough feedback: the tools are easier to tell apart and harder to misfire.
 - **Launcher grouped by what each tool acts on.** The sections are now **This base**, **One note**, **Explore & review**, **Import & export**, and **Many notes at once**. That last section, at the bottom, holds the tools that rewrite notes across the vault or a folder. They used to be grouped by how they open (panel vs dialog). Every card now carries a **scope tag**, such as **Whole vault**, **Open base**, **One note**, **Folder or vault**, or **Changes no notes**, with a tooltip. Searching "vault" lists every vault-wide tool. Favorites are kept.

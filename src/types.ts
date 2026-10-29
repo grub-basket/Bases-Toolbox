@@ -91,6 +91,21 @@ export interface HistoryEntry {
    * written before 0.1.53 only have the snapshot, so revert falls back to that.
    */
   viewUndo?: ViewOpUndo;
+  /**
+   * Frontmatter KEY-ORDER changes (the "Reorder properties" tool). Values never
+   * change, only the order of keys, so this can't be expressed as `changes`.
+   * Revert puts each note's keys back in `before` order — but only while the
+   * note still has exactly the `after` order (unless forced), so a note edited
+   * since isn't reshuffled behind the user's back.
+   */
+  keyOrder?: KeyOrderChange[];
+}
+
+/** One note's frontmatter key order before and after a reorder. */
+export interface KeyOrderChange {
+  path: string;
+  before: string[];
+  after: string[];
 }
 
 /** A folder in a duplicate-finder scope, with whether it reaches into subfolders. */
@@ -202,6 +217,14 @@ export interface BasesToolboxSettings {
    * import and offered back (one click) the next time that folder is the
    * target. Keyed by normalized folder path. */
   importFolderSetups: Record<string, import("./csv-import").ImportPreset>;
+  /** Saved property orders for "Reorder properties in notes" (named presets).
+   * Shared, portable shape — see src/property-order.ts for the export format. */
+  propertyOrders: import("./property-order").PropertyOrderPreset[];
+  /** Default for keys NOT in the reorder list: "after" = put them after the
+   * listed keys, "in-place" = leave them where they are. Overridable per run. */
+  propertyOrderUnlisted: import("./property-order").UnlistedMode;
+  /** Last vault path "Export property orders" wrote to. */
+  propertyOrderExportPath: string;
 }
 
 export const DEFAULT_SETTINGS: BasesToolboxSettings = {
@@ -240,6 +263,9 @@ export const DEFAULT_SETTINGS: BasesToolboxSettings = {
   skipExtensions: "edtz",
   importPresets: [],
   importFolderSetups: {},
+  propertyOrders: [],
+  propertyOrderUnlisted: "after",
+  propertyOrderExportPath: "property-orders.json",
 };
 
 /** A filter condition removed from a .base file, kept so it can be re-enabled. */

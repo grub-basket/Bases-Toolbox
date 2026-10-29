@@ -1871,3 +1871,69 @@ input.bases-toolbox-doctor-input.bases-toolbox-doctor-invalid {
   color: var(--text-normal);
   margin-top: var(--size-4-1);
 }
+
+/* Reorder properties modal — the ordered list reuses the column manager's
+   row layout plus the conditional-formatting grip. */
+.bases-toolbox-po-modal {
+  width: var(--modal-width);
+  max-width: 720px;
+}
+.bases-toolbox-po-yaml-note {
+  color: var(--text-warning);
+}
+.bases-toolbox-po-list {
+  max-height: 45vh;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  padding: 0 var(--size-4-2);
+}
+.bases-toolbox-po-row {
+  cursor: default;
+}
+.bases-toolbox-po-pos {
+  flex: 0 0 auto;
+  min-width: 1.8em;
+  text-align: right;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+}
+/* Real <button>s (keyboard-reachable) styled like Obsidian's icon buttons. */
+.bases-toolbox-po-btn {
+  flex: 0 0 auto;
+  background: transparent;
+  box-shadow: none;
+  padding: var(--size-2-1);
+}
+.bases-toolbox-po-btn .svg-icon {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  flex: 0 0 auto;
+}
+.bases-toolbox-po-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.bases-toolbox-po-preview {
+  margin-top: var(--size-4-3);
+  font-weight: var(--font-semibold);
+}
+.bases-toolbox-po-danger {
+  color: var(--text-error);
+}
+.bases-toolbox-po-import {
+  width: 100%;
+  min-width: 14em;
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+}
+body.is-mobile .bases-toolbox-po-btn {
+  padding: var(--size-2-3);
+}
+body.is-mobile .bases-toolbox-po-btn .svg-icon {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+}

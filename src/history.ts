@@ -1,10 +1,11 @@
 import { Notice, TFile, TFolder, parseYaml, stringifyYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { pruneDeletionAudit } from "./property-delete";
+import { revertKeyOrder } from "./property-order";
 import { findKey } from "./scan";
 import { ChangeRecord, HistoryEntry, ViewOpUndo } from "./types";
 
-export type SkipReason = "edited since" | "property missing" | "file missing" | "path reused";
+export type SkipReason = "edited since" | "property missing" | "file missing" | "path reused" | "write failed";
 
 export interface RevertReport {
   restored: number;
@@ -227,6 +228,8 @@ export async function revertEntry(
   // still fall back to the snapshot restore below.
   if (entry.viewUndo) return revertViewOp(plugin, entry, entry.viewUndo);
   if (entry.fileSnapshots?.length) return revertSnapshots(plugin, entry);
+  // Property-order runs change key ORDER only, never values — their own path.
+  if (entry.keyOrder?.length) return revertKeyOrder(plugin, entry, opts);
   const report: RevertReport = { restored: 0, propertyMissing: 0, valueChanged: 0, fileMissing: 0, skipped: [] };
   // Paths whose deleted-property change we actually restored — used to prune the
   // deletion audit so a restored deletion doesn't linger in the JSONL.
@@ -313,6 +316,17 @@ export function reportNotice(entry: HistoryEntry, r: RevertReport): void {
   if (r.valueChanged) skipped.push(`${r.valueChanged} edited since`);
   if (r.propertyMissing) skipped.push(`${r.propertyMissing} property missing`);
   if (r.fileMissing) skipped.push(`${r.fileMissing} file missing`);
+  if (entry.keyOrder?.length) {
+    const total = entry.keyOrder.length;
+    const writeFailed = r.skipped.filter((s) => s.reason === "write failed").length;
+    if (writeFailed) skipped.push(`${writeFailed} couldn't be written — try again`);
+    new Notice(
+      `Restored the previous property order in ${r.restored} of ${total} note${total === 1 ? "" : "s"}${
+        skipped.length ? ` (skipped: ${skipped.join(", ")})` : ""
+      }.`
+    );
+    return;
+  }
   new Notice(
     `Reverted “${entry.property}” in ${r.restored} of ${entry.changes.length} file${
       entry.changes.length === 1 ? "" : "s"
@@ -355,7 +369,7 @@ export async function undoLatest(plugin: BasesToolboxPlugin): Promise<void> {
 
 export function describeEntry(entry: HistoryEntry): string {
   // Merge entries carry a ready-made human label in `property` and no find/replace.
-  if (entry.fileSnapshots?.length) return entry.property;
+  if (entry.fileSnapshots?.length || entry.keyOrder?.length) return entry.property;
   const from = entry.find === null ? "all values" : `“${entry.find}”`;
   const to = entry.replace.trim() === "" ? "(cleared)" : `“${entry.replace}”`;
   return `${entry.property}: ${from} → ${to}`;
