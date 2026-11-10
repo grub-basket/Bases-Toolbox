@@ -2,6 +2,13 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.73
+- **Cell colours appear as soon as you scroll a column into view.** A rule that colours one cell used to wait for the table's next refresh when its column was scrolled in sideways.
+- **Tables with no file column get conditional formatting in canvas cards and hover popovers.**
+- **"Is duplicated" rules and rules limited to specific bases work in canvas cards and hover popovers.** A canvas card showing a `.base` file directly ignored duplicate rules, and both places ignored rules limited to that base.
+- **Old colours no longer come back after you change a rule.** Obsidian reuses table rows and cells it has scrolled away, and one could return still showing the colour from a rule you had since changed or deleted.
+- **Rules limited to specific bases use the exact base an embed shows.** If two bases shared a name, the embed could be matched to the wrong one, depending on which note was active.
+
 ## 0.1.72
 - **Conditional formatting works when a table shows a linked property.** A column holding an internal link, such as `projectId: "[[Project]]"`, placed before the file column stopped a row from being coloured. If the link was written as a full path, the row took its colour from the linked note instead. Rows now always use their own note. Reported in [issue #3](https://github.com/grub-basket/Bases-Toolbox/issues/3).
 - **Tables with no file column get conditional formatting too.** They were skipped or, with a link in the row, could read the wrong note.

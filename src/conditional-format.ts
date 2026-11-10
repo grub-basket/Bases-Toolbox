@@ -1,6 +1,6 @@
 import { Modal, Notice, Setting, TFile, debounce } from "obsidian";
 import type BasesToolboxPlugin from "./main";
-import { fileForBaseRow } from "./base-row";
+import { baseFileForRow, fileForBaseRow, trackHoverParents } from "./base-row";
 import { findKey, valueToDisplay } from "./scan";
 
 export type FormatScope = "row" | "cell";
@@ -324,19 +324,20 @@ function clearRow(row: HTMLElement): void {
   });
 }
 
-/** The .base path whose view contains this row (embed src or owning leaf). */
+/** The .base path whose view contains this row. */
 function basePathForRow(plugin: BasesToolboxPlugin, row: HTMLElement): string | undefined {
-  const embed = row.closest<HTMLElement>(".bases-embed");
-  if (embed) {
-    const src = (embed.getAttribute("src") ?? "").split("#")[0];
-    const active = plugin.app.workspace.getActiveFile()?.path ?? "";
-    return plugin.app.metadataCache.getFirstLinkpathDest(src, active)?.path;
-  }
   for (const leaf of plugin.app.workspace.getLeavesOfType("bases")) {
     const view = leaf.view as unknown as { containerEl?: HTMLElement; file?: TFile };
     if (view.containerEl?.contains(row)) return view.file?.path;
   }
-  return undefined;
+  // Embeds, canvas cards and hover popovers. The component names the exact file;
+  // an embed's `src` is only link text, which can match several bases.
+  const fromComponent = baseFileForRow(plugin.app, row);
+  if (fromComponent) return fromComponent.path;
+  const src = (row.closest<HTMLElement>(".bases-embed")?.getAttribute("src") ?? "").split("#")[0];
+  if (!src) return undefined;
+  const active = plugin.app.workspace.getActiveFile()?.path ?? "";
+  return plugin.app.metadataCache.getFirstLinkpathDest(src, active)?.path;
 }
 
 /** Reads the frontmatter of the note a base row shows, or null. */
@@ -485,6 +486,16 @@ export function redecorateAll(plugin: BasesToolboxPlugin): void {
         rows.forEach((r) => done.add(r));
       }
     });
+    // Canvas cards showing a .base file directly: one table per .bases-view.
+    doc.querySelectorAll<HTMLElement>(".bases-view").forEach((baseView) => {
+      const rows = Array.from(baseView.querySelectorAll<HTMLElement>(".bases-tr")).filter(
+        (r) => !done.has(r)
+      );
+      if (rows.length) {
+        decorateRowGroup(plugin, rows);
+        rows.forEach((r) => done.add(r));
+      }
+    });
     // Anything left over — decorate individually (no duplicate context).
     doc.querySelectorAll<HTMLElement>(".bases-tr").forEach((r) => {
       if (!done.has(r)) {
@@ -509,7 +520,10 @@ export function scheduleRedecorate(plugin: BasesToolboxPlugin): void {
 }
 
 export function installConditionalFormatting(plugin: BasesToolboxPlugin): void {
+  trackHoverParents(plugin);
   const refresh = debounce(() => redecorateAll(plugin), 150, true);
+  // Doesn't reset on each call, so colours keep up during a continuous scroll.
+  const refreshDuringScroll = debounce(() => redecorateAll(plugin), 150);
   plugin.refreshConditionalFormatting = () => scheduleRedecorate(plugin);
 
   // "is duplicated" needs the WHOLE base's rows (counts), so single-row
@@ -517,25 +531,57 @@ export function installConditionalFormatting(plugin: BasesToolboxPlugin): void {
   const hasDupRule = () =>
     plugin.settings.formatRules.some((r) => r.enabled && r.op === "duplicated" && r.property);
 
+  // A new cell can only change anything for a rule that colours single cells.
+  const hasCellRule = () =>
+    plugin.settings.formatRules.some((r) => r.enabled && r.scope === "cell" && r.property);
+
   const observe = (doc: Document) => {
     const observer = new MutationObserver((mutations) => {
-      if (!plugin.settings.formatRules.length) return;
+      const anyRules = plugin.settings.formatRules.length > 0;
+      // One batch can touch a row many times (a sideways scroll adds its cells
+      // one by one), so collect the rows and decorate each once.
+      const rows = new Set<HTMLElement>();
+      let wholeTable = false;
+      let onlyNewCells = true;
       for (const mutation of mutations) {
         // Row recycled to a different file (virtualization) → re-evaluate it.
         if (mutation.type === "attributes") {
           const t = mutation.target;
-          if (t.instanceOf(HTMLElement)) {
+          if (anyRules && t.instanceOf(HTMLElement)) {
             const row = (t as HTMLElement).closest<HTMLElement>(".bases-tr");
-            if (row) hasDupRule() ? refresh() : decorateRow(plugin, row);
+            if (row) {
+              rows.add(row);
+              onlyNewCells = false;
+            }
           }
           continue;
         }
         for (const node of Array.from(mutation.addedNodes)) {
           if (!node.instanceOf(HTMLElement)) continue;
           const el = node as HTMLElement;
-          if (el.matches(".bases-tr")) hasDupRule() ? refresh() : decorateRow(plugin, el);
-          else if (el.querySelector(".bases-tr")) refresh();
+          // Bases detaches off-screen rows and cells and reuses them, so one
+          // coming back can carry a colour from a rule that has since changed.
+          const stale = el.dataset.btFormatted !== undefined || el.dataset.btCellFormatted !== undefined;
+          if (el.matches(".bases-td")) {
+            // A column scrolled sideways into view: its cells are new.
+            if (!stale && !hasCellRule()) continue;
+            const row = el.closest<HTMLElement>(".bases-tr");
+            if (row) rows.add(row);
+          } else if (el.matches(".bases-tr")) {
+            if (!stale && !anyRules && !el.querySelector("[data-bt-cell-formatted]")) continue;
+            rows.add(el);
+            onlyNewCells = false;
+          } else if (anyRules && el.querySelector(".bases-tr")) {
+            wholeTable = true;
+            onlyNewCells = false;
+          }
         }
+      }
+      if (wholeTable || (rows.size && hasDupRule())) {
+        if (onlyNewCells) refreshDuringScroll();
+        else refresh();
+      } else {
+        rows.forEach((row) => decorateRow(plugin, row));
       }
     });
     observer.observe(doc.body, {
