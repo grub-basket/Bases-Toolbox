@@ -2,6 +2,11 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.74
+- **"Export active base results as CSV" fills in formula columns.** Formulas, backlinks, links and the other computed columns now come out as the table shows them. They used to be blank, along with file columns such as folder, size and dates.
+- **Sync formula writes dates and links correctly.** A date formula used to be written as `true`. Dates are now written as dates, and a formula that returns a link writes the link (`[[Project]]`) rather than its plain text. An empty result is left empty rather than written as "null".
+- **The README covers every tool.** It gains sections for tools it never described, including Reorder properties in notes, Sync formula, Manage views and columns, kanban card order and Literal Enter. It also gets a step-by-step guide to exporting your tables before you lose access to Obsidian.
+
 ## 0.1.73
 - **Cell colours appear as soon as you scroll a column into view.** A rule that colours one cell used to wait for the table's next refresh when its column was scrolled in sideways.
 - **Tables with no file column get conditional formatting in canvas cards and hover popovers.**

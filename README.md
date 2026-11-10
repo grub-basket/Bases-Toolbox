@@ -1,17 +1,24 @@
 # Bases Toolbox
 
-Quality-of-life tools for Bases and properties in Obsidian.
+Bases Toolbox adds tools for the properties behind Obsidian Bases. You can
+edit many notes at once, find and replace values across the vault, color
+table rows by rules, import and export CSV files, and fix values that don't
+match their type. Every change a tool makes to your notes is recorded in
+History, where you can undo it.
 
-## Start here: which tool do I want?
+## Getting started
 
-There's a lot in here, so start with the task. Open everything from the
-**launcher** (the wrench icon in the left ribbon), which groups the tools by
-what they act on and tags each one with its scope. The settings defaults are
-safe, so you don't need to change anything to begin.
+Open any tool from the **launcher**, the wrench icon in the left ribbon. It
+groups the tools by what they act on and tags each one with how far it
+reaches. The tools that rewrite many notes at once are at the bottom, under
+"Many notes at once". The default settings are safe to start with.
 
-The **Scope** column says how far a tool reaches. **Open base** tools only touch
-the notes the base in your active tab shows, after its filters. **Whole vault**
-tools touch every note that has the property, whatever base you have open.
+### Common tasks
+
+The Scope column shows how far each tool reaches. An **Open base** tool
+changes only the notes the base in your active tab shows, after its filters.
+A **Whole vault** tool changes every note that has the property, whatever
+base is open.
 
 | I want to… | Tool | Scope |
 |---|---|---|
@@ -21,12 +28,10 @@ tools touch every note that has the property, whatever base you have open.
 | Copy one property into another (e.g. `startTime` → `Time`) | Convert / fork a property → "Copy as-is" | Whole vault |
 | Rename or merge one value everywhere (e.g. `todo` → `to-do`) | Find & replace | Whole vault |
 | Fix values stored in the wrong format (dates, numbers…) | Format doctor | Whole vault |
+| Keep a formula's result as a real property | Sync formula into property | Open base |
+| Set the order properties appear in inside my notes | Reorder properties in notes | Open base view, whole base, or whole vault |
 | Keep a copy of my tables outside Obsidian | Export to CSV, following "Before you lose access to Obsidian" | Open base, or a base or folder you pick |
 | Undo something | The **Undo** button on the "updated N files" notice, or History | Whatever the change touched |
-
-Every tool that changes notes logs the change, so you can revert it from
-**History**. The tools that rewrite many notes at once sit at the bottom of
-the launcher, under "Many notes at once".
 
 ## Features
 
@@ -62,6 +67,12 @@ wheel over a focused input. Optionally, only digits, `.` and `-` are accepted
 as typed characters (so no stray `e` exponents). Both behaviors are toggles
 in the plugin settings and are on by default.
 
+### Literal Enter
+
+Settings toggle: **Literal Enter**. While you type a property value, Enter
+saves exactly what you typed instead of the highlighted suggestion. To pick a
+suggestion, move to it with the arrow keys first.
+
 ### Bulk edit base results
 
 Command: **Bulk edit base results**. With a base open, act on
@@ -86,15 +97,59 @@ and write the result into a real frontmatter property that Bases can display
 and sort natively. One-shot — re-run to refresh. Logged in history,
 revertible.
 
+### Sync formula into property
+
+Command: **Sync formula into property**. For every note in the open base, it
+works out one of the base's formulas and writes the result into a property
+you name. A value that only existed as a live formula becomes a stored
+property you can sort, filter or use elsewhere. Dates are written as dates,
+and links stay links. One-shot, so re-run it to refresh. Logged in history,
+revertible.
+
+### Reorder properties in notes
+
+Command: **Reorder properties in notes**, also in the launcher and as a
+button in Manage columns. It sets the order properties appear in inside your
+notes, which is the order Obsidian's Properties view shows, across many notes
+at once. Only the order changes: values stay as they are, and nothing extra
+is written into the notes.
+
+- **Pick the notes:** the open base's current view (its filtered rows), the
+  whole base (its own filters, ignoring the view's), or every note in the
+  vault. With no base open, it runs on the vault.
+- **Arrange the list:** it starts from the view's columns, then every other
+  property by how often it's used, each with a note count. Drag the handle or
+  use the arrow buttons, and remove a property to leave it where it is.
+- **Properties not in the list** go after the listed ones, or stay where they
+  are. This is a setting you can change each time.
+- **Preview:** it shows how many notes will change. Notes already in order
+  aren't touched, and above 200 notes it asks first.
+- **Undo:** use the Undo button on the done notice, Undo last change, or
+  History. A note you've edited since is skipped unless you force it.
+- **Saved orders:** save, load, update and delete named orders. Settings →
+  **Property orders** renames and deletes them, and exports or imports them
+  as JSON. The format is shared with the GridSense plugin, so an order moves
+  between the two.
+
+Obsidian rewrites the frontmatter when it saves it, so YAML comments in
+reordered notes are dropped.
+
 ### Conditional formatting
 
-Color Bases rows — or individual cells — by rules, on all bases or a chosen subset of them (a per-rule sheet picker). Each rule has a
-property, operator (equals/contains/compare/empty), value, a **scope**
-(color the whole Row or just that property's Cell), and a color from the
-theme palette or a custom color picker (applied at a subtle tint). Rules are
-fully editable inline, reorderable (they apply top-to-bottom; first match
-wins per row and per cell), and each shows a color swatch. Changes apply to
-open bases in real time. Managed in the plugin settings or a dedicated sidebar panel (command: **Open conditional formatting panel**) that pops out to a main tab.
+Color Bases rows, or single cells, by rules. Each rule has a property, an
+operator, a value, a **scope** (the whole row, or just that property's cell)
+and a color from the theme palette or a custom color, applied as a subtle
+tint. The operators are equals, does not equal, contains, greater or less
+than, is empty, is not empty, and is duplicated in this base. A rule can apply
+to every base or only the bases you pick.
+
+Rules apply top to bottom, and the first match wins for each row and each
+cell. Edit them inline, drag to reorder, and check each one's swatch. Colors
+update live as you edit notes and scroll, in base tabs, embedded bases, canvas
+cards and hover popovers, whether or not the table shows a file column.
+
+Manage the rules in the plugin settings or in a sidebar panel (command:
+**Open conditional formatting panel**), which can pop out to its own tab.
 
 ### CSV import & export
 
@@ -115,9 +170,10 @@ fields may contain newlines.
   several, each with its own filters and columns), and see that view's filters
   and column order before exporting. It resolves the built-in `file.*` columns
   (name, path, folder, ext, size, ctime, mtime, tags) plus your frontmatter
-  properties. Formula columns and link-lists (which need Bases' live engine) come
-  out blank, and a view with filters beyond folder scope is flagged as a
-  best-effort superset. A **"Write readable summary (.md)"** button emits a
+  properties. This tab reads the `.base` file without running it, so formula
+  columns and link lists come out blank, and a view with filters beyond folder
+  scope is flagged as a best-effort superset. The **Export active base results
+  as CSV** command fills those columns in. A **"Write readable summary (.md)"** button emits a
   plain-language note of the base's filters, formulas, sort, and grouping — the
   things a flat CSV can't hold — so you can rebuild them in your spreadsheet.
   The exporter lists these limitations inline.
@@ -134,9 +190,9 @@ with ";". Output is multiple files (CSV + optional summary), not a zip.
 
 For the **exact rows a view is showing**, after all its filters, open the base
 and run the **"Export active base results as CSV"** command. It uses the view's
-column order and needs a base in the active tab. It fills in the file name, file
-path and your properties. Formula columns and the other `file.*` columns come
-out blank. The file is saved as `<base name> export.csv` next to the base, and
+column order and needs a base in the active tab. Every column comes out as the
+table shows it, including formulas, backlinks and other computed columns. The
+file is saved as `<base name> export.csv` next to the base, and
 exporting that base again replaces it.
 
 #### Before you lose access to Obsidian
@@ -149,20 +205,19 @@ each view shows, and what its formulas work out to.
 
 For each base you want to keep:
 
-1. **Save formula results first.** No CSV export includes formula values. To
-   keep them, run **Sync formula into property** with the base open, once per
-   formula. It writes each note's result into a real property, so it changes
-   your notes, and you can undo it from History. Then add that property to the
-   view's columns.
-2. **Export each view.** Open the base, switch to the view, and run **Export
-   active base results as CSV**. This is the only export that gives the exact
-   rows when a view filters on something other than folders.
-3. **Rename each CSV before the next export.** Every view of a base saves to the
-   same file name, so the next export replaces the last one.
-4. **Save the filters, sorting and grouping.** In **Export to CSV**, open the
-   **From a base** tab, load the base, choose **Export this view**, then **Write
-   readable summary (.md)**. A CSV can't hold these, but the summary describes
-   them in plain language.
+1. **Export each view.** Open the base, switch to the view, and run **Export
+   active base results as CSV**. This gives the exact rows and every column,
+   formulas included.
+2. **Rename each CSV before the next export.** Every view of a base saves to
+   the same file name, so the next export replaces the last one.
+3. **Save the filters, sorting and grouping.** In **Export to CSV**, open the
+   **From a base** tab, load the base, choose **Export this view**, then
+   **Write readable summary (.md)**. A CSV can't hold these, but the summary
+   describes them in plain language.
+4. **Optionally, keep formula results in the notes too.** **Sync formula into
+   property** writes a formula's result into each note, so the value survives
+   in the note itself. It changes your notes, and you can undo it from
+   History.
 
 Then, once for the vault:
 
@@ -182,13 +237,21 @@ In a CSV, links become plain text and lists are joined with a semicolon.
 on the target are copied, list properties union, and scalar conflicts get a
 per-property picker. The source's body is appended, links to the source are
 re-pointed at the target (aliases preserved), and the source moves to the
-vault trash (recoverable). No automated undo — check the plan in the modal
-before confirming.
+vault trash (recoverable). The merge is recorded in History, so you can
+revert all of it.
 
 **Find duplicate notes**: group candidates by similar file names (case,
 punctuation, and "copy"/number suffixes ignored), by equal values of a
-property you choose, and/or by identical bodies. Pick the note to keep per
-group and merge the rest into it.
+property you choose, and/or by identical bodies. Limit the scan to folders or
+exclude some. Each group shows every note's size, property count and dates,
+and how its body differs from the note you keep. Untick a note to leave it out
+of the merge.
+
+A keep policy (oldest, newest or longest) can choose the note to keep, and
+then **Merge all visible groups** clears a whole scan at once. When no copy
+deserves to survive, **Merge all N into a new note** combines the ticked notes
+into a new one. Every merge, including bulk ones, can be reverted from
+History.
 
 ### Filter quick-toggle
 
@@ -196,6 +259,47 @@ Command: **Toggle base filters**. Disable individual filter conditions of a
 .base without deleting them — disabled filters are remembered by the plugin
 and can be re-enabled later. (Nested filter groups are listed but not yet
 toggleable.)
+
+### Manage a base's views and columns
+
+These open from the launcher, and the first two also from buttons next to a
+base's view switcher.
+
+- **Manage views for this base**: one dialog for all of a base's views. Rename
+  in place, duplicate a whole view (columns, sort and filters), reorder, set
+  the default, show one, add and delete.
+- **Manage columns for this base**: hide, reveal and reorder a view's columns,
+  and jump to one that's scrolled off-screen. The reveal list comes from the
+  properties the base's notes actually use, plus its formulas. **Group**
+  re-sorts the columns so your own properties come before the file ones. A
+  view with no column list gets one the first time you change something here,
+  and after that new properties no longer appear on their own, so reveal them
+  from this dialog.
+- **Add or fix a base formula column**: adds a formula column by writing it
+  into the `.base` file. It also repairs Obsidian's empty-formula glitch, a
+  blank formula the Bases editor won't let you edit.
+- **Toggle read-only for this base** and **Toggle read-only for all bases**:
+  lock a base, or every base, so its cells
+  can't be edited, which guards against accidental edits and deletes. Links
+  and the date picker stay clickable. Manage the list in Settings → Read-only
+  bases.
+- **Exclude skipped file extensions from this base**: adds a filter so files
+  with the extensions in your skip list (Settings → Always skip file
+  extensions, `.edtz` by default) stop appearing in every view. Running it
+  again doesn't add it twice. Revertible from History.
+
+### Kanban views
+
+- **Toggle hide empty columns (kanban)**: a toolbar button on kanban views,
+  and a command, that hides the columns with no cards. It switches Bases' own
+  "hide empty groups" option, and clicking again brings them back.
+- **Manual card order for this base's kanban**: Bases orders kanban cards by the base's sort, so a
+  card you drag snaps back after a reload. This gives the base a number
+  property for the order, fills it in from a starting order you pick
+  (creation date, modification date, name or the current order) and sorts the
+  kanban by it. Values are spaced out so you can put a card between two
+  others. Re-run it any time to start over. The values and the sort change are
+  both revertible from History.
 
 ### Cell zoom editor
 
@@ -383,6 +487,35 @@ cleans the migrated fields out of note bodies (off by default — that part
 isn't revertible; the frontmatter side is, via history). Scope to a folder
 or the whole vault; existing properties are skipped unless you opt into
 overwriting.
+
+### Property forms for one note
+
+- **New note with properties**: creates a note from a roomy form for its
+  properties.
+- **Edit properties of the active note**: the same form for the active note, which can also
+  rename it.
+
+### Audit aliased links in properties
+
+Command: **Audit aliased internal links in properties**. Finds property values
+whose links use an alias (`[[Note|Alias]]`) and groups them by the note they
+point to. It flags any note that's linked more than one way, such as with
+different aliases, or with an alias in some values and none in others.
+Read-only.
+
+### Open a grid with GridSense
+
+Command: **New grid (GridSense)**. Opens an editable, spreadsheet-style grid
+over a folder's notes, using the separate GridSense plugin. If GridSense isn't
+installed or is turned off, it says so. Nothing else in Bases Toolbox needs
+GridSense.
+
+### Open Stashpad notes in Stashpad
+
+A setting, off by default. With it on, clicking a note in a base that lives in
+a Stashpad folder opens it in the Stashpad view instead of the plain editor.
+Cmd/Ctrl-click and middle-click do the same in a new tab. Only notes with a
+Stashpad id are redirected.
 
 ## Tips & recipes
 

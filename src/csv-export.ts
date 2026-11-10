@@ -4,9 +4,11 @@ import { activeBaseView } from "./base-detect";
 import { ALWAYS_IGNORE_EXT, parseExts } from "./companion-notes";
 import { toCsvCell, toTsvCell } from "./csv-core";
 import { findKey } from "./scan";
+import { readEntryValue } from "./formula-value";
 
 /**
- * Exports the active base view's current results as clean CSV — wikilinks
+ * Exports the active base view's current results as clean CSV — formula
+ * columns evaluated by Bases itself, wikilinks
  * unwrapped, lists joined with "; ", proper quoting — copied to the clipboard
  * and written next to the .base file. Columns follow the view's order.
  */
@@ -31,6 +33,7 @@ export async function exportBaseCsv(plugin: BasesToolboxPlugin): Promise<void> {
     return;
   }
   const files = [...results.keys()].filter((f): f is TFile => f instanceof TFile);
+  let unreadable = 0;
 
   let doc: Record<string, unknown> = {};
   try {
@@ -54,13 +57,17 @@ export async function exportBaseCsv(plugin: BasesToolboxPlugin): Promise<void> {
   const header = order.map((k) => toCsvCell(k.replace(/^note\./, "")));
   const lines = [header.join(",")];
   for (const file of files) {
-    const fm = (app.metadataCache.getFileCache(file)?.frontmatter ?? {}) as Record<string, unknown>;
+    const cache = app.metadataCache.getFileCache(file);
+    const fm = (cache?.frontmatter ?? {}) as Record<string, unknown>;
+    const entry = results.get(file);
     const cells = order.map((k) => {
-      if (k === "file.name") return toCsvCell(file.basename);
-      if (k === "file.path") return toCsvCell(file.path);
-      if (k.startsWith("file.") || k.startsWith("formula.")) return toCsvCell("");
-      const key = findKey(fm, k.replace(/^note\./, ""));
-      return toCsvCell(key === null ? "" : fm[key]);
+      if (k.startsWith("formula.") || (k.startsWith("file.") && !RESOLVED_FILE_KEYS.has(k))) {
+        // Computed by Bases' live engine, exactly as the table shows it.
+        const value = readEntryValue(entry, k);
+        if (value === undefined) unreadable++;
+        return toCsvCell(value ?? "");
+      }
+      return toCsvCell(resolveBaseCell(file, fm, cache, k));
     });
     lines.push(cells.join(","));
   }
@@ -77,7 +84,10 @@ export async function exportBaseCsv(plugin: BasesToolboxPlugin): Promise<void> {
     onClipboard = false;
   }
   new Notice(
-    `Exported ${files.length} rows → "${outPath}"${onClipboard ? " (also on the clipboard)" : ""}.`
+    `Exported ${files.length} rows → "${outPath}"${onClipboard ? " (also on the clipboard)" : ""}.` +
+      (unreadable
+        ? " Formula columns are blank: Obsidian's internals may have changed."
+        : "")
   );
 }
 
@@ -213,6 +223,19 @@ function isoDateTime(ms: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+/** The file.* columns resolveBaseCell works out without Bases' engine. */
+const RESOLVED_FILE_KEYS = new Set([
+  "file.name",
+  "file.file",
+  "file.path",
+  "file.folder",
+  "file.ext",
+  "file.size",
+  "file.ctime",
+  "file.mtime",
+  "file.tags",
+]);
+
 /** Resolves one base "order" key to a cell value for a file. Computed columns
  * (formulas, link lists) that need Bases' live engine come back blank. */
 function resolveBaseCell(
@@ -222,6 +245,10 @@ function resolveBaseCell(
   key: string
 ): unknown {
   switch (key) {
+    // A bare `file` column shows the note's own file, even when the note has a
+    // property called "file" (checked on Obsidian 1.15.1).
+    case "file":
+    case "file.file":
     case "file.name":
       return file.basename;
     case "file.path":
