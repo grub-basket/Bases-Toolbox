@@ -2,6 +2,12 @@
 
 All notable user-facing changes to Bases Toolbox, newest first.
 
+## 0.1.72
+- **Conditional formatting works when a table shows a linked property.** A column holding an internal link, such as `projectId: "[[Project]]"`, placed before the file column stopped a row from being coloured. If the link was written as a full path, the row took its colour from the linked note instead. Rows now always use their own note. Reported in [issue #3](https://github.com/grub-basket/Bases-Toolbox/issues/3).
+- **Tables with no file column get conditional formatting too.** They were skipped or, with a link in the row, could read the wrong note.
+- **Zoom into cell and the allowed-values picker use the row's own note.** With a full-path link in the row they could open or change the linked note. With a plain link they did nothing.
+- **Zoom into cell and the picker target the right column in a table scrolled sideways.** Obsidian removes off-screen columns from the page, which could make them open or change a different property of the note. Cell-scoped conditional formatting had the same weakness and is fixed too.
+
 ## 0.1.71
 - **Reorder properties in notes.** A new command (also in the launcher, and a button in Manage columns) sets the order properties appear in *inside* your notes, which is what Obsidian's Properties view shows, across many notes at once. Only the order changes: values stay as they are and nothing extra is written into the notes. Requested in [issue #2](https://github.com/grub-basket/Bases-Toolbox/issues/2).
   - **Pick the notes:** the open base's current view (its filtered rows), the whole base (the base's own filters, ignoring the view's), or every note in the vault. With no base open, it runs on the vault.

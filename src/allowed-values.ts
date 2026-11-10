@@ -1,6 +1,7 @@
 import { Modal, Notice, Setting, TFile, parseYaml, setIcon } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { baseFileForCell } from "./base-detect";
+import { fileForBaseRow } from "./base-row";
 import { openFindReplaceView } from "./find-replace-view";
 import { PropertyUsage, findKey, valueToDisplay } from "./scan";
 
@@ -145,9 +146,8 @@ async function resolveBasesCellSync(
 ): Promise<{ file: TFile; property: string } | null> {
   const app = plugin.app;
   const row = td.closest(".bases-tr");
-  const href = row?.querySelector("[data-href]")?.getAttribute("data-href");
-  const file = href ? app.vault.getAbstractFileByPath(href) : null;
-  if (!(file instanceof TFile)) return null;
+  const file = row ? fileForBaseRow(app, row) : null;
+  if (!file) return null;
   const embed = td.closest(".bases-embed");
   const baseFile = embed
     ? app.metadataCache.getFirstLinkpathDest(
@@ -163,8 +163,9 @@ async function resolveBasesCellSync(
     const label = scope?.querySelector(".bases-toolbar-views-menu")?.textContent?.trim();
     const view = views.find((v) => v.name === label) ?? views[0];
     const order = Array.isArray(view?.order) ? (view.order as unknown[]) : [];
+    // Off-screen columns aren't in the DOM, so the cell names its own column.
     const index = row ? Array.from(row.querySelectorAll(".bases-td")).indexOf(td) : -1;
-    const raw = order[index];
+    const raw = td.dataset.property ?? order[index];
     if (typeof raw !== "string" || raw.startsWith("file.") || raw.startsWith("formula.")) return null;
     return { file, property: raw.replace(/^note\./, "") };
   } catch {

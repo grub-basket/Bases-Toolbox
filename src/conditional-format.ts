@@ -1,5 +1,6 @@
 import { Modal, Notice, Setting, TFile, debounce } from "obsidian";
 import type BasesToolboxPlugin from "./main";
+import { fileForBaseRow } from "./base-row";
 import { findKey, valueToDisplay } from "./scan";
 
 export type FormatScope = "row" | "cell";
@@ -294,6 +295,24 @@ function columnIndexFor(row: HTMLElement, property: string, order?: string[] | n
   return headers.findIndex((h) => (h.textContent ?? "").trim().toLowerCase() === lower);
 }
 
+/**
+ * The rendered cell showing `property` in this row. Off-screen columns aren't
+ * in the DOM, so position is only a fallback for rows whose cells don't name
+ * their own column.
+ */
+function cellForProperty(
+  row: HTMLElement,
+  property: string,
+  order?: string[] | null
+): HTMLElement | undefined {
+  const cells = Array.from(row.querySelectorAll<HTMLElement>(".bases-td"));
+  if (cells.some((c) => c.dataset.property)) {
+    const target = normProp(property);
+    return cells.find((c) => normProp(c.dataset.property ?? "") === target);
+  }
+  return cells[columnIndexFor(row, property, order)];
+}
+
 function clearRow(row: HTMLElement): void {
   if (row.dataset.btFormatted) {
     row.setCssStyles({ backgroundColor: "" });
@@ -320,11 +339,10 @@ function basePathForRow(plugin: BasesToolboxPlugin, row: HTMLElement): string | 
   return undefined;
 }
 
-/** Reads a base row's file frontmatter (via its data-href link), or null. */
+/** Reads the frontmatter of the note a base row shows, or null. */
 function fmForRow(plugin: BasesToolboxPlugin, row: HTMLElement): Record<string, unknown> | null {
-  const href = row.querySelector("[data-href]")?.getAttribute("data-href");
-  const file = href ? plugin.app.vault.getAbstractFileByPath(href) : null;
-  if (!(file instanceof TFile)) return null;
+  const file = fileForBaseRow(plugin.app, row);
+  if (!file) return null;
   return (plugin.app.metadataCache.getFileCache(file)?.frontmatter ?? {}) as Record<string, unknown>;
 }
 
@@ -351,7 +369,7 @@ function decorateRow(
   const bp = !anyScoped ? undefined : basePath !== undefined ? basePath : basePathForRow(plugin, row);
 
   let rowColor: string | null = null;
-  const cellColors = new Map<number, string>(); // column index → color
+  const cellColors = new Map<HTMLElement, string>();
 
   for (const rule of plugin.settings.formatRules) {
     if (!rule.enabled || !rule.property) continue;
@@ -371,8 +389,8 @@ function decorateRow(
     const color = ruleColor(rule);
     if (!color) continue;
     if (rule.scope === "cell") {
-      const idx = columnIndexFor(row, rule.property, order);
-      if (idx >= 0 && !cellColors.has(idx)) cellColors.set(idx, color); // first per cell wins
+      const cell = cellForProperty(row, rule.property, order);
+      if (cell && !cellColors.has(cell)) cellColors.set(cell, color); // first per cell wins
     } else if (rowColor === null) {
       rowColor = color; // first matching row rule wins
     }
@@ -382,15 +400,9 @@ function decorateRow(
     row.setCssStyles({ backgroundColor: rowColor });
     row.dataset.btFormatted = "1";
   }
-  if (cellColors.size) {
-    const cells = Array.from(row.querySelectorAll<HTMLElement>(".bases-td"));
-    for (const [idx, color] of cellColors) {
-      const cell = cells[idx];
-      if (cell) {
-        cell.setCssStyles({ backgroundColor: color });
-        cell.dataset.btCellFormatted = "1";
-      }
-    }
+  for (const [cell, color] of cellColors) {
+    cell.setCssStyles({ backgroundColor: color });
+    cell.dataset.btCellFormatted = "1";
   }
 }
 

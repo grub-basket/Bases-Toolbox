@@ -1,6 +1,7 @@
 import { Modal, Notice, Setting, TFile, parseYaml } from "obsidian";
 import type BasesToolboxPlugin from "./main";
 import { baseFileForCell } from "./base-detect";
+import { fileForBaseRow } from "./base-row";
 import { parseReplacement } from "./find-replace";
 import { findKey, getPropertyType } from "./scan";
 
@@ -37,9 +38,9 @@ export function installCellZoomTracking(plugin: BasesToolboxPlugin): void {
 }
 
 /**
- * Maps a Bases table cell back to (file, property): the row's file-name link
- * carries the full path in data-href, and the cell's column index lines up
- * with the active view's `order` array in the .base file.
+ * Maps a Bases table cell back to (file, property): the row identifies its own
+ * note, and the cell's column index lines up with the active view's `order`
+ * array in the .base file.
  */
 async function resolveBasesCell(
   plugin: BasesToolboxPlugin,
@@ -47,9 +48,8 @@ async function resolveBasesCell(
 ): Promise<ResolvedCell | null> {
   const app = plugin.app;
   const row = td.closest(".bases-tr");
-  const href = row?.querySelector("[data-href]")?.getAttribute("data-href");
-  const file = href ? app.vault.getAbstractFileByPath(href) : null;
-  if (!(file instanceof TFile)) return null;
+  const file = row ? fileForBaseRow(app, row) : null;
+  if (!file) return null;
 
   const embed = td.closest(".bases-embed");
   // For a standalone base, derive the .base file from the base LEAF that owns
@@ -79,8 +79,10 @@ async function resolveBasesCell(
   if (!view) return null;
   const order = Array.isArray(view.order) ? (view.order as unknown[]) : [];
 
+  // Off-screen columns aren't in the DOM, so a cell's position among its
+  // siblings isn't its position in `order`. The cell names its own column.
   const index = row ? Array.from(row.querySelectorAll(".bases-td")).indexOf(td) : -1;
-  const rawKey = order[index];
+  const rawKey = td.dataset.property ?? order[index];
   if (typeof rawKey !== "string") return null;
   let key: string = rawKey;
   if (key.startsWith("file.") || key.startsWith("formula.")) {
