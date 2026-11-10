@@ -21,6 +21,7 @@ tools touch every note that has the property, whatever base you have open.
 | Copy one property into another (e.g. `startTime` → `Time`) | Convert / fork a property → "Copy as-is" | Whole vault |
 | Rename or merge one value everywhere (e.g. `todo` → `to-do`) | Find & replace | Whole vault |
 | Fix values stored in the wrong format (dates, numbers…) | Format doctor | Whole vault |
+| Keep a copy of my tables outside Obsidian | Export to CSV, following "Before you lose access to Obsidian" | Open base, or a base or folder you pick |
 | Undo something | The **Undo** button on the "updated N files" notice, or History | Whatever the change touched |
 
 Every tool that changes notes logs the change, so you can revert it from
@@ -131,9 +132,49 @@ what to include, then "Copy for Excel" (TSV to clipboard) or write a `.csv`
 (next to the base, or in the folder). Wikilinks are unwrapped and lists joined
 with ";". Output is multiple files (CSV + optional summary), not a zip.
 
-For a base's **exact live filtered results** with formula columns evaluated, open
-the base and run the **"Export active base results as CSV"** command — it uses
-Obsidian's live query engine and errors on any non-base view.
+For the **exact rows a view is showing**, after all its filters, open the base
+and run the **"Export active base results as CSV"** command. It uses the view's
+column order and needs a base in the active tab. It fills in the file name, file
+path and your properties. Formula columns and the other `file.*` columns come
+out blank. The file is saved as `<base name> export.csv` next to the base, and
+exporting that base again replaces it.
+
+#### Before you lose access to Obsidian
+
+Export while Obsidian still runs if you might lose it, for example on a work
+computer or before moving to another app. Your notes stay readable without
+Obsidian, because they're plain Markdown files, and `.base` files are plain
+text. What you can't recreate without Obsidian is the table itself: which notes
+each view shows, and what its formulas work out to.
+
+For each base you want to keep:
+
+1. **Save formula results first.** No CSV export includes formula values. To
+   keep them, run **Sync formula into property** with the base open, once per
+   formula. It writes each note's result into a real property, so it changes
+   your notes, and you can undo it from History. Then add that property to the
+   view's columns.
+2. **Export each view.** Open the base, switch to the view, and run **Export
+   active base results as CSV**. This is the only export that gives the exact
+   rows when a view filters on something other than folders.
+3. **Rename each CSV before the next export.** Every view of a base saves to the
+   same file name, so the next export replaces the last one.
+4. **Save the filters, sorting and grouping.** In **Export to CSV**, open the
+   **From a base** tab, load the base, choose **Export this view**, then **Write
+   readable summary (.md)**. A CSV can't hold these, but the summary describes
+   them in plain language.
+
+Then, once for the vault:
+
+1. **Catch notes no base shows.** In **Export to CSV**, open the **From a
+   folder** tab and export each folder you care about. Every note's properties
+   become a row.
+2. **Copy everything out and check it.** Exports are saved inside your vault, so
+   copy the vault folder somewhere you'll still be able to reach. Open a CSV
+   there to confirm it looks right. Images and PDFs aren't in the CSV, but
+   copying the vault folder keeps them.
+
+In a CSV, links become plain text and lists are joined with a semicolon.
 
 ### Merge notes & duplicate finder
 
